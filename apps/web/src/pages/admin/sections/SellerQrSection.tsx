@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { adminApi, type AdminSeller } from '../../../lib/adminApi';
+import { type AdminSeller } from '../../../lib/adminApi';
 import { supabase } from '../../../lib/supabase';
 
 interface Props { seller: AdminSeller; }

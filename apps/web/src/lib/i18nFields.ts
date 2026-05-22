@@ -3,27 +3,28 @@
 
 type Lang = 'es' | 'en';
 
-export function localized<T extends Record<string, unknown>>(
-  obj: T,
+export function localized(
+  obj: unknown,
   field: string,
   lang: Lang | string | undefined,
 ): string | null {
-  const key = `${field}_${lang === 'en' ? 'en' : 'es'}` as keyof T;
-  const value = obj[key];
+  const rec = obj as Record<string, unknown>;
+  const key = `${field}_${lang === 'en' ? 'en' : 'es'}`;
+  const value = rec[key];
   if (typeof value === 'string') return value;
-  // Fallback: si no hay versión del idioma pedido, usar español
-  const fallback = obj[`${field}_es` as keyof T];
+  const fallback = rec[`${field}_es`];
   return typeof fallback === 'string' ? fallback : null;
 }
 
-export function localizedArray<T extends Record<string, unknown>>(
-  obj: T,
+export function localizedArray(
+  obj: unknown,
   field: string,
   lang: Lang | string | undefined,
 ): string[] {
-  const key = `${field}_${lang === 'en' ? 'en' : 'es'}` as keyof T;
-  const value = obj[key];
+  const rec = obj as Record<string, unknown>;
+  const key = `${field}_${lang === 'en' ? 'en' : 'es'}`;
+  const value = rec[key];
   if (Array.isArray(value)) return value as string[];
-  const fallback = obj[`${field}_es` as keyof T];
+  const fallback = rec[`${field}_es`];
   return Array.isArray(fallback) ? (fallback as string[]) : [];
 }

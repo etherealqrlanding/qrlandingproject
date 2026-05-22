@@ -178,7 +178,7 @@ export interface AdminSeller {
   contact_email: string | null;
   contact_phone: string | null;
   kind: string | null;
-  commission_percent: string;
+  commission_percent: number;
   notes: string | null;
   is_active: boolean;
   is_permanent: boolean;
