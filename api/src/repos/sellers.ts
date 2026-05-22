@@ -1,0 +1,195 @@
+import { pool } from '../db.js';
+
+export interface SellerInput {
+  code: string;
+  name: string;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  kind?: string | null;
+  commission_percent: number;
+  notes?: string | null;
+  is_active?: boolean;
+}
+
+export interface SellerWithStats {
+  id: number;
+  code: string;
+  name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  kind: string | null;
+  commission_percent: string;            // numeric viene como string
+  notes: string | null;
+  is_active: boolean;
+  created_at: string;
+  // stats agregados
+  orders_total: number;                  // todas las órdenes atribuidas
+  orders_paid: number;                   // órdenes en estado 'paid'
+  revenue_paid_usd: number;              // suma total_usd de órdenes pagadas atribuidas
+  commission_paid_usd: number;           // comisión acumulada de órdenes pagadas
+  commission_pending_payment_usd: number;// comisión pagada-al-vendedor pendiente (paid_to_seller_at IS NULL)
+}
+
+export async function listSellersWithStats(): Promise<SellerWithStats[]> {
+  const { rows } = await pool.query<SellerWithStats>(
+    `SELECT
+       s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
+       s.commission_percent::text AS commission_percent,
+       s.notes, s.is_active, s.created_at,
+       COALESCE(stats.orders_total, 0)::int AS orders_total,
+       COALESCE(stats.orders_paid, 0)::int AS orders_paid,
+       COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
+       COALESCE(stats.commission_paid_usd, 0)::float AS commission_paid_usd,
+       COALESCE(stats.commission_pending_payment_usd, 0)::float AS commission_pending_payment_usd
+       FROM sellers s
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*) FILTER (WHERE o.id IS NOT NULL) AS orders_total,
+           COUNT(*) FILTER (WHERE o.status = 'paid') AS orders_paid,
+           SUM(o.total_usd) FILTER (WHERE o.status = 'paid') AS revenue_paid_usd,
+           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid') AS commission_paid_usd,
+           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND a.paid_to_seller_at IS NULL) AS commission_pending_payment_usd
+           FROM order_attributions a
+           JOIN orders o ON o.id = a.order_id
+          WHERE a.seller_id = s.id
+       ) stats ON TRUE
+      ORDER BY s.is_active DESC, s.name`,
+  );
+  return rows;
+}
+
+export async function getSeller(id: number) {
+  const { rows } = await pool.query(
+    `SELECT * FROM sellers WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+export async function createSeller(input: SellerInput): Promise<number> {
+  const { rows } = await pool.query<{ id: number }>(
+    `INSERT INTO sellers (code, name, contact_email, contact_phone, kind, commission_percent, notes, is_active)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id`,
+    [
+      input.code, input.name,
+      input.contact_email ?? null, input.contact_phone ?? null,
+      input.kind ?? null, input.commission_percent,
+      input.notes ?? null, input.is_active ?? true,
+    ],
+  );
+  return rows[0].id;
+}
+
+export async function updateSeller(id: number, input: Partial<SellerInput>): Promise<boolean> {
+  const fields = Object.keys(input);
+  if (fields.length === 0) return true;
+  const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
+  const values = fields.map((f) => (input as Record<string, unknown>)[f]);
+  const result = await pool.query(
+    `UPDATE sellers SET ${sets}, updated_at = NOW() WHERE id = $${fields.length + 1}`,
+    [...values, id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function deactivateSeller(id: number): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE sellers SET is_active = FALSE, updated_at = NOW() WHERE id = $1`,
+    [id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Elimina permanentemente un vendedor.
+ * Devuelve el supabase_user_id si tenía cuenta (para que la ruta lo borre de Supabase Auth).
+ * Lanza un error si tiene ventas asociadas — en ese caso solo se puede desactivar.
+ */
+export async function deleteSeller(id: number): Promise<{ deleted: boolean; supabase_user_id: string | null }> {
+  const { rows: check } = await pool.query<{ cnt: string }>(
+    `SELECT COUNT(*) AS cnt FROM order_attributions WHERE seller_id = $1`,
+    [id],
+  );
+  if (parseInt(check[0].cnt, 10) > 0) {
+    const err = new Error('El vendedor tiene ventas asociadas y no puede eliminarse. Podés desactivarlo en su lugar.');
+    (err as Error & { code: string }).code = 'HAS_ORDERS';
+    throw err;
+  }
+
+  const { rows } = await pool.query<{ supabase_user_id: string | null }>(
+    `DELETE FROM sellers WHERE id = $1 RETURNING supabase_user_id`,
+    [id],
+  );
+  if (rows.length === 0) return { deleted: false, supabase_user_id: null };
+  return { deleted: true, supabase_user_id: rows[0].supabase_user_id };
+}
+
+export interface SellerOrder {
+  order_id: number;
+  public_id: string;
+  status: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  customer_nationality: string | null;
+  adults: number;
+  children: number;
+  total_usd: number;
+  service_date: string;
+  product_name: string;
+  option_name: string;
+  commission_amount_usd: number;
+  paid_to_seller_at: string | null;
+  cash_collected_at: string | null;
+  created_at: string;
+  utm_source: string | null;
+  payment_method: string;
+}
+
+export async function listSellerOrders(sellerId: number, opts?: { status?: string }): Promise<SellerOrder[]> {
+  const params: unknown[] = [sellerId];
+  let statusFilter = '';
+  if (opts?.status) {
+    params.push(opts.status);
+    statusFilter = ` AND o.status = $${params.length}`;
+  }
+  const { rows } = await pool.query<SellerOrder>(
+    `SELECT
+       o.id AS order_id, o.public_id, o.status::text AS status,
+       o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
+       oi.adults, oi.children,
+       o.total_usd::float AS total_usd,
+       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+       oi.product_name_snapshot AS product_name,
+       oi.option_name_snapshot AS option_name,
+       a.commission_amount_usd::float AS commission_amount_usd,
+       a.paid_to_seller_at, o.cash_collected_at, o.created_at,
+       o.utm_source, o.payment_method
+       FROM order_attributions a
+       JOIN orders o ON o.id = a.order_id
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+      WHERE a.seller_id = $1 ${statusFilter}
+      ORDER BY o.created_at DESC`,
+    params,
+  );
+  return rows;
+}
+
+/**
+ * Marca como pagadas al vendedor todas las atribuciones de las órdenes indicadas.
+ * Solo afecta órdenes pagadas (status='paid') y que no estaban ya marcadas.
+ */
+export async function markCommissionsPaid(sellerId: number, orderIds: number[]): Promise<number> {
+  if (orderIds.length === 0) return 0;
+  const result = await pool.query(
+    `UPDATE order_attributions
+        SET paid_to_seller_at = NOW()
+      WHERE seller_id = $1
+        AND order_id = ANY($2::int[])
+        AND paid_to_seller_at IS NULL
+        AND EXISTS (SELECT 1 FROM orders o WHERE o.id = order_attributions.order_id AND o.status = 'paid')`,
+    [sellerId, orderIds],
+  );
+  return result.rowCount ?? 0;
+}

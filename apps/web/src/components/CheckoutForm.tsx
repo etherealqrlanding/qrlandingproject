@@ -1,0 +1,464 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { api, ApiError, type AvailabilityDay } from '../lib/api';
+import { getStoredRef } from '../lib/referral';
+import type { ProductDetail, ProductOption } from '../types/api';
+import { localized } from '../lib/i18nFields';
+import TransferSection from './TransferSection';
+import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
+
+interface Props {
+  product: ProductDetail;
+  option: ProductOption;
+  onClose: () => void;
+  initialPaymentMethod?: 'mercadopago' | 'cash';
+}
+
+const NATIONALITIES = [
+  'Argentina', 'Brasil', 'Estados Unidos', 'Reino Unido', 'España',
+  'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
+];
+
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod }: Props) {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.resolvedLanguage;
+  const exchangeRate = useExchangeRate();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const storedRef = getStoredRef();
+  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash'>(initialPaymentMethod ?? 'mercadopago');
+  const [cutoffTime, setCutoffTime] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
+  const [transferHotel, setTransferHotel] = useState('');
+  // Si viene pre-seleccionado desde la página del producto, no mostramos el selector
+  const showMethodSelector = !initialPaymentMethod && Boolean(storedRef);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const horizonDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 90);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    emailConfirm: '',
+    phone: '',
+    nationality: '',
+    service_date: today,
+    adults: 2,
+    children: 0,
+  });
+
+  // Disponibilidad por fecha de la option seleccionada
+  const [availability, setAvailability] = useState<Map<string, AvailabilityDay>>(new Map());
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  useEffect(() => {
+    api.settings.bookingCutoff().then((d) => setCutoffTime(d.time)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAvailabilityLoading(true);
+    api.availability.forOption(option.id, today, horizonDate)
+      .then((days) => {
+        if (cancelled) return;
+        setAvailability(new Map(days.map((d) => [d.date, d])));
+      })
+      .catch(() => { /* silencioso, dejamos pasar y validamos en backend */ })
+      .finally(() => { if (!cancelled) setAvailabilityLoading(false); });
+    return () => { cancelled = true; };
+  }, [option.id, today, horizonDate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRemaining(null);
+    api.availability.remainingForDate(option.id, form.service_date)
+      .then((d) => {
+        if (cancelled) return;
+        setRemaining(d.remaining);
+        const total = form.adults + form.children;
+        if (d.remaining < total) {
+          const newAdults = Math.max(1, Math.min(form.adults, d.remaining));
+          setForm((prev) => ({ ...prev, adults: newAdults, children: Math.max(0, d.remaining - newAdults) }));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [option.id, form.service_date]);
+
+  const selectedDay = availability.get(form.service_date);
+  const selectedDateStatus = selectedDay?.status;
+  const isDateBlocked = selectedDateStatus === 'full' || selectedDateStatus === 'closed';
+  const isDateLow = selectedDateStatus === 'low';
+
+  const supportsChildren = option.price_child_usd != null;
+  const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
+  const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
+
+  const ticketsUsd = useMemo(() => {
+    const adult = option.price_adult_usd * form.adults;
+    const child = (option.price_child_usd ?? 0) * form.children;
+    return Math.round((adult + child) * 100) / 100;
+  }, [option, form.adults, form.children]);
+
+  const transferUsd = useMemo(() => {
+    if (!option.has_transfer || !wantsTransfer || !option.transfer_price_usd) return 0;
+    return Math.round(option.transfer_price_usd * (form.adults + form.children) * 100) / 100;
+  }, [option, wantsTransfer, form.adults, form.children]);
+
+  const totalUsd = Math.round((ticketsUsd + transferUsd) * 100) / 100;
+
+  const ticketsArs = exchangeRate != null ? Math.round(ticketsUsd * exchangeRate) : null;
+  const transferArs = exchangeRate != null ? Math.round(transferUsd * exchangeRate) : null;
+  const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
+
+  const updateField = <K extends keyof typeof form>(field: K, value: typeof form[K]) =>
+    setForm((prev) => ({ ...prev, [field]: value }));
+
+  const submitLabel = (() => {
+    if (isDateBlocked) return t('checkout.choose_another_date');
+    if (paymentMethod === 'cash') return t('checkout.confirm_booking');
+    return t('checkout.pay_with_mp');
+  })();
+
+  const checkoutInput = {
+    option_id: option.id,
+    service_date: form.service_date,
+    adults: form.adults,
+    children: form.children,
+    customer: {
+      name: form.name.trim(),
+      email: form.email.trim().toLowerCase(),
+      phone: form.phone.trim() || null,
+      nationality: form.nationality || null,
+    },
+    ref_code: storedRef,
+    transfer_requested: option.has_transfer ? wantsTransfer : false,
+    transfer_hotel: (option.has_transfer && wantsTransfer) ? (transferHotel || null) : null,
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isDateBlocked) {
+      setError(selectedDateStatus === 'closed'
+        ? t('checkout.date_closed')
+        : t('checkout.date_full'));
+      return;
+    }
+    if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) {
+      setError(t('checkout.email_mismatch'));
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      if (paymentMethod === 'cash') {
+        const response = await api.checkout.createCashOrder(checkoutInput);
+        globalThis.location.href = `/checkout/cash?order=${encodeURIComponent(response.order_public_id)}`;
+      } else {
+        const response = await api.checkout.createPreference(checkoutInput);
+        globalThis.location.href = response.init_point;
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : (err as Error).message;
+      setError(message);
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+      <div className="min-h-full flex items-start justify-center p-4 py-8">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
+        >
+          ×
+        </button>
+
+        <div className="p-7 border-b border-gold/10">
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
+            {product.venue_name}
+          </p>
+          <h2 className="mt-2 font-display text-3xl text-cream">
+            {localized(option, 'name', lang)}
+          </h2>
+          {cutoffTime && (
+            <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-gold/20 bg-gold/5 px-3 py-1 text-xs text-cream/60">
+              🕐 {t('checkout.cutoff_notice', { time: cutoffTime })}
+            </p>
+          )}
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-7 space-y-5">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label={t('checkout.name')} required>
+              <input
+                type="text" required minLength={2} maxLength={120}
+                value={form.name} onChange={(e) => updateField('name', e.target.value)}
+                className="input"
+                autoComplete="name"
+              />
+            </Field>
+            <Field label={t('checkout.phone')} required>
+              <input
+                type="tel" required maxLength={40}
+                value={form.phone} onChange={(e) => updateField('phone', e.target.value)}
+                className="input"
+                placeholder="+54 9 11 1234 5678"
+                autoComplete="tel"
+              />
+            </Field>
+            <Field label={t('checkout.email')} required>
+              <input
+                type="email" required maxLength={160}
+                value={form.email} onChange={(e) => updateField('email', e.target.value)}
+                className="input"
+                autoComplete="email"
+              />
+            </Field>
+            <Field label={t('checkout.email_confirm')} required>
+              <input
+                type="email" required maxLength={160}
+                value={form.emailConfirm} onChange={(e) => updateField('emailConfirm', e.target.value)}
+                className={`input ${form.emailConfirm && form.emailConfirm.trim().toLowerCase() !== form.email.trim().toLowerCase() ? 'border-bordeaux-light/60' : ''}`}
+                autoComplete="off"
+                onPaste={(e) => e.preventDefault()}
+              />
+              {form.emailConfirm && form.emailConfirm.trim().toLowerCase() !== form.email.trim().toLowerCase() && (
+                <p className="mt-1 text-xs text-bordeaux-light">⚠ {t('checkout.email_mismatch')}</p>
+              )}
+            </Field>
+            <div className="sm:col-span-2 rounded-lg bg-gold/5 border border-gold/20 px-4 py-3 flex gap-3 items-start">
+              <span className="text-gold mt-0.5 text-base leading-none">✉</span>
+              <p className="text-xs text-cream/70 leading-relaxed">{t('checkout.contact_info_notice')}</p>
+            </div>
+            <Field label={t('checkout.nationality')}>
+              <select
+                value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
+                className="input"
+              >
+                <option value="">{t('checkout.select')}</option>
+                {NATIONALITIES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </Field>
+            <Field label={t('checkout.service_date')} required>
+              <input
+                type="date" required min={today} max={horizonDate}
+                value={form.service_date}
+                onChange={(e) => updateField('service_date', e.target.value)}
+                className={`input ${isDateBlocked ? 'border-bordeaux-light/60' : ''}`}
+                aria-invalid={isDateBlocked}
+              />
+              {availabilityLoading && (
+                <p className="mt-1 text-xs text-cream/40">{t('checkout.checking_availability')}</p>
+              )}
+              {!availabilityLoading && selectedDateStatus === 'full' && (
+                <p className="mt-1 text-xs text-bordeaux-light">⚠ {t('checkout.date_full')}</p>
+              )}
+              {!availabilityLoading && selectedDateStatus === 'closed' && (
+                <p className="mt-1 text-xs text-bordeaux-light">
+                  ⚠ {selectedDay?.reason === 'cutoff'
+                    ? t('checkout.date_closed_cutoff')
+                    : selectedDay?.reason === 'not_operating_day'
+                      ? t('checkout.date_closed_day')
+                      : t('checkout.date_closed')}
+                </p>
+              )}
+              {!availabilityLoading && isDateLow && (
+                <p className="mt-1 text-xs text-gold-soft">
+                  ⚡ {selectedDay?.remaining != null
+                    ? `Solo quedan ${selectedDay.remaining} lugar${selectedDay.remaining !== 1 ? 'es' : ''}`
+                    : t('checkout.date_low')}
+                </p>
+              )}
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={t('checkout.adults')} required>
+                <NumberStepper
+                  value={form.adults} min={1} max={maxAdults}
+                  onChange={(v) => updateField('adults', v)}
+                  cappedMessage={remaining != null ? t('checkout.capacity_max_reached') : undefined}
+                />
+              </Field>
+              {supportsChildren && (
+                <Field label={t('checkout.children')}>
+                  <NumberStepper
+                    value={form.children} min={0} max={maxChildren}
+                    onChange={(v) => updateField('children', v)}
+                    cappedMessage={remaining != null ? t('checkout.capacity_max_reached') : undefined}
+                  />
+                </Field>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-gold/5 border border-gold/20 p-5">
+            {transferUsd > 0 && (
+              <div className="space-y-1 mb-3 pb-3 border-b border-gold/15">
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-cream/60">{t('checkout.tickets')}</span>
+                  <span className="text-cream/80">
+                    {ticketsArs != null ? fmtArs(ticketsArs) : `USD ${ticketsUsd}`}
+                  </span>
+                </div>
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-cream/60">{t('checkout.transfer')} ({form.adults + form.children} pax)</span>
+                  <span className="text-cream/80">
+                    +{transferArs != null ? fmtArs(transferArs) : `USD ${transferUsd}`}
+                  </span>
+                </div>
+              </div>
+            )}
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-cream/70">{t('checkout.total')}</span>
+              <span className="font-display text-3xl text-gold">
+                {totalArs != null ? fmtArs(totalArs) : `USD ${totalUsd}`}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-cream/50 text-right">
+              {totalArs != null
+                ? t('checkout.usd_ref', { amount: totalUsd })
+                : t('checkout.charged_in_ars')}
+            </p>
+            {exchangeRate != null && (
+              <p className="mt-3 pt-3 border-t border-gold/10 text-xs text-cream/50 leading-relaxed">
+                💳 {t('checkout.dollar_account_notice')}
+              </p>
+            )}
+          </div>
+
+          {/* Traslado — solo si la option lo incluye */}
+          {option.has_transfer && (
+            <TransferSection
+              wantsTransfer={wantsTransfer}
+              hotel={transferHotel}
+              onToggle={setWantsTransfer}
+              onHotelChange={setTransferHotel}
+              pickupWindow={lang === 'en' ? option.pickup_window_en : option.pickup_window_es}
+              lang={lang === 'en' ? 'en' : 'es'}
+            />
+          )}
+
+          {/* Selector de método de pago — solo cuando no viene pre-seleccionado */}
+          {showMethodSelector && (
+            <div className="rounded-lg border border-gold/15 bg-ink/30 p-4 space-y-2">
+              <p className="text-xs uppercase tracking-widest text-gold-soft">Forma de pago</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('mercadopago')}
+                  className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                    paymentMethod === 'mercadopago'
+                      ? 'border-gold bg-gold/10 text-cream'
+                      : 'border-gold/20 text-cream/50 hover:border-gold/40'
+                  }`}
+                >
+                  <span className="block font-medium">Mercado Pago</span>
+                  <span className="text-xs opacity-70">Tarjeta, transferencia</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('cash')}
+                  className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                    paymentMethod === 'cash'
+                      ? 'border-gold bg-gold/10 text-cream'
+                      : 'border-gold/20 text-cream/50 hover:border-gold/40'
+                  }`}
+                >
+                  <span className="block font-medium">Al vendedor</span>
+                  <span className="text-xs opacity-70">Efectivo</span>
+                </button>
+              </div>
+              {paymentMethod === 'cash' && (
+                <p className="text-xs text-cream/50 pt-1">{t('checkout.cash_note')}</p>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90">
+              {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting || isDateBlocked}
+            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? t('checkout.processing') : submitLabel}
+          </button>
+
+          {paymentMethod === 'mercadopago' && (
+            <p className="text-xs text-cream/40 text-center">{t('checkout.mp_redirect_note')}</p>
+          )}
+        </form>
+      </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-sm text-cream/80 mb-1.5">
+        {label} {required && <span className="text-gold">*</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function NumberStepper({
+  value, min, max, onChange, cappedMessage,
+}: { value: number; min: number; max: number; onChange: (v: number) => void; cappedMessage?: string }) {
+  const [showCapped, setShowCapped] = useState(false);
+
+  const handleIncrement = () => {
+    if (value >= max) {
+      setShowCapped(true);
+      setTimeout(() => setShowCapped(false), 2500);
+      return;
+    }
+    onChange(Math.min(max, value + 1));
+  };
+
+  return (
+    <div>
+      <div className="flex items-center rounded-md border border-gold/20 bg-ink/40 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="px-3 py-2 text-cream hover:bg-gold/10 transition"
+          aria-label="decrement"
+        >−</button>
+        <span className="flex-1 text-center text-cream tabular-nums">{value}</span>
+        <button
+          type="button"
+          onClick={handleIncrement}
+          className="px-3 py-2 text-cream hover:bg-gold/10 transition"
+          aria-label="increment"
+        >+</button>
+      </div>
+      {showCapped && cappedMessage && (
+        <p className="mt-1 text-xs text-gold-soft">{cappedMessage}</p>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,25 @@
+{
+  "name": "ethereal-tours",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ethereal Tours — landing + admin + API para agencia de tango en Buenos Aires",
+  "workspaces": [
+    "apps/*",
+    "api"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:api": "npm --workspace api run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "build:api": "npm --workspace api run build",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "npm --workspace api run migrate",
+    "db:seed": "npm --workspace api run seed",
+    "admin:bootstrap": "npm --workspace api run admin:bootstrap --",
+    "db:reset": "docker compose down -v && docker compose up -d postgres"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

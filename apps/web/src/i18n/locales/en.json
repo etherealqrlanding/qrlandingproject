@@ -1,0 +1,136 @@
+{
+  "nav": {
+    "home": "Home",
+    "shows": "Tango Shows",
+    "about": "About",
+    "contact": "Contact",
+    "book": "Book now"
+  },
+  "hero": {
+    "eyebrow": "Buenos Aires · Tango Houses",
+    "title": "Live the tango. Don't just watch it.",
+    "subtitle": "Dinners, shows and experiences in the 14 most iconic tango houses of the city. Book in minutes, transfer included.",
+    "cta_primary": "Explore experiences",
+    "cta_secondary": "Chat on WhatsApp"
+  },
+  "home": {
+    "featured_title": "Featured houses",
+    "view_all": "View all"
+  },
+  "shows": {
+    "title": "The 14 tango houses of Buenos Aires",
+    "subtitle": "Each house with its own style, menu and personality. Find the one that fits you best.",
+    "empty": "No shows published yet.",
+    "error": "We couldn't load the catalog"
+  },
+  "product": {
+    "from": "From",
+    "view_more": "View more",
+    "about": "About the experience",
+    "schedule": "Days & times",
+    "options_title": "Choose your experience",
+    "options_subtitle": "Different tiers so you can tailor your night.",
+    "per_adult": "per adult",
+    "per_adult_short": "adult",
+    "children": "Children (3-10)",
+    "your_selection": "Your selection",
+    "book_cta": "Book now",
+    "secure_payment": "Secure payment with Mercado Pago",
+    "back_to_list": "Back to list",
+    "error": "We couldn't load this experience"
+  },
+  "checkout": {
+    "name": "Full name",
+    "email": "Email",
+    "email_confirm": "Confirm email",
+    "email_mismatch": "Emails do not match. Please double-check.",
+    "contact_info_notice": "Your phone number and email are essential for sending your booking confirmation and reaching you if needed. Please make sure they are correct.",
+    "phone": "Phone / WhatsApp",
+    "nationality": "Nationality",
+    "service_date": "Service date",
+    "adults": "Adults",
+    "children": "Children",
+    "select": "Select...",
+    "tickets": "Tickets",
+    "transfer": "Transfer",
+    "total": "Total",
+    "charged_in_ars": "Payment is processed in Argentine Pesos (ARS) at the current exchange rate.",
+    "usd_ref": "≈ USD {{amount}} at reference exchange rate",
+    "dollar_account_notice": "If you pay from a dollar-denominated account, the amount shown in your bank statement may vary based on the exchange rate applied by your institution at the time of the transaction.",
+    "pay_with_mp": "Pay with Mercado Pago",
+    "pay_with_seller": "Pay to seller (cash)",
+    "confirm_booking": "Confirm booking",
+    "processing": "Processing...",
+    "cash_note": "The seller will coordinate payment at the time of the service. Booking is pending confirmation.",
+    "mp_redirect_note": "We take you to Mercado Pago's secure checkout. Cards, transfers and cash accepted.",
+    "checking_availability": "Checking availability...",
+    "date_full": "No seats left for this date. Pick another day.",
+    "date_closed": "The venue does not operate on that date. Pick another day.",
+    "date_closed_cutoff": "Same-day booking cutoff has passed. Pick another date.",
+    "date_closed_day": "This experience does not operate on that weekday. Pick another day.",
+    "date_low": "Only a few seats left for this date.",
+    "choose_another_date": "Pick another date",
+    "cutoff_notice": "Same-day bookings accepted until {{time}} (Buenos Aires time)",
+    "capacity_max_reached": "Maximum capacity reached for this date"
+  },
+  "return": {
+    "success_title": "Booking confirmed!",
+    "success_subtitle": "We sent the details to your email. See you soon in Buenos Aires!",
+    "cash_title": "Booking registered!",
+    "cash_subtitle": "Your booking is saved. The seller will coordinate payment and service details with you.",
+    "cash_method": "Payment: cash to seller",
+    "pending_title": "Payment in progress",
+    "pending_subtitle": "Your payment is being processed. We'll email you as soon as it's confirmed.",
+    "failure_title": "Payment did not complete",
+    "failure_subtitle": "No charge was made. You can try again or contact us on WhatsApp.",
+    "order_ref": "Order reference",
+    "amount": "Amount",
+    "status": "Status",
+    "status_pending": "Pending",
+    "status_paid": "Paid",
+    "status_failed": "Failed",
+    "status_cancelled": "Cancelled",
+    "status_refunded": "Refunded",
+    "order_not_found": "We couldn't find the order. Check your email or contact us.",
+    "back_to_shows": "Browse more shows",
+    "back_home": "Back home"
+  },
+  "categories": {
+    "shows": "Tango Shows",
+    "tours": "Tours & Excursions",
+    "programs": "Programs",
+    "lodging": "Lodging",
+    "transfers": "Transfers"
+  },
+  "footer": {
+    "tagline": "Ethereal Tours · Buenos Aires since 2026",
+    "rights": "All rights reserved."
+  },
+  "ref": {
+    "welcome": "Booking with {{name}}",
+    "inactive": "This seller is not currently available"
+  },
+  "seller_inactive": {
+    "title": "Seller unavailable",
+    "message": "This QR belongs to a seller who is no longer active. Please contact whoever shared it with you.",
+    "cta": "Close"
+  },
+  "seller_welcome": {
+    "badge": "Verified Seller",
+    "message": "You scanned {{name}}'s QR code. They are a registered seller authorized by Ethereal Tours. All your transactions are monitored and protected by our team.",
+    "steps_title": "What can you do?",
+    "step1": "Explore tango shows in Buenos Aires",
+    "step2": "Choose date, guests and your experience",
+    "step3": "Pay securely with Mercado Pago",
+    "cta": "Explore experiences →",
+    "kind": {
+      "uber": "Driver / Transfers",
+      "hotel": "Hotel Concierge",
+      "concierge": "Concierge",
+      "agency": "Travel Agency",
+      "guide": "Tour Guide",
+      "influencer": "Influencer",
+      "other": "Authorized Seller"
+    }
+  }
+}

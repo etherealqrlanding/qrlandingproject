@@ -1,0 +1,136 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "shows": "Shows de Tango",
+    "about": "Nosotros",
+    "contact": "Contacto",
+    "book": "Reservar"
+  },
+  "hero": {
+    "eyebrow": "Buenos Aires · Casas de Tango",
+    "title": "Vivís el tango. No solo lo mirás.",
+    "subtitle": "Cenas, shows y experiencias en las 14 casas de tango más emblemáticas de la ciudad. Reservas en minutos, traslado incluido.",
+    "cta_primary": "Ver experiencias",
+    "cta_secondary": "Hablar por WhatsApp"
+  },
+  "home": {
+    "featured_title": "Casas destacadas",
+    "view_all": "Ver todos"
+  },
+  "shows": {
+    "title": "Las 14 casas de tango de Buenos Aires",
+    "subtitle": "Cada casa con su estilo, su menú y su propia personalidad. Encontrá la que mejor te represente.",
+    "empty": "Aún no hay shows publicados.",
+    "error": "No pudimos cargar el catálogo"
+  },
+  "product": {
+    "from": "Desde",
+    "view_more": "Ver más",
+    "about": "Sobre la experiencia",
+    "schedule": "Días y horarios",
+    "options_title": "Elegí tu experiencia",
+    "options_subtitle": "Diferentes niveles para que armes la noche a tu medida.",
+    "per_adult": "por adulto",
+    "per_adult_short": "adulto",
+    "children": "Menores (3-10)",
+    "your_selection": "Tu elección",
+    "book_cta": "Reservar ahora",
+    "secure_payment": "Pago seguro con Mercado Pago",
+    "back_to_list": "Volver al listado",
+    "error": "No pudimos cargar este servicio"
+  },
+  "checkout": {
+    "name": "Nombre completo",
+    "email": "Email",
+    "email_confirm": "Confirmar email",
+    "email_mismatch": "Los emails no coinciden. Por favor verificalos.",
+    "contact_info_notice": "Tu teléfono y email son esenciales para enviarte la confirmación de tu reserva y contactarte ante cualquier novedad. Asegurate de ingresarlos correctamente.",
+    "phone": "Teléfono / WhatsApp",
+    "nationality": "Nacionalidad",
+    "service_date": "Fecha del servicio",
+    "adults": "Adultos",
+    "children": "Menores",
+    "select": "Seleccionar...",
+    "tickets": "Entradas",
+    "transfer": "Traslado",
+    "total": "Total",
+    "charged_in_ars": "El cobro se procesa en pesos argentinos (ARS) según tipo de cambio actual.",
+    "usd_ref": "≈ USD {{amount}} al tipo de cambio de referencia",
+    "dollar_account_notice": "Si abonás con una cuenta en dólares, el importe en el resumen de tu banco puede variar según el tipo de cambio aplicado por tu entidad al momento de la operación.",
+    "pay_with_mp": "Pagar con Mercado Pago",
+    "pay_with_seller": "Pagar al vendedor (efectivo)",
+    "confirm_booking": "Confirmar reserva",
+    "processing": "Procesando...",
+    "cash_note": "El vendedor coordinará el cobro en el momento del servicio. La reserva queda pendiente de confirmación.",
+    "mp_redirect_note": "Te llevamos a la pasarela segura de Mercado Pago. Aceptamos tarjetas, transferencia y efectivo.",
+    "checking_availability": "Verificando disponibilidad...",
+    "date_full": "Sin cupos para esta fecha. Elegí otro día.",
+    "date_closed": "La casa no opera esa fecha. Elegí otro día.",
+    "date_closed_cutoff": "El horario límite de reservas del día ya pasó. Elegí otra fecha.",
+    "date_closed_day": "El servicio no opera ese día de la semana. Elegí otro día.",
+    "date_low": "Quedan pocos lugares para esta fecha.",
+    "choose_another_date": "Elegí otra fecha",
+    "cutoff_notice": "Reservas para hoy se toman hasta las {{time}} hs (hora Buenos Aires)",
+    "capacity_max_reached": "Cupo máximo alcanzado para esta fecha"
+  },
+  "return": {
+    "success_title": "¡Reserva confirmada!",
+    "success_subtitle": "Te enviamos los detalles por email. ¡Nos vemos pronto en Buenos Aires!",
+    "cash_title": "¡Reserva tomada!",
+    "cash_subtitle": "Tu reserva fue registrada. El vendedor coordinará el cobro y los detalles del servicio.",
+    "cash_method": "Pago: efectivo al vendedor",
+    "pending_title": "Pago en proceso",
+    "pending_subtitle": "Tu pago está siendo procesado. Te avisaremos por email apenas se confirme.",
+    "failure_title": "El pago no se completó",
+    "failure_subtitle": "No se realizó ningún cargo. Podés intentar nuevamente o contactarnos por WhatsApp.",
+    "order_ref": "Referencia de la orden",
+    "amount": "Monto",
+    "status": "Estado",
+    "status_pending": "Pendiente",
+    "status_paid": "Pagada",
+    "status_failed": "Fallida",
+    "status_cancelled": "Cancelada",
+    "status_refunded": "Reintegrada",
+    "order_not_found": "No pudimos encontrar la orden. Verificá tu email o contactanos.",
+    "back_to_shows": "Ver otros shows",
+    "back_home": "Volver al inicio"
+  },
+  "categories": {
+    "shows": "Shows de Tango",
+    "tours": "Tours y Excursiones",
+    "programs": "Programas",
+    "lodging": "Alojamiento",
+    "transfers": "Traslados"
+  },
+  "footer": {
+    "tagline": "Ethereal Tours · Buenos Aires desde 2026",
+    "rights": "Todos los derechos reservados."
+  },
+  "ref": {
+    "welcome": "Reservando con {{name}}",
+    "inactive": "Este vendedor no está disponible actualmente"
+  },
+  "seller_inactive": {
+    "title": "Vendedor no disponible",
+    "message": "Este QR pertenece a un vendedor que ya no se encuentra activo. Por favor, contactá a quien te lo compartió.",
+    "cta": "Cerrar"
+  },
+  "seller_welcome": {
+    "badge": "Vendedor Verificado",
+    "message": "Escaneaste el QR de {{name}}, un vendedor registrado y autorizado por Ethereal Tours. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
+    "steps_title": "¿Qué podés hacer?",
+    "step1": "Explorá shows de tango en Buenos Aires",
+    "step2": "Elegí fecha, cantidades y tu experiencia",
+    "step3": "Pagá de forma segura con Mercado Pago",
+    "cta": "Explorar experiencias →",
+    "kind": {
+      "uber": "Chofer / Traslados",
+      "hotel": "Concierge de Hotel",
+      "concierge": "Concierge",
+      "agency": "Agencia de Viajes",
+      "guide": "Guía Turístico",
+      "influencer": "Influencer",
+      "other": "Vendedor Autorizado"
+    }
+  }
+}

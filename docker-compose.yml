@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ethereal-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ethereal
+      POSTGRES_PASSWORD: ethereal
+      POSTGRES_DB: ethereal_tours
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ethereal -d ethereal_tours"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

@@ -1,0 +1,502 @@
+import { Router, type Request, type Response, type NextFunction } from 'express';
+import { z } from 'zod';
+import crypto from 'node:crypto';
+import { pool } from '../db.js';
+import { config } from '../config.js';
+import {
+  createPreference,
+  fetchPayment,
+  mapMpStatusToOrderStatus,
+} from '../services/mercadopago.js';
+import { getExchangeRate, convertUsdToArs, getSameDayCutoff } from '../services/settings.js';
+import {
+  createPendingOrder,
+  setOrderPreferenceId,
+  updateOrderFromPayment,
+  logPaymentEvent,
+  findOrderByPublicId,
+} from '../repos/orders.js';
+import { sendOrderPaidNotifications, sendCashOrderNotifications } from '../services/email.js';
+import { createOrderPaidNotification, createCashBookingNotification } from '../repos/notifications.js';
+import { checkSingleDateAvailability } from '../repos/availability.js';
+
+export const checkoutRouter = Router();
+
+// ─── Validación del request ────────────────────────────────
+const createCheckoutSchema = z.object({
+  option_id: z.number().int().positive(),
+  service_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'service_date must be YYYY-MM-DD'),
+  adults: z.number().int().min(1).max(20),
+  children: z.number().int().min(0).max(20),
+  customer: z.object({
+    name: z.string().min(2).max(120),
+    email: z.string().email().max(160),
+    phone: z.string().max(40).optional().nullable(),
+    nationality: z.string().max(80).optional().nullable(),
+  }),
+  ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional().nullable(),
+  utm: z.object({
+    source: z.string().max(80).optional().nullable(),
+    medium: z.string().max(80).optional().nullable(),
+    campaign: z.string().max(80).optional().nullable(),
+  }).optional(),
+  transfer_requested: z.boolean().optional(),
+  transfer_hotel: z.string().max(200).optional().nullable(),
+});
+
+// ─── POST /api/checkout/preferences ───────────────────────
+checkoutRouter.post('/preferences', async (req, res, next) => {
+  try {
+    const parsed = createCheckoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const input = parsed.data;
+
+    // 1) Cargar option + product (precios autoritativos del backend, NO confiar en el cliente)
+    const { rows: optionRows } = await pool.query<{
+      id: number; product_id: number;
+      name_es: string; name_en: string;
+      price_adult_usd: string; price_child_usd: string | null;
+      transfer_price_usd: string;
+      available_days: number[];
+      default_capacity_per_day: number;
+      product_name: string; product_slug: string;
+      is_active: boolean; product_active: boolean;
+    }>(
+      `SELECT
+         o.id, o.product_id,
+         o.name_es, o.name_en,
+         o.price_adult_usd::text AS price_adult_usd,
+         o.price_child_usd::text AS price_child_usd,
+         o.transfer_price_usd::text AS transfer_price_usd,
+         o.available_days,
+         o.default_capacity_per_day,
+         o.is_active,
+         p.name AS product_name, p.slug AS product_slug,
+         p.is_active AS product_active
+         FROM product_options o
+         JOIN products p ON p.id = o.product_id
+        WHERE o.id = $1
+        LIMIT 1`,
+      [input.option_id],
+    );
+    const option = optionRows[0];
+    if (!option || !option.is_active || !option.product_active) {
+      return res.status(404).json({ error: 'Option not found or inactive' });
+    }
+
+    // 2) Validar día de operación
+    const date = new Date(`${input.service_date}T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return res.status(400).json({ error: 'Invalid service_date' });
+    }
+    if (date.getTime() < Date.now() - 86_400_000) {
+      return res.status(400).json({ error: 'service_date cannot be in the past' });
+    }
+    // Validar horario límite global para reservas del mismo día (hora Buenos Aires = UTC-3)
+    const cutoffTime = await getSameDayCutoff();
+    if (cutoffTime) {
+      const nowBA = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const todayBA = nowBA.toISOString().slice(0, 10);
+      if (input.service_date === todayBA) {
+        const currentMin = nowBA.getUTCHours() * 60 + nowBA.getUTCMinutes();
+        const [ch, cm] = cutoffTime.split(':').map(Number);
+        if (currentMin >= ch * 60 + cm) {
+          return res.status(409).json({
+            error: `Reservas para hoy se aceptan hasta las ${cutoffTime} (hora Buenos Aires)`,
+          });
+        }
+      }
+    }
+    // JS: 0=Domingo. Nuestro schema: 1=Lun..7=Dom
+    const isoDow = date.getDay() === 0 ? 7 : date.getDay();
+    if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
+      return res.status(400).json({
+        error: 'This option does not operate on the selected day',
+        available_days: option.available_days,
+      });
+    }
+
+    // 2b) Validar disponibilidad puntual: fechas cerradas y capacidad real
+    const availCheck = await checkSingleDateAvailability(
+      option.id, option.default_capacity_per_day, input.service_date, input.adults + input.children,
+    );
+    if (!availCheck.ok) {
+      return res.status(409).json({ error: availCheck.message ?? 'Fecha no disponible' });
+    }
+
+    // 3) Cálculo de totales (USD) — fuente de verdad: backend
+    const priceAdult = parseFloat(option.price_adult_usd);
+    const priceChild = option.price_child_usd != null ? parseFloat(option.price_child_usd) : 0;
+    if (input.children > 0 && option.price_child_usd == null) {
+      return res.status(400).json({ error: 'This option does not allow children pricing' });
+    }
+    const transferPriceUsd = parseFloat(option.transfer_price_usd ?? '0');
+    const transferSubtotal = (input.transfer_requested && transferPriceUsd > 0)
+      ? Math.round(transferPriceUsd * (input.adults + input.children) * 100) / 100
+      : 0;
+    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
+
+    // 4) Convertir a ARS usando tipo de cambio actual
+    const rate = await getExchangeRate();
+    const totalArs = convertUsdToArs(subtotalUsd, rate);
+
+    // 5) Crear orden pendiente en DB
+    const order = await createPendingOrder({
+      customer: input.customer,
+      item: {
+        product_id: option.product_id,
+        option_id: option.id,
+        product_name_snapshot: option.product_name,
+        option_name_snapshot: option.name_es,  // guardamos español, multi-lang en metadata
+        service_date: input.service_date,
+        adults: input.adults,
+        children: input.children,
+        unit_price_adult_usd: priceAdult,
+        unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
+        subtotal_usd: subtotalUsd,
+        transfer_requested: input.transfer_requested ?? false,
+        transfer_hotel: input.transfer_hotel ?? null,
+      },
+      total_usd: subtotalUsd,
+      total_ars: totalArs,
+      exchange_rate_used: rate,
+      ref_code: input.ref_code ?? null,
+      utm: input.utm,
+    });
+
+    // 6) Crear preference en MP
+    const pref = await createPreference({
+      orderPublicId: order.public_id,
+      title: `${option.name_es} — ${option.product_name}`,
+      totalArs,
+      quantityAdults: input.adults,
+      quantityChildren: input.children,
+      customer: {
+        name: input.customer.name,
+        email: input.customer.email,
+        phone: input.customer.phone ?? undefined,
+      },
+      metadata: {
+        order_id: order.id,
+        seller_ref: input.ref_code ?? null,
+        option_id: option.id,
+        product_slug: option.product_slug,
+        service_date: input.service_date,
+      },
+      webOrigin: config.WEB_ORIGIN,
+    });
+
+    await setOrderPreferenceId(order.id, pref.id);
+    await logPaymentEvent(order.id, 'preference_created', pref.id, { init_point: pref.init_point });
+
+    res.json({
+      data: {
+        order_public_id: order.public_id,
+        preference_id: pref.id,
+        init_point: pref.init_point,
+        sandbox_init_point: pref.sandbox_init_point,
+        total_usd: subtotalUsd,
+        total_ars: totalArs,
+        exchange_rate: rate,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/checkout/seller-info?code=XXX ──────────────
+// Endpoint público: devuelve si el vendedor existe, está activo y es permanente.
+// Usado por el frontend para mostrar/ocultar la opción de pago en efectivo.
+checkoutRouter.get('/seller-info', async (req, res, next) => {
+  try {
+    const code = req.query.code;
+    if (!code || typeof code !== 'string' || !/^[A-Za-z0-9_-]{3,32}$/.test(code)) {
+      return res.status(400).json({ error: 'Invalid code' });
+    }
+    res.set('Cache-Control', 'no-store');
+    const { rows } = await pool.query<{ name: string; kind: string | null; is_permanent: boolean; is_active: boolean }>(
+      `SELECT name, kind, is_permanent, is_active FROM sellers WHERE code = $1 LIMIT 1`,
+      [code],
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Seller not found' });
+    if (!rows[0].is_active) return res.status(410).json({ error: 'SELLER_INACTIVE' });
+    res.json({ data: { name: rows[0].name, kind: rows[0].kind, is_permanent: rows[0].is_permanent } });
+  } catch (err) { next(err); }
+});
+
+// ─── POST /api/checkout/cash ──────────────────────────────
+// Reserva directa con pago al vendedor. No genera preferencia de MP.
+// Requiere ref_code válido (el vendedor cobra en efectivo).
+const cashCheckoutSchema = createCheckoutSchema.extend({
+  ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/, 'ref_code is required for cash payment'),
+});
+
+checkoutRouter.post('/cash', async (req, res, next) => {
+  try {
+    const parsed = cashCheckoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const input = parsed.data;
+
+    // Cargar option + product
+    const { rows: optionRows } = await pool.query<{
+      id: number; product_id: number;
+      name_es: string; price_adult_usd: string; price_child_usd: string | null;
+      transfer_price_usd: string;
+      available_days: number[];
+      default_capacity_per_day: number;
+      product_name: string; product_slug: string;
+      is_active: boolean; product_active: boolean;
+    }>(
+      `SELECT o.id, o.product_id, o.name_es,
+              o.price_adult_usd::text AS price_adult_usd,
+              o.price_child_usd::text AS price_child_usd,
+              o.transfer_price_usd::text AS transfer_price_usd,
+              o.available_days, o.default_capacity_per_day, o.is_active,
+              p.name AS product_name, p.slug AS product_slug,
+              p.is_active AS product_active
+         FROM product_options o
+         JOIN products p ON p.id = o.product_id
+        WHERE o.id = $1 LIMIT 1`,
+      [input.option_id],
+    );
+    const option = optionRows[0];
+    if (!option || !option.is_active || !option.product_active) {
+      return res.status(404).json({ error: 'Option not found or inactive' });
+    }
+
+    // Validar día de operación
+    const date = new Date(`${input.service_date}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return res.status(400).json({ error: 'Invalid service_date' });
+    if (date.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'service_date cannot be in the past' });
+    const isoDow = date.getDay() === 0 ? 7 : date.getDay();
+    if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
+      return res.status(400).json({ error: 'This option does not operate on the selected day', available_days: option.available_days });
+    }
+    // Validar horario límite global para reservas del mismo día (hora Buenos Aires = UTC-3)
+    const cutoffTimeCash = await getSameDayCutoff();
+    if (cutoffTimeCash) {
+      const nowBA = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const todayBA = nowBA.toISOString().slice(0, 10);
+      if (input.service_date === todayBA) {
+        const currentMin = nowBA.getUTCHours() * 60 + nowBA.getUTCMinutes();
+        const [ch, cm] = cutoffTimeCash.split(':').map(Number);
+        if (currentMin >= ch * 60 + cm) {
+          return res.status(409).json({
+            error: `Reservas para hoy se aceptan hasta las ${cutoffTimeCash} (hora Buenos Aires)`,
+          });
+        }
+      }
+    }
+
+    // Validar disponibilidad puntual: fechas cerradas y capacidad real
+    const availCheckCash = await checkSingleDateAvailability(
+      option.id, option.default_capacity_per_day, input.service_date, input.adults + input.children,
+    );
+    if (!availCheckCash.ok) {
+      return res.status(409).json({ error: availCheckCash.message ?? 'Fecha no disponible' });
+    }
+
+    // Cálculo de totales
+    const priceAdult = Number.parseFloat(option.price_adult_usd);
+    const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
+    if (input.children > 0 && option.price_child_usd == null) {
+      return res.status(400).json({ error: 'This option does not allow children pricing' });
+    }
+    const transferPriceUsdCash = Number.parseFloat(option.transfer_price_usd ?? '0');
+    const transferSubtotalCash = (input.transfer_requested && transferPriceUsdCash > 0)
+      ? Math.round(transferPriceUsdCash * (input.adults + input.children) * 100) / 100
+      : 0;
+    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash;
+
+    const rate = await getExchangeRate();
+    const totalArs = convertUsdToArs(subtotalUsd, rate);
+
+    // Verificar que el ref_code pertenece a un vendedor activo y permanente
+    const { rows: sellerCheck } = await pool.query<{ id: number; is_permanent: boolean }>(
+      `SELECT id, is_permanent FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+      [input.ref_code],
+    );
+    if (sellerCheck.length === 0) {
+      return res.status(400).json({ error: 'Código de vendedor inválido o inactivo' });
+    }
+    if (!sellerCheck[0].is_permanent) {
+      return res.status(403).json({ error: 'Este vendedor no tiene habilitado el cobro en efectivo' });
+    }
+
+    // Crear la orden con payment_method = 'cash'
+    const order = await createPendingOrder({
+      customer: input.customer,
+      item: {
+        product_id: option.product_id,
+        option_id: option.id,
+        product_name_snapshot: option.product_name,
+        option_name_snapshot: option.name_es,
+        service_date: input.service_date,
+        adults: input.adults,
+        children: input.children,
+        unit_price_adult_usd: priceAdult,
+        unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
+        subtotal_usd: subtotalUsd,
+        transfer_requested: input.transfer_requested ?? false,
+        transfer_hotel: input.transfer_hotel ?? null,
+      },
+      total_usd: subtotalUsd,
+      total_ars: totalArs,
+      exchange_rate_used: rate,
+      ref_code: input.ref_code,
+      payment_method: 'cash',
+      utm: input.utm,
+    });
+
+    await logPaymentEvent(order.id, 'cash_order_created', null, { ref_code: input.ref_code });
+
+    // Notificaciones: fire-and-forget
+    sendCashOrderNotifications(order.id).catch((err) =>
+      console.error('[email] sendCashOrderNotifications failed for order', order.id, err),
+    );
+    createCashBookingNotification(order.id).catch((err) =>
+      console.error('[notif] createCashBookingNotification failed for order', order.id, err),
+    );
+
+    res.status(201).json({ data: { order_public_id: order.public_id, total_usd: subtotalUsd } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/checkout/webhook ──────────────────────────
+// MP envía notificaciones cuando cambia el estado de un pago.
+// Firma: header x-signature con HMAC-SHA256(`id:${data.id};request-id:${x-request-id};ts:${ts}`, secret)
+checkoutRouter.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const eventType = (req.body?.type ?? req.query?.type) as string | undefined;
+    const dataId = (req.body?.data?.id ?? req.query?.['data.id']) as string | undefined;
+
+    // Verificación de firma solo si MP envía el header x-signature (nuevo formato webhook).
+    // IPN legacy (topic=payment, sin x-signature) se acepta sin firma.
+    const signatureHeader = req.header('x-signature');
+    if (signatureHeader && config.MP_WEBHOOK_SECRET && config.MP_WEBHOOK_SECRET !== 'change-me-when-configured-in-mp-panel') {
+      const requestId = req.header('x-request-id') ?? '';
+      const isValid = verifyMpSignature(signatureHeader, requestId, dataId ?? '', config.MP_WEBHOOK_SECRET);
+      if (!isValid) {
+        await logPaymentEvent(null, 'webhook_invalid_signature', dataId ?? null, req.body);
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+    }
+
+    await logPaymentEvent(null, `webhook_${eventType ?? 'unknown'}`, dataId ?? null, req.body);
+
+    // Solo procesamos eventos de tipo 'payment'
+    if (eventType !== 'payment' || !dataId) {
+      return res.status(200).json({ received: true });
+    }
+
+    // Consultar el pago en MP
+    let payment;
+    try {
+      payment = await fetchPayment(dataId);
+    } catch (err) {
+      const isNotFound = (err as { status?: number; error?: string })?.status === 404
+        || (err as { error?: string })?.error === 'not_found';
+      if (isNotFound) {
+        await logPaymentEvent(null, 'webhook_payment_not_found', dataId, req.body);
+        return res.status(200).json({ received: true, note: 'payment not found in MP' });
+      }
+      throw err;
+    }
+    const externalRef = payment.external_reference;
+    if (!externalRef) {
+      await logPaymentEvent(null, 'webhook_no_external_ref', dataId, payment);
+      return res.status(200).json({ received: true, note: 'no external_reference' });
+    }
+
+    const newStatus = mapMpStatusToOrderStatus(payment.status);
+    const client = await pool.connect();
+    try {
+      const updated = await updateOrderFromPayment(client, externalRef, {
+        status: newStatus,
+        mp_payment_id: String(payment.id ?? ''),
+        mp_payment_status: payment.status ?? null,
+        mp_payment_method: payment.payment_method_id ?? null,
+        paid_at: newStatus === 'paid' ? new Date() : null,
+      });
+      if (updated) {
+        await logPaymentEvent(updated.id, `order_${newStatus}`, dataId, {
+          payment_id: payment.id,
+          status: payment.status,
+          status_detail: payment.status_detail,
+        });
+        // Disparar notificaciones por email solo cuando pasa a 'paid' por primera vez.
+        // No bloqueamos el webhook esperando los emails: fire-and-forget con catch.
+        if (newStatus === 'paid' && updated.status === 'paid') {
+          sendOrderPaidNotifications(updated.id).catch((err) =>
+            console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
+          );
+          createOrderPaidNotification(updated.id).catch((err) =>
+            console.error('[notif] createOrderPaidNotification failed for order', updated.id, err),
+          );
+        }
+      }
+    } finally {
+      client.release();
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── GET /api/checkout/orders/:publicId ───────────────────
+// Endpoint público para que las páginas de retorno muestren info del pago.
+// No expone datos sensibles, solo lo necesario para el "thanks" page.
+checkoutRouter.get('/orders/:publicId', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+    const order = await findOrderByPublicId(publicId);
+    if (!order) return res.status(404).json({ error: 'Not found' });
+    res.json({
+      data: {
+        public_id: publicId,
+        status: order.status,
+        total_usd: order.total_usd,
+        total_ars: order.total_ars,
+        customer_email: order.customer_email,
+        customer_name: order.customer_name,
+        payment_method: order.payment_method,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// HMAC-SHA256 según docs MP: el manifest es `id:{data.id};request-id:{x-request-id};ts:{ts}`
+// donde ts y v1 vienen en el header x-signature como "ts=...,v1=..."
+function verifyMpSignature(
+  signatureHeader: string,
+  requestId: string,
+  dataId: string,
+  secret: string,
+): boolean {
+  if (!signatureHeader) return false;
+  const parts = Object.fromEntries(
+    signatureHeader.split(',').map((p) => p.trim().split('=') as [string, string]),
+  );
+  const ts = parts.ts;
+  const v1 = parts.v1;
+  if (!ts || !v1) return false;
+  const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+  const expected = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+  // Comparación constant-time
+  if (expected.length !== v1.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
+}
