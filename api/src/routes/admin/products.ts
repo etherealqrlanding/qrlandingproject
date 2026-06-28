@@ -7,6 +7,7 @@ import {
   adminDeleteImage,
   adminDeleteOption,
   adminDeleteProduct,
+  adminHardDeleteProduct,
   adminGetProduct,
   adminListProducts,
   adminUpdateImage,
@@ -74,10 +75,27 @@ adminProductsRouter.patch('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// DELETE /api/admin/products/:id
+//   (default)      → soft delete: marca is_active = FALSE (conserva historial).
+//   ?mode=hard     → borrado definitivo. Solo si no aparece en órdenes; si tiene ventas
+//                    devuelve 409 con el conteo para que el front ofrezca desactivar.
 adminProductsRouter.delete('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+
+    if (req.query.mode === 'hard') {
+      const result = await adminHardDeleteProduct(id);
+      if (result.blocked) {
+        return res.status(409).json({
+          error: `El producto aparece en ${result.orderCount} orden(es) histórica(s) y no puede borrarse definitivamente. Podés desactivarlo en su lugar.`,
+          details: { order_count: result.orderCount },
+        });
+      }
+      if (!result.deleted) return res.status(404).json({ error: 'Not found' });
+      return res.json({ data: { ok: true } });
+    }
+
     const ok = await adminDeleteProduct(id);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ data: { ok: true } });
@@ -96,9 +114,16 @@ const optionSchema = z.object({
   includes_en: z.array(z.string().max(300)).max(30).optional(),
   price_adult_usd: z.number().nonnegative(),
   price_child_usd: z.number().nonnegative().optional().nullable(),
+  net_price_adult_usd: z.number().nonnegative().optional().nullable(),
+  net_price_child_usd: z.number().nonnegative().optional().nullable(),
+  net_price_currency: z.enum(['USD', 'ARS']).optional().nullable(),
+  net_price_adult_ars: z.number().nonnegative().optional().nullable(),
+  net_price_child_ars: z.number().nonnegative().optional().nullable(),
   has_dinner: z.boolean().optional(),
   has_transfer: z.boolean().optional(),
   transfer_price_usd: z.number().nonnegative().optional(),
+  net_transfer_price_usd: z.number().nonnegative().optional().nullable(),
+  net_transfer_price_ars: z.number().nonnegative().optional().nullable(),
   available_days: z.array(z.number().int().min(1).max(7)).max(7).optional(),
   pickup_window_es: z.string().max(200).optional().nullable(),
   pickup_window_en: z.string().max(200).optional().nullable(),

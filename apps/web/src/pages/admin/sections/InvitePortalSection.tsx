@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { adminApi, AdminApiError, type AdminSeller } from '../../../lib/adminApi';
+import Spinner from '../../../components/Spinner';
 
 interface Props {
   seller: AdminSeller;
@@ -70,7 +71,7 @@ export default function InvitePortalSection({ seller, onUpdated }: Readonly<Prop
           disabled={loading || !hasEmail}
           className="btn-ghost text-sm disabled:opacity-40 whitespace-nowrap"
         >
-          {loading ? 'Generando...' : buttonLabel}
+          {loading ? <><Spinner size="sm" className="mr-2" />Generando...</> : buttonLabel}
         </button>
       </div>
 

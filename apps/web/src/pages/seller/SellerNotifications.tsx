@@ -37,12 +37,12 @@ export default function SellerNotifications() {
   const unread = notifications.filter((n) => !n.read_at).length;
 
   return (
-    <div className="p-8 max-w-3xl">
-      <header className="mb-8">
+    <div className="p-4 md:p-8 max-w-3xl">
+      <header className="mb-5 md:mb-8">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
-        <h1 className="mt-2 font-display text-4xl text-cream">Notificaciones</h1>
+        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Notificaciones</h1>
         {!loading && unread > 0 && (
-          <p className="mt-1 text-sm text-gold-soft">
+          <p className="mt-0.5 text-xs md:text-sm text-gold-soft">
             {unread} notificación{unread !== 1 ? 'es' : ''} sin leer
           </p>
         )}
@@ -106,7 +106,7 @@ export default function SellerNotifications() {
       )}
 
       {/* Recordatorio de contacto */}
-      <div className="mt-10 rounded-xl border border-gold/10 bg-ink-soft/20 p-5 flex gap-4 items-start">
+      <div className="mt-6 md:mt-10 rounded-xl border border-gold/10 bg-ink-soft/20 p-4 md:p-5 flex gap-3 md:gap-4 items-start">
         <span className="text-2xl leading-none" aria-hidden>💬</span>
         <div>
           <p className="text-sm text-cream/80 font-medium mb-1">¿Tenés alguna duda?</p>

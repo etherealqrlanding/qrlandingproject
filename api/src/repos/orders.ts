@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
+import { getMpFeePct } from '../services/settings.js';
 
 export interface CreateOrderInput {
   customer: {
@@ -21,6 +22,8 @@ export interface CreateOrderInput {
     subtotal_usd: number;
     transfer_requested?: boolean;
     transfer_hotel?: string | null;
+    // Net prices snapshot (optional: only set when option has them configured)
+    net_total_usd?: number | null;
   };
   total_usd: number;
   total_ars: number;
@@ -77,21 +80,34 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
 
     // Atribución a vendedor si vino ref válido
     if (input.ref_code) {
-      const { rows: sellerRows } = await client.query<{ id: number; commission_percent: string }>(
-        `SELECT id, commission_percent FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+      const { rows: sellerRows } = await client.query<{ id: number }>(
+        `SELECT id FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
         [input.ref_code],
       );
       const seller = sellerRows[0];
       if (seller) {
-        const commissionPct = Number.parseFloat(seller.commission_percent);
-        const commissionUsd = Math.round(input.total_usd * commissionPct) / 100;
-        const commissionArs = Math.round(input.total_ars * commissionPct) / 100;
+        const netTotalUsd = input.item.net_total_usd ?? null;
+        let commissionUsd = 0;
+        let mpFeePctSnapshot: number | null = null;
+
+        if (netTotalUsd != null) {
+          if (input.payment_method === 'cash') {
+            // Efectivo: comisión = bruto - neto (sin descuento de fee)
+            commissionUsd = Math.max(0, Math.round((input.total_usd - netTotalUsd) * 100) / 100);
+          }
+          // Para MP: la comisión se calcula en el webhook cuando el pago se confirma,
+          // porque el fee de MP se aplica al momento real del cobro.
+          // Dejamos commission_amount_usd = 0 y lo actualizamos en updateCommissionForMpOrder().
+        }
+
+        const commissionArs = Math.round(commissionUsd * input.exchange_rate_used * 100) / 100;
         await client.query(
           `INSERT INTO order_attributions (
-             order_id, seller_id, commission_percent_snapshot,
+             order_id, seller_id,
+             net_total_usd_snapshot, mp_fee_pct_snapshot,
              commission_amount_usd, commission_amount_ars
-           ) VALUES ($1,$2,$3,$4,$5)`,
-          [order.id, seller.id, commissionPct, commissionUsd, commissionArs],
+           ) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [order.id, seller.id, netTotalUsd, mpFeePctSnapshot, commissionUsd, commissionArs],
         );
       }
     }
@@ -156,6 +172,45 @@ export async function logPaymentEvent(
     `INSERT INTO payment_events (order_id, event_type, mp_resource_id, payload)
      VALUES ($1, $2, $3, $4::jsonb)`,
     [orderId, eventType, mpResourceId, JSON.stringify(payload)],
+  );
+}
+
+/**
+ * Calcula y guarda la comisión para una orden MP recién pagada.
+ * Se llama desde el webhook cuando el status pasa a 'paid'.
+ * Fórmula: commission = max(0, total_usd × (1 - mp_fee_pct/100) - net_total_usd_snapshot)
+ */
+export async function updateCommissionForMpOrder(client: PoolClient, orderId: number): Promise<void> {
+  const { rows: orderRows } = await client.query<{ total_usd: string; exchange_rate_used: string }>(
+    `SELECT total_usd::text, exchange_rate_used::text FROM orders WHERE id = $1 LIMIT 1`,
+    [orderId],
+  );
+  const order = orderRows[0];
+  if (!order) return;
+
+  const { rows: attrRows } = await client.query<{ id: number; net_total_usd_snapshot: string | null }>(
+    `SELECT id, net_total_usd_snapshot::text FROM order_attributions WHERE order_id = $1 LIMIT 1`,
+    [orderId],
+  );
+  const attr = attrRows[0];
+  if (!attr || attr.net_total_usd_snapshot == null) return;
+
+  const mpFeePct = await getMpFeePct();
+  const totalUsd = Number.parseFloat(order.total_usd);
+  const netTotalUsd = Number.parseFloat(attr.net_total_usd_snapshot);
+  const exchangeRate = Number.parseFloat(order.exchange_rate_used);
+
+  const grossAfterFee = totalUsd * (1 - mpFeePct / 100);
+  const commissionUsd = Math.max(0, Math.round((grossAfterFee - netTotalUsd) * 100) / 100);
+  const commissionArs = Math.round(commissionUsd * exchangeRate * 100) / 100;
+
+  await client.query(
+    `UPDATE order_attributions
+        SET commission_amount_usd = $1,
+            commission_amount_ars = $2,
+            mp_fee_pct_snapshot   = $3
+      WHERE id = $4`,
+    [commissionUsd, commissionArs, mpFeePct, attr.id],
   );
 }
 

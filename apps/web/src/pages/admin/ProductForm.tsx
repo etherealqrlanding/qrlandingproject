@@ -4,8 +4,10 @@ import { adminApi, AdminApiError, type AdminCategory, type AdminProductDetail } 
 import OptionsEditor from './sections/OptionsEditor';
 import ImagesEditor from './sections/ImagesEditor';
 import GeneralSection from './sections/GeneralSection';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 type Tab = 'general' | 'options' | 'images';
+type DeleteDialog = 'deactivate' | 'hard';
 
 export default function ProductForm() {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +19,8 @@ export default function ProductForm() {
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<DeleteDialog | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     adminApi.categories.list().then(setCategories).catch(() => { /* ignore for now */ });
@@ -38,15 +42,32 @@ export default function ProductForm() {
 
   const handleUpdated = (updated: AdminProductDetail) => setProduct(updated);
 
-  const handleDelete = async () => {
+  const runDeactivate = async () => {
     if (!product) return;
-    if (!confirm(`¿Marcar "${product.name}" como inactivo? No se borra de la DB.`)) return;
+    setDeleting(true);
     try {
       await adminApi.products.delete(product.id);
       navigate('/admin/products');
     } catch (err) {
-      const message = err instanceof AdminApiError ? err.message : (err as Error).message;
-      alert(`Error: ${message}`);
+      setError(err instanceof AdminApiError ? err.message : (err as Error).message);
+      setDialog(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const runHardDelete = async () => {
+    if (!product) return;
+    setDeleting(true);
+    try {
+      await adminApi.products.delete(product.id, { hard: true });
+      navigate('/admin/products');
+    } catch (err) {
+      // 409 = aparece en órdenes históricas: solo se puede desactivar.
+      setError(err instanceof AdminApiError ? err.message : (err as Error).message);
+      setDialog(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -108,7 +129,8 @@ export default function ProductForm() {
               isNew={isNew}
               onCreated={handleCreated}
               onUpdated={handleUpdated}
-              onDelete={!isNew ? handleDelete : undefined}
+              onDelete={isNew ? undefined : () => setDialog('deactivate')}
+              onHardDelete={isNew ? undefined : () => setDialog('hard')}
             />
           )}
           {tab === 'options' && product && (
@@ -119,6 +141,33 @@ export default function ProductForm() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        open={dialog === 'deactivate'}
+        danger={false}
+        title="Desactivar producto"
+        message={<p>Se ocultará <strong className="text-cream">{product?.name}</strong> de la web pública, pero queda en la base y podés reactivarlo cuando quieras. No afecta a las órdenes existentes.</p>}
+        confirmLabel="Desactivar"
+        loading={deleting}
+        onConfirm={runDeactivate}
+        onCancel={() => setDialog(null)}
+      />
+
+      <ConfirmDialog
+        open={dialog === 'hard'}
+        title="Eliminar producto definitivamente"
+        message={
+          <>
+            <p>Vas a eliminar <strong className="text-cream">{product?.name}</strong> de forma permanente, junto con sus tiers, imágenes y cupos. Esta acción no se puede deshacer.</p>
+            <p className="text-cream/50">Si el producto aparece en órdenes históricas, no se podrá borrar (solo desactivar) para preservar el historial de ventas.</p>
+          </>
+        }
+        confirmLabel="Eliminar definitivamente"
+        requireText="ELIMINAR"
+        loading={deleting}
+        onConfirm={runHardDelete}
+        onCancel={() => setDialog(null)}
+      />
     </div>
   );
 }

@@ -63,3 +63,29 @@ export async function setSameDayCutoff(time: string | null): Promise<void> {
 export function convertUsdToArs(amountUsd: number, rate: number): number {
   return Math.round(amountUsd * rate * 100) / 100;
 }
+
+const MP_FEE_KEY = 'mp_fee_pct';
+
+export async function getMpFeePct(): Promise<number> {
+  const { rows } = await pool.query<{ value: { pct: number } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [MP_FEE_KEY],
+  );
+  const pct = rows[0]?.value?.pct;
+  if (typeof pct !== 'number' || pct < 0 || pct > 100) return 10; // default 10%
+  return pct;
+}
+
+export async function setMpFeePct(pct: number): Promise<void> {
+  if (pct < 0 || pct > 100) throw new Error('mp_fee_pct must be between 0 and 100');
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [
+      MP_FEE_KEY,
+      JSON.stringify({ pct, updated_at: new Date().toISOString() }),
+      'Porcentaje de comisión de Mercado Pago. Se descuenta del bruto al calcular comisión del vendedor.',
+    ],
+  );
+}

@@ -45,14 +45,14 @@ export default function SellerBooking() {
   };
 
   return (
-    <div className="p-8 max-w-4xl">
-      <header className="mb-6">
+    <div className="p-4 md:p-8 max-w-4xl">
+      <header className="mb-4 md:mb-6">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
-        <h1 className="mt-2 font-display text-4xl text-cream">Nueva Reserva</h1>
-        <p className="mt-1 text-sm text-cream/50">Ingresá una reserva en nombre de un pasajero</p>
+        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Nueva Reserva</h1>
+        <p className="mt-0.5 text-xs md:text-sm text-cream/50">Ingresá una reserva en nombre de un pasajero</p>
       </header>
 
-      <div className="mb-6 rounded-xl border border-gold/20 bg-gold/5 p-4 flex gap-3">
+      <div className="mb-4 md:mb-6 rounded-xl border border-gold/20 bg-gold/5 p-3 md:p-4 flex gap-3">
         <span className="text-gold text-lg mt-0.5" aria-hidden>✦</span>
         <div className="text-sm text-cream/70 leading-relaxed">
           <strong className="text-cream/90">Reservas manuales:</strong> elegí el show y la opción, completá los datos

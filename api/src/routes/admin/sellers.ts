@@ -81,13 +81,15 @@ adminSellersRouter.delete('/:id', async (req, res, next) => {
 });
 
 // DELETE /api/admin/sellers/:id/permanent — elimina definitivamente el registro.
-// Falla con 409 si el vendedor tiene ventas asociadas (integridad histórica).
+// Sin ?force=true: falla con 409 si el vendedor tiene ventas (incluye el conteo en details).
+// Con ?force=true: borra también todas las ventas que trajo (cascada).
 adminSellersRouter.delete('/:id/permanent', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const force = req.query.force === 'true';
 
-    const result = await deleteSeller(id);
+    const result = await deleteSeller(id, { force });
     if (!result.deleted) return res.status(404).json({ error: 'Not found' });
 
     // Si tenía cuenta en Supabase Auth, la eliminamos también
@@ -97,10 +99,11 @@ adminSellersRouter.delete('/:id/permanent', async (req, res, next) => {
       });
     }
 
-    res.json({ data: { ok: true } });
+    res.json({ data: { ok: true, deleted_orders: result.deleted_orders } });
   } catch (err) {
     if ((err as Error & { code?: string }).code === 'HAS_ORDERS') {
-      return res.status(409).json({ error: (err as Error).message });
+      const orderCount = (err as Error & { orderCount?: number }).orderCount ?? 0;
+      return res.status(409).json({ error: (err as Error).message, details: { order_count: orderCount } });
     }
     next(err);
   }

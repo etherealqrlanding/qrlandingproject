@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 import BottomNavAdmin from './BottomNavAdmin';
 
@@ -13,6 +14,12 @@ const NAV = [
 export default function AdminLayout() {
   const { me, signOut } = useAdminAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -20,11 +27,11 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="min-h-screen flex bg-ink text-cream">
+    <div className="h-[100dvh] overflow-hidden flex bg-ink text-cream">
       {/* Sidebar — solo desktop */}
       <aside className="hidden md:flex w-64 shrink-0 border-r border-gold/10 bg-ink-soft/40 flex-col">
         <div className="px-6 py-5 border-b border-gold/10">
-          <p className="font-display text-xl text-gold">Ethereal</p>
+          <p className="font-display text-xl text-gold">ticketstangoshow</p>
           <p className="text-xs text-cream/50">Panel administrativo</p>
         </div>
 
@@ -66,10 +73,10 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header móvil */}
         <header className="md:hidden sticky top-0 z-30 bg-ink-soft/90 backdrop-blur border-b border-gold/10 flex items-center justify-between px-4 h-12">
-          <p className="font-display text-lg text-gold">Ethereal</p>
+          <p className="font-display text-lg text-gold">ticketstangoshow</p>
           <div className="flex items-center gap-4">
             {me && <p className="text-xs text-cream/50 truncate max-w-[140px]">{me.admin.email}</p>}
             <button
@@ -82,7 +89,7 @@ export default function AdminLayout() {
           </div>
         </header>
 
-        <main className="flex-1 min-w-0 pb-16 md:pb-0">
+        <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden pb-24 md:pb-0">
           <Outlet />
         </main>
       </div>

@@ -1,16 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
+import { LoadingScreen } from '../Spinner';
 
 export default function ProtectedSellerRoute({ children }: { readonly children: React.ReactNode }) {
   const { loading, session, me, error, hasTransientError, refresh } = useSellerAuth();
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink text-cream/60">
-        <p className="text-sm">Cargando sesión...</p>
-      </div>
-    );
+    return <LoadingScreen label="Cargando sesión..." />;
   }
 
   if (!session) {
@@ -23,7 +20,7 @@ export default function ProtectedSellerRoute({ children }: { readonly children: 
         <div className="max-w-md text-center">
           <p className="text-2xl font-display text-bordeaux-light">Acceso denegado</p>
           <p className="mt-3 text-sm text-cream/70">
-            Tu sesión es válida pero no tenés acceso al portal de vendedores. Contactá a Ethereal Tours para que te habiliten.
+            Tu sesión es válida pero no tenés acceso al portal de vendedores. Contactá a ticketstangoshow para que te habiliten.
           </p>
         </div>
       </div>

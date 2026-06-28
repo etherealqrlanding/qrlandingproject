@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { supabase } from '../../lib/supabase';
 import { sellerApi } from '../../lib/sellerApi';
+import Spinner, { LoadingScreen } from '../../components/Spinner';
 
 // El cliente Supabase tiene detectSessionInUrl: false (para no interferir con el admin).
 // Cuando llegamos vía link de invite/recovery, necesitamos establecer la sesión manualmente
@@ -20,6 +21,24 @@ function parseHashTokens(): { accessToken: string; refreshToken: string; type: s
   return null;
 }
 
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function SellerLogin() {
   const { signIn, session, me, loading, meLoading, hasTransientError } = useSellerAuth();
   const navigate = useNavigate();
@@ -33,6 +52,8 @@ export default function SellerLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -82,11 +103,7 @@ export default function SellerLogin() {
   };
 
   if (loading || sessionEstablishing) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink">
-        <p className="text-sm text-cream/50">Verificando acceso...</p>
-      </div>
-    );
+    return <LoadingScreen label="Verificando acceso..." />;
   }
 
   if (mode === 'login' && session && me) return <Navigate to={from} replace />;
@@ -140,46 +157,70 @@ export default function SellerLogin() {
   const submitLabel = isInvite ? 'Crear contraseña e ingresar' : 'Guardar contraseña';
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-ink p-6">
-      <div className="w-full max-w-md">
-        <p className="block text-center font-display text-3xl text-gold mb-2">
-          Ethereal Tours
+    <div className="h-[100dvh] overflow-y-auto flex flex-col items-center bg-ink px-4">
+      <div className="w-full max-w-md my-auto py-6">
+        <p className="block text-center font-display text-3xl text-gold mb-1">
+          ticketstangoshow
         </p>
-        <p className="text-center text-xs uppercase tracking-[0.3em] text-gold-soft mb-10">
+        <p className="text-center text-xs uppercase tracking-[0.3em] text-gold-soft mb-4 sm:mb-8">
           Portal de vendedores
         </p>
 
         {/* ── Crear / resetear contraseña ── */}
         {mode === 'set-password' && (
-          <form onSubmit={handleSetPassword} className="rounded-2xl border border-gold/15 bg-ink-soft/60 p-7 space-y-5">
+          <form onSubmit={handleSetPassword} className="rounded-2xl border border-gold/15 bg-ink-soft/60 p-4 sm:p-6 space-y-3 sm:space-y-5">
             <div>
               <h1 className="font-display text-2xl text-cream">
                 {isInvite ? 'Crear tu contraseña' : 'Nueva contraseña'}
               </h1>
               <p className="mt-1 text-sm text-cream/50">
                 {isInvite
-                  ? 'Bienvenido a Ethereal Tours. Elegí una contraseña para acceder al portal cuando quieras.'
+                  ? 'Bienvenido a ticketstangoshow. Elegí una contraseña para acceder al portal cuando quieras.'
                   : 'Ingresá y confirmá tu nueva contraseña.'}
               </p>
             </div>
 
             <label className="block">
               <span className="block text-sm text-cream/80 mb-1.5">Contraseña</span>
-              <input
-                type="password" required autoFocus autoComplete="new-password"
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                placeholder="Mínimo 8 caracteres"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required autoFocus autoComplete="new-password"
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="input pr-10"
+                  placeholder="Mínimo 8 caracteres"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-cream/40 hover:text-cream/70 transition-colors"
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
             </label>
 
             <label className="block">
               <span className="block text-sm text-cream/80 mb-1.5">Confirmar contraseña</span>
-              <input
-                type="password" required autoComplete="new-password"
-                value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)}
-                className="input"
-              />
+              <div className="relative">
+                <input
+                  type={showPasswordConfirm ? 'text' : 'password'}
+                  required autoComplete="new-password"
+                  value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)}
+                  className="input pr-10"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPasswordConfirm((v) => !v)}
+                  aria-label={showPasswordConfirm ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-cream/40 hover:text-cream/70 transition-colors"
+                >
+                  {showPasswordConfirm ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
             </label>
 
             {error && (
@@ -198,14 +239,14 @@ export default function SellerLogin() {
               disabled={submitting || Boolean(success)}
               className="btn-primary w-full disabled:opacity-50"
             >
-              {submitting ? 'Guardando...' : submitLabel}
+              {submitting ? <><Spinner size="sm" className="mr-2" />Guardando...</> : submitLabel}
             </button>
           </form>
         )}
 
         {/* ── Login normal ── */}
         {mode === 'login' && (
-          <form onSubmit={handleLogin} className="rounded-2xl border border-gold/15 bg-ink-soft/60 p-7 space-y-5">
+          <form onSubmit={handleLogin} className="rounded-2xl border border-gold/15 bg-ink-soft/60 p-4 sm:p-6 space-y-3 sm:space-y-5">
             <h1 className="font-display text-2xl text-cream">Iniciar sesión</h1>
 
             <label className="block">
@@ -219,11 +260,23 @@ export default function SellerLogin() {
 
             <label className="block">
               <span className="block text-sm text-cream/80 mb-1.5">Contraseña</span>
-              <input
-                type="password" required minLength={6} autoComplete="current-password"
-                value={password} onChange={(e) => setPassword(e.target.value)}
-                className="input"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required minLength={6} autoComplete="current-password"
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  className="input pr-10"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-cream/40 hover:text-cream/70 transition-colors"
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
             </label>
 
             {error && (
@@ -233,7 +286,7 @@ export default function SellerLogin() {
             )}
 
             <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50">
-              {submitting ? 'Ingresando...' : 'Ingresar'}
+              {submitting ? <><Spinner size="sm" className="mr-2" />Ingresando...</> : 'Ingresar'}
             </button>
 
             <button
@@ -248,7 +301,7 @@ export default function SellerLogin() {
 
         {/* ── Olvidé mi contraseña ── */}
         {mode === 'forgot-password' && (
-          <form onSubmit={handleForgotPassword} className="rounded-2xl border border-gold/15 bg-ink-soft/60 p-7 space-y-5">
+          <form onSubmit={handleForgotPassword} className="rounded-2xl border border-gold/15 bg-ink-soft/60 p-4 sm:p-6 space-y-3 sm:space-y-5">
             <div>
               <h1 className="font-display text-2xl text-cream">Restablecer contraseña</h1>
               <p className="mt-1 text-sm text-cream/50">
@@ -275,7 +328,7 @@ export default function SellerLogin() {
 
             {!success && (
               <button type="submit" disabled={submitting} className="btn-primary w-full disabled:opacity-50">
-                {submitting ? 'Enviando...' : 'Enviar link de acceso'}
+                {submitting ? <><Spinner size="sm" className="mr-2" />Enviando...</> : 'Enviar link de acceso'}
               </button>
             )}
 

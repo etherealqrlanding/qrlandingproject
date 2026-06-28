@@ -22,6 +22,9 @@ const blankOption: Partial<AdminOption> = {
   description_es: '', description_en: '',
   includes_es: [], includes_en: [],
   price_adult_usd: 0, price_child_usd: null,
+  net_price_currency: 'USD',
+  net_price_adult_usd: null, net_price_child_usd: null, net_transfer_price_usd: null,
+  net_price_adult_ars: null, net_price_child_ars: null, net_transfer_price_ars: null,
   has_dinner: false, has_transfer: false, transfer_price_usd: 0,
   available_days: [1, 2, 3, 4, 5, 6, 7],
   pickup_window_es: '', pickup_window_en: '',
@@ -57,11 +60,19 @@ export default function OptionsEditor({ product, onChange }: Props) {
 
   const handleSaveExisting = async (opt: AdminOption, changes: Partial<AdminOption>) => {
     try {
+      const parseNetField = (v: unknown) => (v != null && v !== '') ? Number(v) : null;
       const payload: Partial<AdminOption> = {
         ...changes,
+        net_price_currency: (changes.net_price_currency ?? 'USD') as 'USD' | 'ARS',
         price_adult_usd: Number(changes.price_adult_usd ?? 0),
         price_child_usd: changes.price_child_usd != null && changes.price_child_usd !== ('' as unknown)
           ? Number(changes.price_child_usd) : null,
+        net_price_adult_usd: parseNetField(changes.net_price_adult_usd),
+        net_price_child_usd: parseNetField(changes.net_price_child_usd),
+        net_transfer_price_usd: parseNetField(changes.net_transfer_price_usd),
+        net_price_adult_ars: parseNetField(changes.net_price_adult_ars),
+        net_price_child_ars: parseNetField(changes.net_price_child_ars),
+        net_transfer_price_ars: parseNetField(changes.net_transfer_price_ars),
         default_capacity_per_day: changes.default_capacity_per_day != null ? Number(changes.default_capacity_per_day) : undefined,
         low_availability_threshold: changes.low_availability_threshold != null ? Number(changes.low_availability_threshold) : undefined,
         display_order: changes.display_order != null ? Number(changes.display_order) : undefined,
@@ -76,11 +87,19 @@ export default function OptionsEditor({ product, onChange }: Props) {
 
   const handleCreate = async () => {
     try {
+      const parseNetField = (v: unknown) => (v != null && v !== '') ? Number(v) : null;
       const payload = {
         ...draftNew,
+        net_price_currency: (draftNew.net_price_currency ?? 'USD') as 'USD' | 'ARS',
         price_adult_usd: Number(draftNew.price_adult_usd ?? 0),
         price_child_usd: draftNew.price_child_usd != null && draftNew.price_child_usd !== ''
           ? Number(draftNew.price_child_usd) : null,
+        net_price_adult_usd: parseNetField(draftNew.net_price_adult_usd),
+        net_price_child_usd: parseNetField(draftNew.net_price_child_usd),
+        net_transfer_price_usd: parseNetField(draftNew.net_transfer_price_usd),
+        net_price_adult_ars: parseNetField(draftNew.net_price_adult_ars),
+        net_price_child_ars: parseNetField(draftNew.net_price_child_ars),
+        net_transfer_price_ars: parseNetField(draftNew.net_transfer_price_ars),
       };
       await adminApi.products.options.create(product.id, payload);
       setDraftNew(blankOption);
@@ -164,23 +183,45 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
 }) {
   const [draft, setDraft] = useState<Partial<AdminOption>>(option);
 
+  const netCur = option.net_price_currency ?? 'USD';
+  const netAdult = netCur === 'USD' ? option.net_price_adult_usd : option.net_price_adult_ars;
+  const netChild = netCur === 'USD' ? option.net_price_child_usd : option.net_price_child_ars;
+  const fmt = (v: number | string | null | undefined) =>
+    v == null || v === '' ? null : Number(v).toLocaleString('es-AR');
+
   return (
     <div className={`rounded-lg border overflow-hidden transition ${option.is_active ? 'border-gold/10 bg-ink-soft/40' : 'border-white/5 bg-ink-soft/20 opacity-70'}`}>
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 hover:bg-gold/5 transition text-left"
+        className="w-full p-4 hover:bg-gold/5 transition text-left"
       >
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-cream/40 font-mono">#{option.display_order}</span>
-          <div>
-            <p className={`font-medium ${option.is_active ? 'text-cream' : 'text-cream/50'}`}>{option.name_es}</p>
-            <p className="text-xs text-cream/50">{option.code}</p>
+        {/* Fila 1: orden + nombre + flecha */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-xs text-cream/40 font-mono shrink-0">#{option.display_order}</span>
+            <div className="min-w-0">
+              <p className={`font-medium leading-tight ${option.is_active ? 'text-cream' : 'text-cream/50'}`}>{option.name_es}</p>
+              <p className="text-xs text-cream/50 mt-0.5">{option.code}</p>
+            </div>
           </div>
+          <span className="text-cream/40 shrink-0 mt-0.5">{expanded ? '▴' : '▾'}</span>
         </div>
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-gold">USD {option.price_adult_usd}</span>
-          <span className="text-cream/50">Cupo: {option.default_capacity_per_day}</span>
+        {/* Fila 2: precio + cupo + visibilidad */}
+        <div className="flex items-center gap-3 mt-2.5 flex-wrap pl-7">
+          <span className="text-gold text-sm">
+            Venta USD {option.price_adult_usd}
+            {fmt(option.price_child_usd) && <span className="text-gold/60"> · menor {fmt(option.price_child_usd)}</span>}
+          </span>
+          {fmt(netAdult) ? (
+            <span className="text-cream/60 text-xs">
+              Neto {netCur} {fmt(netAdult)}
+              {fmt(netChild) && <span className="text-cream/40"> · menor {fmt(netChild)}</span>}
+            </span>
+          ) : (
+            <span className="text-bordeaux-light/80 text-xs">Neto sin definir</span>
+          )}
+          <span className="text-cream/40 text-xs">Cupo: {option.default_capacity_per_day}</span>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggleVisibility(); }}
@@ -196,7 +237,6 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
             <span className={`w-1.5 h-1.5 rounded-full ${option.is_active ? 'bg-gold' : 'bg-cream/30'}`} />
             {isToggling ? '...' : option.is_active ? 'Visible' : 'Oculto'}
           </button>
-          <span className="text-cream/40">{expanded ? '▴' : '▾'}</span>
         </div>
       </button>
 
@@ -326,6 +366,97 @@ function OptionFormFields({ option, onChange }: {
             className="input"
           />
         </Field>
+      </div>
+
+      {/* Valores netos — base para calcular comisión del vendedor */}
+      <div className="rounded-lg border border-gold/15 bg-ink/30 p-4 space-y-3">
+        <div>
+          <p className="text-sm font-medium text-gold-soft">Valores netos</p>
+          <p className="text-xs text-cream/40 mt-0.5">
+            Monto mínimo que el operador recibe por operación. Comisión = precio de venta − neto (efectivo) o (precio × (1 − fee MP)) − neto (Mercado Pago).
+          </p>
+        </div>
+
+        {/* Selector de moneda del neto */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-cream/60">Moneda del neto:</span>
+          {(['USD', 'ARS'] as const).map((cur) => (
+            <button
+              key={cur}
+              type="button"
+              onClick={() => update('net_price_currency', cur)}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition ${
+                (option.net_price_currency ?? 'USD') === cur
+                  ? 'bg-gold text-ink'
+                  : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'
+              }`}
+            >
+              {cur}
+            </button>
+          ))}
+        </div>
+
+        {(option.net_price_currency ?? 'USD') === 'USD' ? (
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="Neto adulto (USD)" hint="Obligatorio para calcular comisión">
+              <input
+                type="number" min={0} step={0.01}
+                value={option.net_price_adult_usd ?? ''}
+                onChange={(e) => update('net_price_adult_usd', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Ej: 120"
+              />
+            </Field>
+            <Field label="Neto menor (USD)" hint="Si vacío, usa el neto adulto">
+              <input
+                type="number" min={0} step={0.01}
+                value={option.net_price_child_usd ?? ''}
+                onChange={(e) => update('net_price_child_usd', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Ej: 80"
+              />
+            </Field>
+            <Field label="Neto traslado (USD/pax)" hint="Solo si tiene traslado habilitado">
+              <input
+                type="number" min={0} step={0.01}
+                value={option.net_transfer_price_usd ?? ''}
+                onChange={(e) => update('net_transfer_price_usd', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Ej: 15"
+              />
+            </Field>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="Neto adulto (ARS)" hint="Obligatorio para calcular comisión">
+              <input
+                type="number" min={0} step={1}
+                value={option.net_price_adult_ars ?? ''}
+                onChange={(e) => update('net_price_adult_ars', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Ej: 50000"
+              />
+            </Field>
+            <Field label="Neto menor (ARS)" hint="Si vacío, usa el neto adulto">
+              <input
+                type="number" min={0} step={1}
+                value={option.net_price_child_ars ?? ''}
+                onChange={(e) => update('net_price_child_ars', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Ej: 35000"
+              />
+            </Field>
+            <Field label="Neto traslado (ARS/pax)" hint="Solo si tiene traslado habilitado">
+              <input
+                type="number" min={0} step={1}
+                value={option.net_transfer_price_ars ?? ''}
+                onChange={(e) => update('net_transfer_price_ars', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Ej: 8000"
+              />
+            </Field>
+          </div>
+        )}
       </div>
 
       <Field label="Días de operación">

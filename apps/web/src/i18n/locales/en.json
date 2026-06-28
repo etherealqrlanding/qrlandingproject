@@ -35,9 +35,12 @@
     "children": "Children (3-10)",
     "your_selection": "Your selection",
     "book_cta": "Book now",
+    "book_option": "Book this option",
     "secure_payment": "Secure payment with Mercado Pago",
     "back_to_list": "Back to list",
-    "error": "We couldn't load this experience"
+    "error": "We couldn't load this experience",
+    "currency_notice": "Charges will be processed in Argentine Pesos (ARS) at the exchange rate determined by the operator.",
+    "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
     "name": "Full name",
@@ -71,7 +74,9 @@
     "date_low": "Only a few seats left for this date.",
     "choose_another_date": "Pick another date",
     "cutoff_notice": "Same-day bookings accepted until {{time}} (Buenos Aires time)",
-    "capacity_max_reached": "Maximum capacity reached for this date"
+    "capacity_max_reached": "Maximum capacity reached for this date",
+    "currency_notice": "Prices are shown in US Dollars (USD) and Argentine Pesos (ARS). The charge is processed in ARS at the exchange rate set by the operator; the ARS amount is an estimate.",
+    "ars_estimate": "≈ ARS {{amount}} (estimated at current rate)"
   },
   "return": {
     "success_title": "Booking confirmed!",
@@ -103,7 +108,7 @@
     "transfers": "Transfers"
   },
   "footer": {
-    "tagline": "Ethereal Tours · Buenos Aires since 2026",
+    "tagline": "ticketstangoshow · Buenos Aires since 2026",
     "rights": "All rights reserved."
   },
   "ref": {
@@ -117,7 +122,7 @@
   },
   "seller_welcome": {
     "badge": "Verified Seller",
-    "message": "You scanned {{name}}'s QR code. They are a registered seller authorized by Ethereal Tours. All your transactions are monitored and protected by our team.",
+    "message": "You scanned {{name}}'s QR code. They are a registered seller authorized by ticketstangoshow. All your transactions are monitored and protected by our team.",
     "steps_title": "What can you do?",
     "step1": "Explore tango shows in Buenos Aires",
     "step2": "Choose date, guests and your experience",

@@ -8,6 +8,7 @@ interface Props {
   onCreated: (p: AdminProductDetail) => void;
   onUpdated: (p: AdminProductDetail) => void;
   onDelete?: () => void;
+  onHardDelete?: () => void;
 }
 
 const empty = {
@@ -20,7 +21,7 @@ const empty = {
   is_active: true, display_order: 0,
 };
 
-export default function GeneralSection({ product, categories, isNew, onCreated, onUpdated, onDelete }: Props) {
+export default function GeneralSection({ product, categories, isNew, onCreated, onUpdated, onDelete, onHardDelete }: Props) {
   const [form, setForm] = useState(() => product ? { ...empty, ...product } : { ...empty });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -227,7 +228,7 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
 
 
       <div className="flex items-center justify-between pt-4 border-t border-gold/10">
-        <div>
+        <div className="flex items-center gap-4">
           {onDelete && (
             <button
               type="button"
@@ -235,6 +236,15 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
               className="text-sm text-bordeaux-light hover:text-bordeaux-light/80"
             >
               Desactivar producto
+            </button>
+          )}
+          {onHardDelete && (
+            <button
+              type="button"
+              onClick={onHardDelete}
+              className="text-sm text-red-500 hover:text-red-400"
+            >
+              Eliminar definitivamente
             </button>
           )}
         </div>

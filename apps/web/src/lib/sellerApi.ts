@@ -51,6 +51,7 @@ async function doFetch(path: string, token: string, init?: RequestInit): Promise
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       Authorization: `Bearer ${token}`,
       ...init?.headers,
     },
@@ -62,7 +63,7 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_URL}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...init?.headers },
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...init?.headers },
     });
   } catch (err) {
     throw new SellerApiError(0, `Sin conexión con el servidor: ${(err as Error).message}`);
@@ -257,4 +258,10 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
+  qrBlob: async (size = 400): Promise<Blob> => {
+    const token = await getValidToken();
+    const res = await doFetch(`/api/seller/me/qr?size=${size}`, token);
+    if (!res.ok) throw new SellerApiError(res.status, `QR fetch failed: ${res.status}`);
+    return res.blob();
+  },
 };

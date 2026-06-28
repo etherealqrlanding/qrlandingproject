@@ -35,9 +35,12 @@
     "children": "Menores (3-10)",
     "your_selection": "Tu elección",
     "book_cta": "Reservar ahora",
+    "book_option": "Reservar esta opción",
     "secure_payment": "Pago seguro con Mercado Pago",
     "back_to_list": "Volver al listado",
-    "error": "No pudimos cargar este servicio"
+    "error": "No pudimos cargar este servicio",
+    "currency_notice": "Los cargos se procesarán en pesos argentinos (ARS) y serán convertidos al tipo de cambio que determine el operador.",
+    "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
     "name": "Nombre completo",
@@ -71,7 +74,9 @@
     "date_low": "Quedan pocos lugares para esta fecha.",
     "choose_another_date": "Elegí otra fecha",
     "cutoff_notice": "Reservas para hoy se toman hasta las {{time}} hs (hora Buenos Aires)",
-    "capacity_max_reached": "Cupo máximo alcanzado para esta fecha"
+    "capacity_max_reached": "Cupo máximo alcanzado para esta fecha",
+    "currency_notice": "Los precios se muestran en dólares (USD) y pesos argentinos (ARS). El cargo se procesa en ARS al tipo de cambio que determine el operador; el monto en ARS es estimativo.",
+    "ars_estimate": "≈ ARS {{amount}} (estimado a tasa actual)"
   },
   "return": {
     "success_title": "¡Reserva confirmada!",
@@ -103,7 +108,7 @@
     "transfers": "Traslados"
   },
   "footer": {
-    "tagline": "Ethereal Tours · Buenos Aires desde 2026",
+    "tagline": "ticketstangoshow · Buenos Aires desde 2026",
     "rights": "Todos los derechos reservados."
   },
   "ref": {
@@ -117,7 +122,7 @@
   },
   "seller_welcome": {
     "badge": "Vendedor Verificado",
-    "message": "Escaneaste el QR de {{name}}, un vendedor registrado y autorizado por Ethereal Tours. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
+    "message": "Escaneaste el QR de {{name}}, un vendedor registrado y autorizado por ticketstangoshow. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
     "steps_title": "¿Qué podés hacer?",
     "step1": "Explorá shows de tango en Buenos Aires",
     "step2": "Elegí fecha, cantidades y tu experiencia",

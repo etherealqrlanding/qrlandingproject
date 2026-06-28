@@ -41,6 +41,10 @@ export default function App() {
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isSellerRoute = location.pathname.startsWith('/seller');
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+
   if (isAdminRoute) {
     return (
       <AdminAuthProvider>
@@ -100,7 +104,7 @@ function PublicApp() {
   }, [freshCode, freshTick]);
 
   return (
-    <div className="min-h-screen flex flex-col pb-16 md:pb-0">
+    <div className="min-h-screen flex flex-col pb-24 md:pb-0">
       <Navbar />
       <main className="flex-1">
         <Routes>

@@ -13,6 +13,7 @@ import {
   createPendingOrder,
   setOrderPreferenceId,
   updateOrderFromPayment,
+  updateCommissionForMpOrder,
   logPaymentEvent,
   findOrderByPublicId,
 } from '../repos/orders.js';
@@ -58,7 +59,11 @@ checkoutRouter.post('/preferences', async (req, res, next) => {
       id: number; product_id: number;
       name_es: string; name_en: string;
       price_adult_usd: string; price_child_usd: string | null;
-      transfer_price_usd: string;
+      net_price_adult_usd: string | null; net_price_child_usd: string | null;
+      transfer_price_usd: string; net_transfer_price_usd: string | null;
+      net_price_currency: string;
+      net_price_adult_ars: string | null; net_price_child_ars: string | null;
+      net_transfer_price_ars: string | null;
       available_days: number[];
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
@@ -67,9 +72,16 @@ checkoutRouter.post('/preferences', async (req, res, next) => {
       `SELECT
          o.id, o.product_id,
          o.name_es, o.name_en,
-         o.price_adult_usd::text AS price_adult_usd,
-         o.price_child_usd::text AS price_child_usd,
-         o.transfer_price_usd::text AS transfer_price_usd,
+         o.price_adult_usd::text          AS price_adult_usd,
+         o.price_child_usd::text          AS price_child_usd,
+         o.net_price_adult_usd::text      AS net_price_adult_usd,
+         o.net_price_child_usd::text      AS net_price_child_usd,
+         o.transfer_price_usd::text       AS transfer_price_usd,
+         o.net_transfer_price_usd::text   AS net_transfer_price_usd,
+         o.net_price_currency,
+         o.net_price_adult_ars::text      AS net_price_adult_ars,
+         o.net_price_child_ars::text      AS net_price_child_ars,
+         o.net_transfer_price_ars::text   AS net_transfer_price_ars,
          o.available_days,
          o.default_capacity_per_day,
          o.is_active,
@@ -127,20 +139,48 @@ checkoutRouter.post('/preferences', async (req, res, next) => {
     }
 
     // 3) Cálculo de totales (USD) — fuente de verdad: backend
-    const priceAdult = parseFloat(option.price_adult_usd);
-    const priceChild = option.price_child_usd != null ? parseFloat(option.price_child_usd) : 0;
+    const priceAdult = Number.parseFloat(option.price_adult_usd);
+    const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
     if (input.children > 0 && option.price_child_usd == null) {
       return res.status(400).json({ error: 'This option does not allow children pricing' });
     }
-    const transferPriceUsd = parseFloat(option.transfer_price_usd ?? '0');
-    const transferSubtotal = (input.transfer_requested && transferPriceUsd > 0)
-      ? Math.round(transferPriceUsd * (input.adults + input.children) * 100) / 100
-      : 0;
+    const transferPriceUsd = Number.parseFloat(option.transfer_price_usd ?? '0');
+    const transferRequested = input.transfer_requested === true && transferPriceUsd > 0;
+    const pax = input.adults + input.children;
+    const transferSubtotal = transferRequested ? Math.round(transferPriceUsd * pax * 100) / 100 : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
 
-    // 4) Convertir a ARS usando tipo de cambio actual
+    // 4) Tipo de cambio (se necesita antes del neto para convertir netos en ARS)
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
+
+    // Neto: monto mínimo que el operador debe recibir (si está configurado en la opción)
+    const netCurrency = option.net_price_currency ?? 'USD';
+    let netTotalUsd: number | null = null;
+    if (netCurrency === 'USD') {
+      const netAdult = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
+      const netChild = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
+      const netTransfer = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+      if (netAdult != null) {
+        netTotalUsd = Math.round((
+          input.adults * netAdult
+          + input.children * (netChild ?? netAdult)
+          + (transferRequested && netTransfer != null ? netTransfer * pax : 0)
+        ) * 100) / 100;
+      }
+    } else {
+      const netAdultArs = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
+      const netChildArs = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
+      const netTransferArs = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+      if (netAdultArs != null && rate > 0) {
+        const netTotalArs = Math.round((
+          input.adults * netAdultArs
+          + input.children * (netChildArs ?? netAdultArs)
+          + (transferRequested && netTransferArs != null ? netTransferArs * pax : 0)
+        ) * 100) / 100;
+        netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
+      }
+    }
 
     // 5) Crear orden pendiente en DB
     const order = await createPendingOrder({
@@ -149,15 +189,16 @@ checkoutRouter.post('/preferences', async (req, res, next) => {
         product_id: option.product_id,
         option_id: option.id,
         product_name_snapshot: option.product_name,
-        option_name_snapshot: option.name_es,  // guardamos español, multi-lang en metadata
+        option_name_snapshot: option.name_es,
         service_date: input.service_date,
         adults: input.adults,
         children: input.children,
         unit_price_adult_usd: priceAdult,
         unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
         subtotal_usd: subtotalUsd,
-        transfer_requested: input.transfer_requested ?? false,
+        transfer_requested: transferRequested,
         transfer_hotel: input.transfer_hotel ?? null,
+        net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
       total_ars: totalArs,
@@ -246,16 +287,27 @@ checkoutRouter.post('/cash', async (req, res, next) => {
     const { rows: optionRows } = await pool.query<{
       id: number; product_id: number;
       name_es: string; price_adult_usd: string; price_child_usd: string | null;
-      transfer_price_usd: string;
+      net_price_adult_usd: string | null; net_price_child_usd: string | null;
+      transfer_price_usd: string; net_transfer_price_usd: string | null;
+      net_price_currency: string;
+      net_price_adult_ars: string | null; net_price_child_ars: string | null;
+      net_transfer_price_ars: string | null;
       available_days: number[];
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
       is_active: boolean; product_active: boolean;
     }>(
       `SELECT o.id, o.product_id, o.name_es,
-              o.price_adult_usd::text AS price_adult_usd,
-              o.price_child_usd::text AS price_child_usd,
-              o.transfer_price_usd::text AS transfer_price_usd,
+              o.price_adult_usd::text        AS price_adult_usd,
+              o.price_child_usd::text        AS price_child_usd,
+              o.net_price_adult_usd::text    AS net_price_adult_usd,
+              o.net_price_child_usd::text    AS net_price_child_usd,
+              o.transfer_price_usd::text     AS transfer_price_usd,
+              o.net_transfer_price_usd::text AS net_transfer_price_usd,
+              o.net_price_currency,
+              o.net_price_adult_ars::text    AS net_price_adult_ars,
+              o.net_price_child_ars::text    AS net_price_child_ars,
+              o.net_transfer_price_ars::text AS net_transfer_price_ars,
               o.available_days, o.default_capacity_per_day, o.is_active,
               p.name AS product_name, p.slug AS product_slug,
               p.is_active AS product_active
@@ -308,13 +360,41 @@ checkoutRouter.post('/cash', async (req, res, next) => {
       return res.status(400).json({ error: 'This option does not allow children pricing' });
     }
     const transferPriceUsdCash = Number.parseFloat(option.transfer_price_usd ?? '0');
-    const transferSubtotalCash = (input.transfer_requested && transferPriceUsdCash > 0)
-      ? Math.round(transferPriceUsdCash * (input.adults + input.children) * 100) / 100
-      : 0;
+    const transferRequestedCash = input.transfer_requested === true && transferPriceUsdCash > 0;
+    const paxCash = input.adults + input.children;
+    const transferSubtotalCash = transferRequestedCash ? Math.round(transferPriceUsdCash * paxCash * 100) / 100 : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
+
+    // Neto para efectivo
+    const netCurrencyCash = option.net_price_currency ?? 'USD';
+    let netTotalUsdCash: number | null = null;
+    if (netCurrencyCash === 'USD') {
+      const netAdultCash = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
+      const netChildCash = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
+      const netTransferCash = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+      if (netAdultCash != null) {
+        netTotalUsdCash = Math.round((
+          input.adults * netAdultCash
+          + input.children * (netChildCash ?? netAdultCash)
+          + (transferRequestedCash && netTransferCash != null ? netTransferCash * paxCash : 0)
+        ) * 100) / 100;
+      }
+    } else {
+      const netAdultArsCash = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
+      const netChildArsCash = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
+      const netTransferArsCash = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+      if (netAdultArsCash != null && rate > 0) {
+        const netTotalArs = Math.round((
+          input.adults * netAdultArsCash
+          + input.children * (netChildArsCash ?? netAdultArsCash)
+          + (transferRequestedCash && netTransferArsCash != null ? netTransferArsCash * paxCash : 0)
+        ) * 100) / 100;
+        netTotalUsdCash = Math.round((netTotalArs / rate) * 100) / 100;
+      }
+    }
 
     // Verificar que el ref_code pertenece a un vendedor activo y permanente
     const { rows: sellerCheck } = await pool.query<{ id: number; is_permanent: boolean }>(
@@ -342,8 +422,9 @@ checkoutRouter.post('/cash', async (req, res, next) => {
         unit_price_adult_usd: priceAdult,
         unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
         subtotal_usd: subtotalUsd,
-        transfer_requested: input.transfer_requested ?? false,
+        transfer_requested: transferRequestedCash,
         transfer_hotel: input.transfer_hotel ?? null,
+        net_total_usd: netTotalUsdCash,
       },
       total_usd: subtotalUsd,
       total_ars: totalArs,
@@ -434,6 +515,8 @@ checkoutRouter.post('/webhook', async (req: Request, res: Response, next: NextFu
         // Disparar notificaciones por email solo cuando pasa a 'paid' por primera vez.
         // No bloqueamos el webhook esperando los emails: fire-and-forget con catch.
         if (newStatus === 'paid' && updated.status === 'paid') {
+          // Calcular comisión del vendedor usando el modelo neto (fee MP aplicado)
+          await updateCommissionForMpOrder(client, updated.id);
           sendOrderPaidNotifications(updated.id).catch((err) =>
             console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
           );

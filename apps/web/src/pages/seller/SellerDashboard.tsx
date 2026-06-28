@@ -1,21 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
-import { supabase } from '../../lib/supabase';
-
-const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
+import { sellerApi } from '../../lib/sellerApi';
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl border border-gold/10 bg-ink-soft/40 p-5">
-      <p className="text-xs uppercase tracking-wider text-cream/50 mb-2">{label}</p>
-      <p className="font-display text-3xl text-gold">{value}</p>
-      {sub && <p className="mt-1 text-xs text-cream/40">{sub}</p>}
+    <div className="rounded-xl border border-gold/10 bg-ink-soft/40 p-3 md:p-5">
+      <p className="text-[10px] uppercase tracking-wider text-cream/50 mb-1">{label}</p>
+      <p className="font-display text-2xl md:text-3xl text-gold leading-tight">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-cream/40 hidden sm:block">{sub}</p>}
     </div>
   );
 }
 
 function fmt(usd: number) {
   return `USD ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function QrImage({ url, error, code }: { url: string | null; error: boolean; code: string }) {
+  if (error) {
+    return (
+      <div className="w-36 h-36 flex flex-col items-center justify-center gap-2 bg-gray-50 rounded">
+        <span className="text-2xl">⚠️</span>
+        <p className="text-[10px] text-gray-500 text-center px-2 leading-tight">
+          No se pudo cargar el QR. Verificá la conexión.
+        </p>
+      </div>
+    );
+  }
+  if (url) {
+    return <img src={url} alt={`QR código ${code}`} className="w-36 h-36 block" />;
+  }
+  return <div className="w-36 h-36 bg-gray-100 animate-pulse rounded" />;
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -40,23 +55,24 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 export default function SellerDashboard() {
   const { me } = useSellerAuth();
   const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState(false);
   const qrObjectUrl = useRef<string | null>(null);
 
   useEffect(() => {
     if (!me) return;
     let cancelled = false;
+    setQrUrl(null);
+    setQrError(false);
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return;
-      const res = await fetch(`${API_URL}/api/seller/me/qr?size=400`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok || cancelled) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      qrObjectUrl.current = url;
-      setQrUrl(url);
+      try {
+        const blob = await sellerApi.qrBlob(400);
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        qrObjectUrl.current = url;
+        setQrUrl(url);
+      } catch {
+        if (!cancelled) setQrError(true);
+      }
     })();
     return () => { cancelled = true; };
   }, [me]);
@@ -77,61 +93,56 @@ export default function SellerDashboard() {
   const refLink = `${window.location.origin}/?ref=${encodeURIComponent(me.code)}`;
 
   const handleDownloadQr = async () => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) return;
-    const res = await fetch(`${API_URL}/api/seller/me/qr?size=1024`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return;
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `qr-${me.code}.png`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await sellerApi.qrBlob(1024);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qr-${me.code}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
   };
 
   return (
-    <div className="p-8 max-w-5xl">
-      <header className="mb-8">
-        <h1 className="font-display text-4xl text-cream">
+    <div className="p-4 md:p-8 max-w-5xl">
+      <header className="mb-5 md:mb-8">
+        <h1 className="font-display text-3xl md:text-4xl text-cream">
           Hola, {me.name.split(' ')[0]}
         </h1>
-        <p className="mt-1 text-sm text-cream/50">
-          Tu tasa de comisión es del <span className="text-gold-soft">{commissionRate}</span> sobre cada venta generada con tu código{' '}
+        <p className="mt-1 text-xs md:text-sm text-cream/50">
+          Comisión: <span className="text-gold-soft">{commissionRate}</span> · código{' '}
           <span className="font-mono text-gold-soft">{me.code}</span>
         </p>
       </header>
 
       {/* Stats */}
-      <section className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        <StatCard label="Ventas generadas" value={String(me.orders_paid)} sub="órdenes cobradas" />
-        <StatCard label="Facturación total" value={fmt(me.revenue_paid_usd)} sub="suma de tus ventas" />
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 md:mb-8">
+        <StatCard label="Ventas" value={String(me.orders_paid)} sub="órdenes cobradas" />
+        <StatCard label="Facturación" value={fmt(me.revenue_paid_usd)} sub="suma de tus ventas" />
         <StatCard label="Comisión ganada" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
-        <StatCard label="Pendiente de cobro" value={fmt(pending)} sub={pending > 0 ? 'en proceso de liquidación' : 'al día'} />
+        <StatCard label="Pendiente" value={fmt(pending)} sub={pending > 0 ? 'en proceso' : 'al día'} />
       </section>
 
       {pending > 0 && (
-        <div className="rounded-xl border border-gold/20 bg-gold/5 p-5 text-sm text-cream/80 mb-8">
+        <div className="rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm text-cream/80 mb-5 md:mb-8">
           <p className="font-medium text-gold mb-1">Tenés comisión pendiente de liquidación</p>
-          <p>
-            {fmt(pending)} todavía no te fue transferido. Cuando el equipo de Ethereal Tours procese el pago, vas a verlo reflejado en la sección <strong>Liquidaciones</strong>.
+          <p className="text-xs md:text-sm">
+            {fmt(pending)} no te fue transferido aún. Cuando el equipo procese el pago lo verás en <strong>Liquidaciones</strong>.
           </p>
         </div>
       )}
 
       {/* Tarjeta de vendedor + QR */}
       <section className="rounded-xl border border-gold/20 bg-ink-soft/40 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gold/10">
+        <div className="px-4 py-3 border-b border-gold/10">
           <p className="text-xs uppercase tracking-widest text-gold-soft">Tu perfil de vendedor</p>
         </div>
 
-        <div className="grid md:grid-cols-[1fr_auto] gap-0 divide-y md:divide-y-0 md:divide-x divide-gold/10">
-          {/* Info */}
-          <div className="p-5 space-y-3">
+        <div className="grid md:grid-cols-[1fr_auto] gap-0">
+          {/* Info — segundo en mobile, primero en desktop */}
+          <div className="p-4 space-y-2.5 min-w-0 overflow-hidden order-2 md:order-1 border-t md:border-t-0 md:border-r border-gold/10">
             <InfoRow label="Nombre">{me.name}</InfoRow>
             <InfoRow label="Código">
               <span className="font-mono text-gold-soft">{me.code}</span>
@@ -143,39 +154,33 @@ export default function SellerDashboard() {
 
             {/* Link para compartir */}
             <div className="pt-2 border-t border-gold/10">
-              <p className="text-xs text-cream/40 mb-2">Tu link de referido</p>
-              <div className="flex items-center gap-2 rounded-lg border border-gold/15 bg-ink/40 px-3 py-2">
-                <span className="text-xs text-cream/60 font-mono truncate flex-1">{refLink}</span>
-                <CopyButton text={refLink} label="Copiar link" />
+              <p className="text-xs text-cream/40 mb-1.5">Tu link de referido</p>
+              <div className="flex items-center gap-2 rounded-lg border border-gold/15 bg-ink/40 px-3 py-2 min-w-0 overflow-hidden">
+                <span className="text-xs text-cream/60 font-mono truncate min-w-0 flex-1">{refLink}</span>
+                <CopyButton text={refLink} label="Copiar" />
               </div>
-              <p className="mt-1.5 text-[11px] text-cream/30">
-                Compartí este link con tus pasajeros. Cada compra generada con él te acredita tu comisión automáticamente.
-              </p>
             </div>
           </div>
 
-          {/* QR */}
-          <div className="p-5 flex flex-col items-center gap-4">
-            <p className="text-xs uppercase tracking-widest text-cream/40 self-start md:self-center">Tu QR</p>
-            <div className="rounded-xl border border-gold/15 bg-white p-3">
-              {qrUrl ? (
-                <img src={qrUrl} alt={`QR código ${me.code}`} className="w-40 h-40 block" />
-              ) : (
-                <div className="w-40 h-40 bg-gray-100 animate-pulse rounded" />
-              )}
+          {/* QR — primero en mobile, segundo en desktop */}
+          <div className="p-4 flex flex-col items-center gap-3 order-1 md:order-2">
+            <p className="self-start text-xs uppercase tracking-widest text-cream/40">Tu QR</p>
+            <div className="rounded-xl border border-gold/15 bg-white p-2">
+              <QrImage url={qrUrl} error={qrError} code={me.code} />
             </div>
-            <div className="flex flex-col gap-2 w-full">
+            <div className="flex gap-2 w-full">
               <button
                 type="button"
                 onClick={handleDownloadQr}
-                className="w-full rounded-lg border border-gold/30 bg-gold/10 px-4 py-2 text-sm text-gold-soft hover:bg-gold/20 transition text-center"
+                disabled={!qrUrl}
+                className="flex-1 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs text-gold-soft hover:bg-gold/20 transition text-center disabled:opacity-40"
               >
-                ↓ Descargar QR (PNG)
+                ↓ Descargar QR
               </button>
-              <CopyButton text={refLink} label="Copiar link de referido" />
+              <CopyButton text={refLink} label="Copiar link" />
             </div>
             <p className="text-[10px] text-cream/25 text-center">
-              Imprimí el QR o mostralo en pantalla para que tus pasajeros lo escaneen
+              Imprimí el QR o mostralo en pantalla
             </p>
           </div>
         </div>
@@ -186,9 +191,9 @@ export default function SellerDashboard() {
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 text-sm">
+    <div className="flex items-baseline justify-between gap-2 text-sm">
       <span className="text-cream/45 shrink-0">{label}</span>
-      <span className="text-cream/90 text-right">{children}</span>
+      <span className="text-cream/90 text-right min-w-0 break-all">{children}</span>
     </div>
   );
 }

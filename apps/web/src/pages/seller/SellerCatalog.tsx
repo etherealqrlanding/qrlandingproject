@@ -39,16 +39,16 @@ export default function SellerCatalog() {
   };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <header className="mb-2">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
-        <h1 className="mt-2 font-display text-4xl text-cream">Catálogo de Shows</h1>
-        <p className="mt-1 text-sm text-cream/50">
-          Info completa de cada servicio para asesorar a tus pasajeros al instante
+        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Catálogo de Shows</h1>
+        <p className="mt-0.5 text-xs md:text-sm text-cream/50">
+          Info completa de cada servicio para asesorar a tus pasajeros
         </p>
       </header>
 
-      <div className="mt-4 mb-7 rounded-xl border border-gold/15 bg-gold/5 px-4 py-3 text-sm text-cream/70 flex gap-3">
+      <div className="mt-3 mb-5 md:mb-7 rounded-xl border border-gold/15 bg-gold/5 px-3 md:px-4 py-3 text-xs md:text-sm text-cream/70 flex gap-3">
         <span className="text-gold mt-0.5" aria-hidden>✦</span>
         <span>
           Hacé click en un show para ver todos los detalles: horarios, qué incluye, precios y días disponibles.

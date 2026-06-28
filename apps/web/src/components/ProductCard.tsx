@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ProductSummary } from '../types/api';
 import { localized } from '../lib/i18nFields';
-import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
+import { useExchangeRate } from '../lib/useExchangeRate';
 
 interface Props {
   product: ProductSummary;
@@ -42,13 +42,12 @@ export default function ProductCard({ product }: Props) {
           {product.starting_price_usd != null && (
             <p className="text-sm text-cream/80">
               <span className="text-cream/50">{t('product.from')}</span>{' '}
-              {startingArs != null ? (
+              <span className="text-gold font-medium">USD {product.starting_price_usd}</span>
+              {startingArs != null && (
                 <>
-                  <span className="text-gold font-medium">{fmtArs(startingArs)}</span>
-                  <span className="text-cream/40 text-xs ml-1">≈ USD {product.starting_price_usd}</span>
+                  <span className="text-cream/30 mx-1">·</span>
+                  <span className="text-gold font-medium">ARS {startingArs.toLocaleString('es-AR')}</span>
                 </>
-              ) : (
-                <span className="text-gold font-medium">USD {product.starting_price_usd}</span>
               )}
             </p>
           )}
@@ -56,6 +55,11 @@ export default function ProductCard({ product }: Props) {
             {t('product.view_more')} →
           </span>
         </div>
+        {product.starting_price_usd != null && (
+          <p className="mt-2 text-[11px] leading-snug text-cream/40">
+            {t('product.currency_notice')}
+          </p>
+        )}
       </div>
     </Link>
   );

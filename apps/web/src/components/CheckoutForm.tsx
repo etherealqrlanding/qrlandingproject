@@ -5,7 +5,8 @@ import { getStoredRef } from '../lib/referral';
 import type { ProductDetail, ProductOption } from '../types/api';
 import { localized } from '../lib/i18nFields';
 import TransferSection from './TransferSection';
-import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
+import { useExchangeRate } from '../lib/useExchangeRate';
+import Spinner from './Spinner';
 
 interface Props {
   product: ProductDetail;
@@ -119,8 +120,6 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
 
   const totalUsd = Math.round((ticketsUsd + transferUsd) * 100) / 100;
 
-  const ticketsArs = exchangeRate != null ? Math.round(ticketsUsd * exchangeRate) : null;
-  const transferArs = exchangeRate != null ? Math.round(transferUsd * exchangeRate) : null;
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
 
   const updateField = <K extends keyof typeof form>(field: K, value: typeof form[K]) =>
@@ -312,34 +311,29 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               <div className="space-y-1 mb-3 pb-3 border-b border-gold/15">
                 <div className="flex items-baseline justify-between text-sm">
                   <span className="text-cream/60">{t('checkout.tickets')}</span>
-                  <span className="text-cream/80">
-                    {ticketsArs != null ? fmtArs(ticketsArs) : `USD ${ticketsUsd}`}
-                  </span>
+                  <span className="text-cream/80">USD {ticketsUsd}</span>
                 </div>
                 <div className="flex items-baseline justify-between text-sm">
                   <span className="text-cream/60">{t('checkout.transfer')} ({form.adults + form.children} pax)</span>
-                  <span className="text-cream/80">
-                    +{transferArs != null ? fmtArs(transferArs) : `USD ${transferUsd}`}
-                  </span>
+                  <span className="text-cream/80">+ USD {transferUsd}</span>
                 </div>
               </div>
             )}
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm text-cream/70">{t('checkout.total')}</span>
-              <span className="font-display text-3xl text-gold">
-                {totalArs != null ? fmtArs(totalArs) : `USD ${totalUsd}`}
-              </span>
+            <div className="flex items-start justify-between gap-4">
+              <span className="text-sm text-cream/70 pt-2">{t('checkout.total')}</span>
+              <div className="text-right">
+                <p className="font-display text-3xl text-gold">USD {totalUsd}</p>
+                {totalArs != null && (
+                  <p className="text-xs text-cream/50 mt-1">
+                    ≈ ARS {Math.round(totalArs).toLocaleString('en-US')}
+                  </p>
+                )}
+              </div>
             </div>
-            <p className="mt-1 text-xs text-cream/50 text-right">
-              {totalArs != null
-                ? t('checkout.usd_ref', { amount: totalUsd })
-                : t('checkout.charged_in_ars')}
-            </p>
-            {exchangeRate != null && (
-              <p className="mt-3 pt-3 border-t border-gold/10 text-xs text-cream/50 leading-relaxed">
-                💳 {t('checkout.dollar_account_notice')}
-              </p>
-            )}
+            <div className="mt-4 pt-3 border-t border-gold/10 flex gap-2 items-start">
+              <span className="text-gold-soft shrink-0 leading-none mt-0.5">💱</span>
+              <p className="text-xs text-cream/60 leading-relaxed">{t('checkout.currency_notice')}</p>
+            </div>
           </div>
 
           {/* Traslado — solo si la option lo incluye */}
@@ -401,7 +395,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             disabled={submitting || isDateBlocked}
             className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? t('checkout.processing') : submitLabel}
+            {submitting ? (
+              <><Spinner size="sm" className="mr-2" />{t('checkout.processing')}</>
+            ) : submitLabel}
           </button>
 
           {paymentMethod === 'mercadopago' && (

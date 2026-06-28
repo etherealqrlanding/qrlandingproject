@@ -104,25 +104,61 @@ export async function deactivateSeller(id: number): Promise<boolean> {
 /**
  * Elimina permanentemente un vendedor.
  * Devuelve el supabase_user_id si tenía cuenta (para que la ruta lo borre de Supabase Auth).
- * Lanza un error si tiene ventas asociadas — en ese caso solo se puede desactivar.
+ *
+ * Si tiene ventas asociadas y `force` es false, lanza un error HAS_ORDERS (con el conteo)
+ * para que el front pueda pedir confirmación reforzada.
+ * Con `force: true`, borra también TODAS las órdenes que trajo el vendedor (decisión de
+ * negocio): al eliminar las órdenes, el ON DELETE CASCADE limpia order_items y
+ * order_attributions, y los payment_events quedan con order_id = NULL. Todo en una
+ * transacción para no dejar el vendedor sin sus ventas (o viceversa) ante un fallo parcial.
  */
-export async function deleteSeller(id: number): Promise<{ deleted: boolean; supabase_user_id: string | null }> {
+export async function deleteSeller(
+  id: number,
+  opts: { force?: boolean } = {},
+): Promise<{ deleted: boolean; supabase_user_id: string | null; deleted_orders: number }> {
   const { rows: check } = await pool.query<{ cnt: string }>(
     `SELECT COUNT(*) AS cnt FROM order_attributions WHERE seller_id = $1`,
     [id],
   );
-  if (parseInt(check[0].cnt, 10) > 0) {
-    const err = new Error('El vendedor tiene ventas asociadas y no puede eliminarse. Podés desactivarlo en su lugar.');
-    (err as Error & { code: string }).code = 'HAS_ORDERS';
+  const orderCount = parseInt(check[0].cnt, 10);
+  if (orderCount > 0 && !opts.force) {
+    const err = new Error(
+      `El vendedor tiene ${orderCount} venta(s) asociada(s). Eliminarlo borrará también esas ventas. Confirmá para continuar o desactivalo en su lugar.`,
+    );
+    (err as Error & { code: string; orderCount: number }).code = 'HAS_ORDERS';
+    (err as Error & { code: string; orderCount: number }).orderCount = orderCount;
     throw err;
   }
 
-  const { rows } = await pool.query<{ supabase_user_id: string | null }>(
-    `DELETE FROM sellers WHERE id = $1 RETURNING supabase_user_id`,
-    [id],
-  );
-  if (rows.length === 0) return { deleted: false, supabase_user_id: null };
-  return { deleted: true, supabase_user_id: rows[0].supabase_user_id };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let deletedOrders = 0;
+    if (orderCount > 0) {
+      const del = await client.query(
+        `DELETE FROM orders
+          WHERE id IN (SELECT order_id FROM order_attributions WHERE seller_id = $1)`,
+        [id],
+      );
+      deletedOrders = del.rowCount ?? 0;
+    }
+
+    const { rows } = await client.query<{ supabase_user_id: string | null }>(
+      `DELETE FROM sellers WHERE id = $1 RETURNING supabase_user_id`,
+      [id],
+    );
+
+    await client.query('COMMIT');
+
+    if (rows.length === 0) return { deleted: false, supabase_user_id: null, deleted_orders: 0 };
+    return { deleted: true, supabase_user_id: rows[0].supabase_user_id, deleted_orders: deletedOrders };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export interface SellerOrder {

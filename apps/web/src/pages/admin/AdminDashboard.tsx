@@ -27,30 +27,30 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="p-8 max-w-6xl">
-      <header className="mb-10">
+    <div className="p-4 md:p-8 max-w-6xl">
+      <header className="mb-6 md:mb-10">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
           Bienvenido, {me.admin.full_name ?? me.admin.email}
         </p>
-        <h1 className="mt-2 font-display text-4xl text-cream">Dashboard</h1>
+        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Dashboard</h1>
       </header>
 
-      <section className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-5">
         {cards.map((c) => (
           <Link
             key={c.label}
             to={c.href}
-            className="rounded-lg border border-gold/10 bg-ink-soft/60 p-6 transition hover:border-gold/30"
+            className="rounded-lg border border-gold/10 bg-ink-soft/60 p-4 md:p-6 transition hover:border-gold/30 block"
           >
-            <p className="text-xs uppercase tracking-widest text-gold-soft">{c.label}</p>
-            <p className="mt-3 font-display text-5xl text-cream">{c.value}</p>
-            <p className="mt-2 text-xs text-cream/50">{c.hint}</p>
+            <p className="text-xs uppercase tracking-widest text-gold-soft leading-tight">{c.label}</p>
+            <p className="font-display text-3xl md:text-5xl text-cream mt-2 md:mt-3">{c.value}</p>
+            <p className="mt-1 text-xs text-cream/50">{c.hint}</p>
           </Link>
         ))}
       </section>
 
-      <section className="mt-12">
-        <h2 className="font-display text-2xl text-cream mb-4">Acciones rápidas</h2>
+      <section className="mt-8 md:mt-12">
+        <h2 className="font-display text-xl md:text-2xl text-cream mb-3 md:mb-4">Acciones rápidas</h2>
         <div className="flex flex-wrap gap-3">
           <Link to="/admin/products/new" className="btn-primary">+ Nuevo producto</Link>
           <Link to="/admin/products" className="btn-ghost">Ver todos los productos</Link>

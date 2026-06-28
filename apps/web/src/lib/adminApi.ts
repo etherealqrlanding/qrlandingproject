@@ -55,6 +55,7 @@ async function doFetch(path: string, token: string, init?: RequestInit): Promise
     ...init,
     headers: {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
       Authorization: `Bearer ${token}`,
       ...init?.headers,
     },
@@ -119,6 +120,24 @@ export interface AdminCategory {
   display_order: number; is_active: boolean;
 }
 
+export interface AdminProductOptionPreview {
+  id: number; code: string; name_es: string;
+  price_adult_usd: number | null;
+  price_child_usd: number | null;
+  net_price_adult_usd: number | null;
+  net_price_child_usd: number | null;
+  net_price_currency: 'USD' | 'ARS' | null;
+  net_price_adult_ars: number | null;
+  net_price_child_ars: number | null;
+  net_transfer_price_ars: number | null;
+  has_transfer: boolean;
+  transfer_price_usd: number | null;
+  net_transfer_price_usd: number | null;
+  default_capacity_per_day: number;
+  is_active: boolean;
+  display_order: number;
+}
+
 export interface AdminProductSummary {
   id: number; slug: string; name: string; venue_name: string;
   is_active: boolean; display_order: number;
@@ -126,6 +145,7 @@ export interface AdminProductSummary {
   category_id: number; category_slug: string; category_name_es: string;
   options_count: string; images_count: string;
   updated_at: string;
+  options: AdminProductOptionPreview[];
 }
 
 export interface AdminProductDetail {
@@ -147,8 +167,15 @@ export interface AdminOption {
   description_es: string | null; description_en: string | null;
   includes_es: string[]; includes_en: string[];
   price_adult_usd: number | string; price_child_usd: number | string | null;
+  net_price_adult_usd: number | string | null;
+  net_price_child_usd: number | string | null;
   has_dinner: boolean; has_transfer: boolean;
   transfer_price_usd: number;
+  net_transfer_price_usd: number | string | null;
+  net_price_currency: 'USD' | 'ARS' | null;
+  net_price_adult_ars: number | string | null;
+  net_price_child_ars: number | string | null;
+  net_transfer_price_ars: number | string | null;
   available_days: number[];
   pickup_window_es: string | null; pickup_window_en: string | null;
   dinner_time_es: string | null; dinner_time_en: string | null;
@@ -251,8 +278,10 @@ export const adminApi = {
       request<AdminProductDetail>('/api/admin/products', { method: 'POST', body: JSON.stringify(input) }),
     update: (id: number, input: Partial<AdminProductDetail>) =>
       request<AdminProductDetail>(`/api/admin/products/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
-    delete: (id: number) =>
-      request<{ ok: true }>(`/api/admin/products/${id}`, { method: 'DELETE' }),
+    // Sin opts → soft delete (desactiva). { hard: true } → borrado definitivo
+    // (devuelve 409 si el producto aparece en órdenes históricas).
+    delete: (id: number, opts?: { hard?: boolean }) =>
+      request<{ ok: true }>(`/api/admin/products/${id}${opts?.hard ? '?mode=hard' : ''}`, { method: 'DELETE' }),
     options: {
       create: (productId: number, input: Partial<AdminOption>) =>
         request<{ id: number }>(`/api/admin/products/${productId}/options`, {
@@ -312,8 +341,13 @@ export const adminApi = {
       }),
     delete: (id: number) =>
       request<{ ok: true }>(`/api/admin/sellers/${id}`, { method: 'DELETE' }),
-    permanentDelete: (id: number) =>
-      request<{ ok: true }>(`/api/admin/sellers/${id}/permanent`, { method: 'DELETE' }),
+    // Sin force → 409 si tiene ventas (details.order_count trae el conteo).
+    // { force: true } → borra también todas las ventas que trajo (cascada).
+    permanentDelete: (id: number, opts?: { force?: boolean }) =>
+      request<{ ok: true; deleted_orders: number }>(
+        `/api/admin/sellers/${id}/permanent${opts?.force ? '?force=true' : ''}`,
+        { method: 'DELETE' },
+      ),
     orders: (id: number, status?: string) => {
       const qs = status ? `?status=${encodeURIComponent(status)}` : '';
       return request<AdminSellerOrder[]>(`/api/admin/sellers/${id}/orders${qs}`);
@@ -345,6 +379,9 @@ export const adminApi = {
         method: 'PATCH',
         body: JSON.stringify({ status, note }),
       }),
+    // Borrado total e irreversible de la orden (incluso si está pagada).
+    delete: (publicId: string) =>
+      request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}`, { method: 'DELETE' }),
     refund: (publicId: string, options?: { reason?: string; notify_customer?: boolean; amount_usd?: number }) =>
       request<{
         ok: true; refund_id: number | null;
@@ -368,6 +405,13 @@ export const adminApi = {
       request<{ time: string | null }>('/api/admin/settings/booking-cutoff', {
         method: 'PUT',
         body: JSON.stringify({ time }),
+      }),
+    getMpFeePct: () =>
+      request<{ pct: number }>('/api/admin/settings/mp-fee-pct'),
+    updateMpFeePct: (pct: number) =>
+      request<{ pct: number }>('/api/admin/settings/mp-fee-pct', {
+        method: 'PUT',
+        body: JSON.stringify({ pct }),
       }),
   },
 };

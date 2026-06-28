@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminOption } from '../../../lib/adminApi';
+import { LoadingBlock } from '../../../components/Spinner';
 
 interface AvailabilityEntry {
   id: number;
@@ -195,7 +196,7 @@ export default function AvailabilityEditor({ option, onClose }: Props) {
         {/* Lista de overrides */}
         <div className="p-6">
           {error && <p className="text-sm text-bordeaux-light mb-4">{error}</p>}
-          {!entries && <p className="text-sm text-cream/50">Cargando...</p>}
+          {!entries && <LoadingBlock label="Cargando..." />}
           {entries && entries.length === 0 && (
             <p className="text-sm text-cream/40 py-4 text-center">
               No hay fechas especiales configuradas. Todas usan el cupo por defecto ({option.default_capacity_per_day}).

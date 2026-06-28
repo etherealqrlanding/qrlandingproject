@@ -1,16 +1,13 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
+import { LoadingScreen } from '../Spinner';
 
 export default function ProtectedRoute({ children }: { readonly children: React.ReactNode }) {
   const { loading, session, me, error, hasTransientError, refresh } = useAdminAuth();
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-ink text-cream/60">
-        <p className="text-sm">Cargando sesión...</p>
-      </div>
-    );
+    return <LoadingScreen label="Cargando sesión..." />;
   }
 
   if (!session) {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError } from '../../lib/adminApi';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 interface OrderFull {
   id: number;
@@ -49,7 +50,10 @@ interface OrderFull {
 
 export default function OrderDetail() {
   const { publicId } = useParams<{ publicId: string }>();
+  const navigate = useNavigate();
   const [order, setOrder] = useState<OrderFull | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newStatus, setNewStatus] = useState<string>('');
   const [note, setNote] = useState('');
@@ -145,6 +149,20 @@ export default function OrderDetail() {
       alert(`Error al procesar reintegro: ${(err as AdminApiError).message}`);
     } finally {
       setRefundProcessing(false);
+    }
+  };
+
+  const runDelete = async () => {
+    if (!publicId) return;
+    setDeleting(true);
+    try {
+      await adminApi.orders.delete(publicId);
+      navigate('/admin/orders');
+    } catch (err) {
+      setError((err as AdminApiError).message);
+      setDeleteOpen(false);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -298,8 +316,38 @@ export default function OrderDetail() {
               <p className="mt-2 text-sm text-cream/80 whitespace-pre-wrap">{order.internal_notes}</p>
             </div>
           )}
+
+          {/* Zona peligrosa: borrado total e irreversible de la orden */}
+          <div className="rounded-lg border border-red-500/30 bg-red-950/10 p-5">
+            <p className="text-xs uppercase tracking-widest text-red-400">Eliminar orden</p>
+            <p className="mt-2 text-sm text-cream/60">
+              Borra esta orden de forma <strong>permanente</strong> (items, atribución de comisión y datos del cliente).
+              {order.status === 'paid' && ' La orden está pagada: si correspondía un reintegro, hacelo antes desde "Cancelar y reintegrar".'}
+            </p>
+            <button type="button" onClick={() => setDeleteOpen(true)}
+              className="mt-4 w-full rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+            >
+              Eliminar orden
+            </button>
+          </div>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Eliminar orden definitivamente"
+        message={
+          <>
+            <p>Vas a eliminar la orden <strong className="text-cream font-mono break-all">{order.public_id}</strong> de <strong className="text-cream">{order.customer_name}</strong> (USD {order.total_usd}).</p>
+            <p>Se borran los items, la atribución de comisión y los datos del cliente. Esta acción es <strong>irreversible</strong>{order.status === 'paid' ? ' y no genera ningún reintegro automático en Mercado Pago' : ''}.</p>
+          </>
+        }
+        confirmLabel="Eliminar orden"
+        requireText="ELIMINAR"
+        loading={deleting}
+        onConfirm={runDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
 
       {/* Modal de confirmación de refund */}
       {refundOpen && (

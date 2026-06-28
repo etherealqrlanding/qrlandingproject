@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { sellerApi, getNotificationStreamUrl, type SellerNotification } from '../../lib/sellerApi';
 import BottomNavSeller from './BottomNavSeller';
@@ -19,6 +19,8 @@ const SSE_RECONNECT_MS = 5_000;
 export default function SellerLayout() {
   const { me, signOut } = useSellerAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
   const [polledUnread, setPolledUnread] = useState<number | null>(null);
   const [toast, setToast] = useState<SellerNotification | null>(null);
   const esRef = useRef<EventSource | null>(null);
@@ -92,6 +94,10 @@ export default function SellerLayout() {
     if ((me?.unread_notifications ?? 0) === 0) setPolledUnread(0);
   }, [me?.unread_notifications]);
 
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/seller/login');
@@ -100,7 +106,7 @@ export default function SellerLayout() {
   const unread = polledUnread ?? me?.unread_notifications ?? 0;
 
   return (
-    <div className="min-h-screen flex bg-ink text-cream">
+    <div className="h-[100dvh] overflow-hidden flex bg-ink text-cream">
       {/* Toast de notificación en tiempo real */}
       {toast && (
         <div
@@ -184,7 +190,7 @@ export default function SellerLayout() {
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header móvil */}
         <header className="md:hidden sticky top-0 z-30 bg-ink-soft/90 backdrop-blur border-b border-gold/10 flex items-center justify-between px-4 h-12">
           <p className="font-display text-lg text-gold">ticketstangoshow</p>
@@ -202,7 +208,7 @@ export default function SellerLayout() {
           </div>
         </header>
 
-        <main className="flex-1 min-w-0 pb-16 md:pb-0">
+        <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden pb-24 md:pb-0">
           {/* Campanita fija alineada con los títulos — solo desktop */}
           <Link
             to="/seller/notificaciones"

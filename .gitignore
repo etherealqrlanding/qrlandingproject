@@ -6,6 +6,8 @@ build/
 .env
 .env.local
 .env.*.local
+.env.bak
+*.env.bak
 coverage/
 .vscode/
 .idea/

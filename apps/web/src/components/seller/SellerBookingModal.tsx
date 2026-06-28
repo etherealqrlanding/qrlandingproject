@@ -4,6 +4,7 @@ import { api, type AvailabilityDay } from '../../lib/api';
 import { sellerApi, SellerApiError, type SellerBookingResult } from '../../lib/sellerApi';
 import type { ProductDetail, ProductOption } from '../../types/api';
 import TransferSection from '../TransferSection';
+import Spinner from '../Spinner';
 
 interface Props {
   product: ProductDetail;
@@ -424,7 +425,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting
-              ? 'Procesando...'
+              ? <><Spinner size="sm" className="mr-2" />Procesando...</>
               : isDateBlocked
                 ? 'Elegí otra fecha'
                 : paymentMethod === 'cash'

@@ -8,7 +8,7 @@ import { getStoredRef, clearRef } from '../lib/referral';
 import { ApiError } from '../lib/api';
 import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
-import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
+import { useExchangeRate } from '../lib/useExchangeRate';
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -123,6 +123,11 @@ export default function ProductPage() {
                   option={opt}
                   selected={opt.id === selectedOptionId}
                   onSelect={() => setSelectedOptionId(opt.id)}
+                  onBook={() => {
+                    setSelectedOptionId(opt.id);
+                    setCheckoutPaymentMethod('mercadopago');
+                    setCheckoutOpen(true);
+                  }}
                   lang={lang}
                 />
               ))}
@@ -156,11 +161,12 @@ export default function ProductPage() {
 }
 
 function OptionCard({
-  option, selected, onSelect, lang,
+  option, selected, onSelect, onBook, lang,
 }: {
   option: ProductOption;
   selected: boolean;
   onSelect: () => void;
+  onBook: () => void;
   lang: string | undefined;
 }) {
   const { t } = useTranslation();
@@ -174,11 +180,13 @@ function OptionCard({
   const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
+    <div
+      role="button"
+      tabIndex={0}
       aria-pressed={selected}
-      className={`text-left rounded-lg border p-5 transition ${
+      onClick={onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(); } }}
+      className={`text-left rounded-lg border p-5 transition cursor-pointer select-none ${
         selected
           ? 'border-gold/70 bg-gold/5 ring-1 ring-gold/40'
           : 'border-gold/10 bg-ink-soft hover:border-gold/30'
@@ -190,13 +198,11 @@ function OptionCard({
           {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-2xl font-display text-gold">
-            {priceArs != null ? fmtArs(priceArs) : `USD ${option.price_adult_usd}`}
-          </p>
-          <p className="text-xs text-cream/50">{t('product.per_adult')}</p>
+          <p className="text-xl font-display text-gold">USD {option.price_adult_usd}</p>
           {priceArs != null && (
-            <p className="text-xs text-cream/35">≈ USD {option.price_adult_usd}</p>
+            <p className="text-xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</p>
           )}
+          <p className="mt-0.5 text-xs text-cream/50">{t('product.per_adult')}</p>
         </div>
       </div>
 
@@ -219,7 +225,14 @@ function OptionCard({
         </ul>
       )}
 
-    </button>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onBook(); }}
+        className="mt-4 w-full btn-primary text-sm py-2.5"
+      >
+        {t('product.book_option')}
+      </button>
+    </div>
   );
 }
 
@@ -250,24 +263,33 @@ function BookingSummary({
       </h3>
       <p className="text-sm text-cream/60">{product.venue_name}</p>
 
-      <div className="mt-5 flex items-baseline gap-2">
-        <span className="text-3xl font-display text-gold">
-          {priceArs != null ? fmtArs(priceArs) : `USD ${option.price_adult_usd}`}
-        </span>
+      <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-2xl font-display text-gold">USD {option.price_adult_usd}</span>
+        {priceArs != null && (
+          <span className="text-2xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</span>
+        )}
         <span className="text-sm text-cream/50">/ {t('product.per_adult_short')}</span>
       </div>
-      {priceArs != null && (
-        <p className="text-xs text-cream/40">≈ USD {option.price_adult_usd}</p>
-      )}
       {option.price_child_usd != null && (
-        <p className="mt-1 text-xs text-cream/50">
-          {t('product.children')}: {priceChildArs != null ? fmtArs(priceChildArs) : `USD ${option.price_child_usd}`}
-          {priceChildArs != null && ` (≈ USD ${option.price_child_usd})`}
+        <p className="mt-2 text-sm text-cream/60">
+          {t('product.children')}:{' '}
+          <span className="text-cream/85">USD {option.price_child_usd}</span>
+          {priceChildArs != null && (
+            <>
+              <span className="text-cream/30 mx-1">·</span>
+              <span className="text-cream/85">ARS {priceChildArs.toLocaleString('es-AR')}</span>
+            </>
+          )}
         </p>
       )}
 
+      <div className="mt-4 rounded-lg bg-gold/5 border border-gold/15 px-3 py-2.5 flex gap-2 items-start">
+        <span className="text-gold-soft text-sm shrink-0 leading-none mt-0.5">💱</span>
+        <p className="text-xs text-cream/60 leading-relaxed">{t('product.currency_notice')}</p>
+      </div>
+
       {showCash ? (
-        <div className="mt-6 space-y-2">
+        <div className="mt-4 space-y-2">
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
@@ -289,7 +311,7 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full mt-6"
+            className="btn-primary w-full mt-4"
           >
             {t('product.book_cta')}
           </button>

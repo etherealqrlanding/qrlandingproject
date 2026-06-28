@@ -4,8 +4,10 @@ import { adminApi, AdminApiError, type AdminSeller } from '../../lib/adminApi';
 import SellerDataSection from './sections/SellerDataSection';
 import SellerQrSection from './sections/SellerQrSection';
 import SellerOrdersSection from './sections/SellerOrdersSection';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 type Tab = 'data' | 'qr' | 'orders';
+type DeleteDialog = 'deactivate' | 'permanent' | 'permanent-force';
 
 export default function SellerForm() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +18,9 @@ export default function SellerForm() {
   const [seller, setSeller] = useState<AdminSeller | null>(null);
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<DeleteDialog | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [forceCount, setForceCount] = useState(0);
 
   useEffect(() => {
     if (isNew) return;
@@ -34,25 +39,54 @@ export default function SellerForm() {
 
   const handleUpdated = (updated: AdminSeller) => setSeller(updated);
 
-  const handleDelete = async () => {
+  const runDeactivate = async () => {
     if (!seller) return;
-    if (!confirm(`¿Desactivar a "${seller.name}"? Sus ventas históricas se conservan.`)) return;
+    setDeleting(true);
     try {
       await adminApi.sellers.delete(seller.id);
       navigate('/admin/sellers');
     } catch (err) {
-      alert((err as AdminApiError).message);
+      setError((err as AdminApiError).message);
+      setDialog(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const handlePermanentDelete = async () => {
+  // Primer intento sin force: si hay ventas, el backend responde 409 y escalamos
+  // al diálogo reforzado que avisa que también se borrarán esas ventas.
+  const runPermanentDelete = async () => {
     if (!seller) return;
-    if (!confirm(`¿Eliminar definitivamente a "${seller.name}"?\n\nEsta acción no se puede deshacer. Si el vendedor tiene ventas asociadas, no se permitirá la eliminación.`)) return;
+    setDeleting(true);
     try {
       await adminApi.sellers.permanentDelete(seller.id);
       navigate('/admin/sellers');
     } catch (err) {
-      alert((err as AdminApiError).message);
+      const apiErr = err as AdminApiError;
+      if (apiErr.status === 409) {
+        const count = (apiErr.details as { order_count?: number } | undefined)?.order_count ?? 0;
+        setForceCount(count);
+        setDialog('permanent-force');
+      } else {
+        setError(apiErr.message);
+        setDialog(null);
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const runPermanentDeleteForce = async () => {
+    if (!seller) return;
+    setDeleting(true);
+    try {
+      await adminApi.sellers.permanentDelete(seller.id, { force: true });
+      navigate('/admin/sellers');
+    } catch (err) {
+      setError((err as AdminApiError).message);
+      setDialog(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -109,14 +143,54 @@ export default function SellerForm() {
               isNew={isNew}
               onCreated={handleCreated}
               onUpdated={handleUpdated}
-              onDelete={isNew ? undefined : handleDelete}
-              onPermanentDelete={isNew ? undefined : handlePermanentDelete}
+              onDelete={isNew ? undefined : () => setDialog('deactivate')}
+              onPermanentDelete={isNew ? undefined : () => setDialog('permanent')}
             />
           )}
           {tab === 'qr' && seller && <SellerQrSection seller={seller} />}
           {tab === 'orders' && seller && <SellerOrdersSection seller={seller} />}
         </>
       )}
+
+      <ConfirmDialog
+        open={dialog === 'deactivate'}
+        danger={false}
+        title="Desactivar vendedor"
+        message={<p>Se ocultará a <strong className="text-cream">{seller?.name}</strong> del listado activo. Sus ventas históricas y comisiones se conservan, y podés reactivarlo cuando quieras.</p>}
+        confirmLabel="Desactivar"
+        loading={deleting}
+        onConfirm={runDeactivate}
+        onCancel={() => setDialog(null)}
+      />
+
+      <ConfirmDialog
+        open={dialog === 'permanent'}
+        title="Eliminar vendedor definitivamente"
+        message={<p>Vas a eliminar a <strong className="text-cream">{seller?.name}</strong> de forma permanente. Esta acción no se puede deshacer. Si tiene ventas asociadas, te lo vamos a advertir antes de borrarlas.</p>}
+        confirmLabel="Eliminar"
+        loading={deleting}
+        onConfirm={runPermanentDelete}
+        onCancel={() => setDialog(null)}
+      />
+
+      <ConfirmDialog
+        open={dialog === 'permanent-force'}
+        title="⚠ Este vendedor tiene ventas"
+        message={
+          <>
+            <p>
+              <strong className="text-cream">{seller?.name}</strong> tiene{' '}
+              <strong className="text-bordeaux-light">{forceCount} venta(s)</strong> asociada(s).
+            </p>
+            <p>Si continuás, se eliminarán <strong className="text-cream">el vendedor y todas esas ventas</strong> (con sus pagos e items). Esta acción es <strong>irreversible</strong>.</p>
+          </>
+        }
+        confirmLabel={`Eliminar vendedor y ${forceCount} venta(s)`}
+        requireText="ELIMINAR"
+        loading={deleting}
+        onConfirm={runPermanentDeleteForce}
+        onCancel={() => setDialog(null)}
+      />
     </div>
   );
 }

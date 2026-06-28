@@ -28,7 +28,27 @@ export async function adminListProducts() {
        c.id AS category_id, c.slug AS category_slug, c.name_es AS category_name_es,
        p.updated_at,
        (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id) AS options_count,
-       (SELECT COUNT(*) FROM product_images i WHERE i.product_id = p.id) AS images_count
+       (SELECT COUNT(*) FROM product_images i WHERE i.product_id = p.id) AS images_count,
+       (SELECT COALESCE(json_agg(to_jsonb(opt) ORDER BY opt.display_order), '[]'::json)
+          FROM (
+            SELECT o.id, o.code, o.name_es,
+                   o.price_adult_usd::float        AS price_adult_usd,
+                   o.price_child_usd::float        AS price_child_usd,
+                   o.net_price_adult_usd::float    AS net_price_adult_usd,
+                   o.net_price_child_usd::float    AS net_price_child_usd,
+                   o.net_price_currency,
+                   o.net_price_adult_ars::float    AS net_price_adult_ars,
+                   o.net_price_child_ars::float    AS net_price_child_ars,
+                   o.net_transfer_price_ars::float AS net_transfer_price_ars,
+                   o.has_transfer,
+                   o.transfer_price_usd::float     AS transfer_price_usd,
+                   o.net_transfer_price_usd::float AS net_transfer_price_usd,
+                   o.default_capacity_per_day,
+                   o.is_active, o.display_order
+              FROM product_options o
+             WHERE o.product_id = p.id
+          ) opt
+       ) AS options
        FROM products p
        JOIN categories c ON c.id = p.category_id
       ORDER BY p.display_order, p.name`,
@@ -98,6 +118,28 @@ export async function adminDeleteProduct(id: number): Promise<boolean> {
   return (result.rowCount ?? 0) > 0;
 }
 
+/**
+ * Hard delete de un producto. Solo se permite si NO aparece en órdenes históricas
+ * (order_items.product_id es FK RESTRICT, y queremos preservar el historial de ventas).
+ * Si tiene ventas, devuelve { blocked: true, orderCount } y NO borra nada — el front
+ * debe ofrecer desactivarlo en su lugar.
+ * Al borrar, el ON DELETE CASCADE limpia product_options, product_images y option_availability.
+ */
+export async function adminHardDeleteProduct(
+  id: number,
+): Promise<{ deleted: boolean; blocked: boolean; orderCount: number }> {
+  const { rows } = await pool.query<{ cnt: string }>(
+    `SELECT COUNT(*) AS cnt FROM order_items WHERE product_id = $1`,
+    [id],
+  );
+  const orderCount = parseInt(rows[0].cnt, 10);
+  if (orderCount > 0) {
+    return { deleted: false, blocked: true, orderCount };
+  }
+  const result = await pool.query(`DELETE FROM products WHERE id = $1`, [id]);
+  return { deleted: (result.rowCount ?? 0) > 0, blocked: false, orderCount: 0 };
+}
+
 // ─── Opciones ───────────────────────────────────────────
 
 export interface AdminOptionInput {
@@ -110,9 +152,16 @@ export interface AdminOptionInput {
   includes_en?: string[];
   price_adult_usd: number;
   price_child_usd?: number | null;
+  net_price_adult_usd?: number | null;
+  net_price_child_usd?: number | null;
   has_dinner?: boolean;
   has_transfer?: boolean;
   transfer_price_usd?: number;
+  net_transfer_price_usd?: number | null;
+  net_price_currency?: 'USD' | 'ARS' | null;
+  net_price_adult_ars?: number | null;
+  net_price_child_ars?: number | null;
+  net_transfer_price_ars?: number | null;
   available_days?: number[];
   pickup_window_es?: string | null;
   pickup_window_en?: string | null;
@@ -130,20 +179,26 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
     `INSERT INTO product_options (
        product_id, code, name_es, name_en, description_es, description_en,
        includes_es, includes_en, price_adult_usd, price_child_usd,
-       has_dinner, has_transfer, transfer_price_usd, available_days,
+       net_price_adult_usd, net_price_child_usd,
+       has_dinner, has_transfer, transfer_price_usd, net_transfer_price_usd,
+       net_price_currency, net_price_adult_ars, net_price_child_ars, net_transfer_price_ars,
+       available_days,
        pickup_window_es, pickup_window_en,
        dinner_time_es, dinner_time_en,
        show_time_es, show_time_en,
        default_capacity_per_day, display_order, is_active
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
      RETURNING id`,
     [
       productId, input.code, input.name_es, input.name_en,
       input.description_es ?? null, input.description_en ?? null,
       input.includes_es ?? [], input.includes_en ?? [],
       input.price_adult_usd, input.price_child_usd ?? null,
+      input.net_price_adult_usd ?? null, input.net_price_child_usd ?? null,
       input.has_dinner ?? false, input.has_transfer ?? false,
-      input.transfer_price_usd ?? 0,
+      input.transfer_price_usd ?? 0, input.net_transfer_price_usd ?? null,
+      input.net_price_currency ?? 'USD',
+      input.net_price_adult_ars ?? null, input.net_price_child_ars ?? null, input.net_transfer_price_ars ?? null,
       input.available_days ?? [1,2,3,4,5,6,7],
       input.pickup_window_es ?? null, input.pickup_window_en ?? null,
       input.dinner_time_es ?? null, input.dinner_time_en ?? null,
@@ -156,10 +211,13 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
 }
 
 export async function adminUpdateOption(id: number, input: Partial<AdminOptionInput>): Promise<boolean> {
-  const fields = Object.keys(input);
+  // net_price_currency is NOT NULL in DB — drop null to avoid constraint violation
+  const safeInput: Partial<AdminOptionInput> = { ...input };
+  if (safeInput.net_price_currency == null) delete safeInput.net_price_currency;
+  const fields = Object.keys(safeInput);
   if (fields.length === 0) return true;
   const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
-  const values = fields.map((f) => (input as Record<string, unknown>)[f]);
+  const values = fields.map((f) => (safeInput as Record<string, unknown>)[f]);
   const result = await pool.query(
     `UPDATE product_options SET ${sets} WHERE id = $${fields.length + 1}`,
     [...values, id],

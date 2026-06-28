@@ -261,3 +261,20 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
     res.json({ data: { ok: true, status: rows[0].status } });
   } catch (err) { next(err); }
 });
+
+// DELETE /api/admin/orders/:publicId — borrado total e irreversible de la orden.
+// Arrastra (FK ON DELETE CASCADE) order_items y order_attributions; los payment_events
+// quedan con order_id = NULL (ON DELETE SET NULL) como rastro mínimo del cobro.
+// Se permite incluso para órdenes pagadas: la decisión del negocio es darle flexibilidad
+// total al admin, con la confirmación correspondiente del lado del front.
+adminOrdersRouter.delete('/:publicId', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const result = await pool.query(`DELETE FROM orders WHERE public_id = $1 RETURNING id`, [publicId]);
+    if ((result.rowCount ?? 0) === 0) return res.status(404).json({ error: 'Not found' });
+
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});

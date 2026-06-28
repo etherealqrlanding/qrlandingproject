@@ -2,6 +2,34 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail } from '../../lib/adminApi';
 
+function withUpdatedCaps(
+  products: AdminProductDetail[],
+  dirtyIds: Set<number>,
+  caps: Map<number, number>,
+): AdminProductDetail[] {
+  return products.map((p) => ({
+    ...p,
+    options: p.options.map((opt) =>
+      dirtyIds.has(opt.id) && caps.has(opt.id)
+        ? { ...opt, default_capacity_per_day: caps.get(opt.id)! }
+        : opt,
+    ),
+  }));
+}
+
+function withBulkCap(
+  products: AdminProductDetail[],
+  selected: Set<number>,
+  val: number,
+): AdminProductDetail[] {
+  return products.map((p) => ({
+    ...p,
+    options: p.options.map((opt) =>
+      selected.has(opt.id) ? { ...opt, default_capacity_per_day: val } : opt,
+    ),
+  }));
+}
+
 export default function BulkCapacityPage() {
   const [products, setProducts] = useState<AdminProductDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,16 +121,7 @@ export default function BulkCapacityPage() {
           adminApi.products.options.update(id, { default_capacity_per_day: draftCaps.get(id)! }),
         ),
       );
-      setProducts((prev) =>
-        prev.map((p) => ({
-          ...p,
-          options: p.options.map((opt) =>
-            dirtyIds.has(opt.id) && draftCaps.has(opt.id)
-              ? { ...opt, default_capacity_per_day: draftCaps.get(opt.id)! }
-              : opt,
-          ),
-        })),
-      );
+      setProducts((prev) => withUpdatedCaps(prev, dirtyIds, draftCaps));
       setDraftCaps((prev) => { const n = new Map(prev); dirtyIds.forEach((id) => n.delete(id)); return n; });
     } catch (err) {
       setError(err instanceof AdminApiError ? err.message : (err as Error).message);
@@ -113,7 +132,7 @@ export default function BulkCapacityPage() {
 
   // ── Asignar cupo masivo ──────────────────────────────────
   const handleBulkApply = async () => {
-    const val = parseInt(bulkInput, 10);
+    const val = Number.parseInt(bulkInput, 10);
     if (!val || val < 1 || !selected.size) return;
     setApplying(true);
     setError(null);
@@ -123,14 +142,7 @@ export default function BulkCapacityPage() {
           adminApi.products.options.update(id, { default_capacity_per_day: val }),
         ),
       );
-      setProducts((prev) =>
-        prev.map((p) => ({
-          ...p,
-          options: p.options.map((opt) =>
-            selected.has(opt.id) ? { ...opt, default_capacity_per_day: val } : opt,
-          ),
-        })),
-      );
+      setProducts((prev) => withBulkCap(prev, selected, val));
       setDraftCaps((prev) => { const n = new Map(prev); selected.forEach((id) => n.delete(id)); return n; });
       setBulkInput('');
       setSelected(new Set());
@@ -141,12 +153,16 @@ export default function BulkCapacityPage() {
     }
   };
 
+  const handleCapChange = (optId: number, val: number) => {
+    setDraftCaps((prev) => new Map(prev).set(optId, val));
+  };
+
   const someSelected = selected.size > 0;
   const allSelected = allOptionIds.length > 0 && selected.size === allOptionIds.length;
   const hasDirty = dirtyIds.size > 0;
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <Link to="/admin/products" className="text-sm text-gold-soft hover:text-gold">
         ← Volver a productos
       </Link>
@@ -168,8 +184,9 @@ export default function BulkCapacityPage() {
         </p>
         <div className="mt-5 flex items-center gap-4 flex-wrap">
           <div>
-            <label className="block text-sm text-cream/70 mb-1.5">Hora límite</label>
+            <label htmlFor="cutoff-time" className="block text-sm text-cream/70 mb-1.5">Hora límite</label>
             <input
+              id="cutoff-time"
               type="time"
               value={cutoff}
               onChange={(e) => setCutoff(e.target.value)}
@@ -227,7 +244,7 @@ export default function BulkCapacityPage() {
             {someSelected && (
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-cream/60">
-                  <span className="text-gold font-semibold">{selected.size}</span> seleccionado{selected.size !== 1 ? 's' : ''}
+                  <span className="text-gold font-semibold">{selected.size}</span> seleccionado{selected.size === 1 ? '' : 's'}
                 </span>
                 <div className="flex items-center gap-2">
                   <input
@@ -239,7 +256,7 @@ export default function BulkCapacityPage() {
                   />
                   <button
                     type="button" onClick={handleBulkApply}
-                    disabled={applying || !bulkInput || parseInt(bulkInput, 10) < 1}
+                    disabled={applying || !bulkInput || Number.parseInt(bulkInput, 10) < 1}
                     className="btn-primary text-sm disabled:opacity-50"
                   >
                     {applying ? 'Aplicando...' : 'Asignar cupo'}
@@ -256,7 +273,7 @@ export default function BulkCapacityPage() {
             {hasDirty && (
               <div className="flex items-center gap-3 ml-auto">
                 <span className="text-sm text-gold-soft">
-                  {dirtyIds.size} cambio{dirtyIds.size !== 1 ? 's' : ''} pendiente{dirtyIds.size !== 1 ? 's' : ''}
+                  {dirtyIds.size} cambio{dirtyIds.size === 1 ? '' : 's'} pendiente{dirtyIds.size === 1 ? '' : 's'}
                 </span>
                 <button
                   type="button" onClick={handleSaveAll} disabled={saving}
@@ -280,107 +297,168 @@ export default function BulkCapacityPage() {
         )}
 
         {!loading && products.length > 0 && (
-          <div className="rounded-lg border border-gold/10 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-ink-soft/60 text-cream/40 text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="py-3 pl-4 pr-2 w-8">
-                    <input
-                      type="checkbox" checked={allSelected}
-                      ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                      onChange={toggleAll} className="accent-gold"
-                    />
-                  </th>
-                  <th className="text-left py-3 px-3">Producto / Tier</th>
-                  <th className="text-center py-3 px-3 w-24">Estado</th>
-                  <th className="text-right py-3 pr-4 pl-3 w-32">Cupo / noche</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.flatMap((p) => {
-                  const ids = p.options.map((o) => o.id);
-                  const allProdSel = ids.length > 0 && ids.every((id) => selected.has(id));
-                  const someProdSel = ids.some((id) => selected.has(id));
+          <>
+            {/* ── Mobile: cards ── */}
+            <div className="md:hidden space-y-4">
+              {products.map((p) => {
+                const ids = p.options.map((o) => o.id);
+                const allProdSel = ids.length > 0 && ids.every((id) => selected.has(id));
+                const someProdSel = ids.some((id) => selected.has(id));
+                return (
+                  <div key={`pm-${p.id}`} className="rounded-xl border border-gold/10 overflow-hidden">
+                    {/* Cabecera del producto */}
+                    <div className="px-4 py-3 bg-ink-soft/30 flex items-center gap-3 border-b border-gold/10">
+                      <input
+                        type="checkbox" checked={allProdSel}
+                        ref={(el) => { if (el) el.indeterminate = someProdSel && !allProdSel; }}
+                        onChange={() => toggleProduct(p)}
+                        className="accent-gold shrink-0" disabled={ids.length === 0}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-cream font-semibold text-sm truncate">{p.name}</p>
+                        <p className="text-[10px] text-cream/40 truncate">
+                          {p.venue_name} · {p.options.length} tier{p.options.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                    </div>
+                    {/* Opciones */}
+                    {p.options.length === 0 ? (
+                      <p className="px-4 py-3 text-xs text-cream/30 italic">Sin tiers configurados</p>
+                    ) : (
+                      <div className="divide-y divide-gold/5">
+                        {p.options.map((opt) => {
+                          const isCapDirty = draftCaps.has(opt.id) && draftCaps.get(opt.id) !== opt.default_capacity_per_day;
+                          const isSel = selected.has(opt.id);
+                          return (
+                            <div
+                              key={`om-${opt.id}`}
+                              className={`px-4 py-3 flex items-center gap-3 transition-colors ${isSel ? 'bg-gold/5' : ''}`}
+                            >
+                              <input
+                                type="checkbox" checked={isSel}
+                                onChange={() => toggleOption(opt.id)}
+                                className="accent-gold shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm ${opt.is_active ? 'text-cream' : 'text-cream/40'}`}>{opt.name_es}</p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-[10px] font-mono text-cream/30">{opt.code}</span>
+                                  {opt.is_active
+                                    ? <span className="inline-flex items-center gap-1 text-[10px] text-gold/80"><span className="w-1 h-1 rounded-full bg-gold/60 inline-block" />Visible</span>
+                                    : <span className="text-[10px] text-cream/30">Oculto</span>
+                                  }
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="text-[10px] text-cream/35 mb-1">Cupo/noche</p>
+                                <InlineNumberInput
+                                  value={getCap(opt)} min={1} dirty={isCapDirty}
+                                  onChange={(val) => handleCapChange(opt.id, val)}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-                  return [
-                    <tr key={`p-${p.id}`} className="border-t border-gold/10 bg-ink-soft/30">
-                      <td className="py-2.5 pl-4 pr-2">
-                        <input
-                          type="checkbox" checked={allProdSel}
-                          ref={(el) => { if (el) el.indeterminate = someProdSel && !allProdSel; }}
-                          onChange={() => toggleProduct(p)}
-                          className="accent-gold" disabled={ids.length === 0}
-                        />
-                      </td>
-                      <td colSpan={3} className="py-2.5 px-3">
-                        <span className="font-semibold text-cream">{p.name}</span>
-                        <span className="ml-2 text-xs text-cream/40">{p.venue_name}</span>
-                        <span className="ml-2 text-xs text-cream/25">
-                          {p.options.length} tier{p.options.length !== 1 ? 's' : ''}
-                        </span>
-                      </td>
-                    </tr>,
-
-                    ...p.options.map((opt) => {
-                      const isCapDirty = draftCaps.has(opt.id) && draftCaps.get(opt.id) !== opt.default_capacity_per_day;
-                      const isSel = selected.has(opt.id);
-
-                      return (
-                        <tr
-                          key={`o-${opt.id}`}
-                          className={`border-t border-gold/5 transition-colors ${isSel ? 'bg-gold/5' : 'hover:bg-white/[0.02]'}`}
-                        >
-                          <td className="py-2 pl-4 pr-2">
-                            <input
-                              type="checkbox" checked={isSel}
-                              onChange={() => toggleOption(opt.id)} className="accent-gold"
-                            />
-                          </td>
-                          <td className="py-2 px-3 pl-9">
-                            <span className={opt.is_active ? 'text-cream' : 'text-cream/40'}>{opt.name_es}</span>
-                            <span className="ml-2 text-xs text-cream/25 font-mono">{opt.code}</span>
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            {opt.is_active
-                              ? <span className="inline-flex items-center gap-1 text-xs text-gold/80"><span className="w-1.5 h-1.5 rounded-full bg-gold/60 inline-block" />Visible</span>
-                              : <span className="text-xs text-cream/30">Oculto</span>
-                            }
-                          </td>
-                          <td className="py-2 pr-4 pl-3 text-right">
-                            <InlineNumberInput
-                              value={getCap(opt)} min={1} dirty={isCapDirty}
-                              onChange={(val) => setDraftCaps((prev) => new Map(prev).set(opt.id, val))}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    }),
-
-                    ...(p.options.length === 0
-                      ? [<tr key={`p-${p.id}-empty`} className="border-t border-gold/5">
-                          <td colSpan={4} className="py-2.5 pl-9 text-xs text-cream/30 italic">Sin tiers configurados</td>
-                        </tr>]
-                      : []),
-                  ];
-                })}
-              </tbody>
-            </table>
-          </div>
+            {/* ── Desktop: tabla ── */}
+            <div className="hidden md:block rounded-lg border border-gold/10 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-ink-soft/60 text-cream/40 text-xs uppercase tracking-wider">
+                  <tr>
+                    <th className="py-3 pl-4 pr-2 w-8">
+                      <input
+                        type="checkbox" checked={allSelected}
+                        ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                        onChange={toggleAll} className="accent-gold"
+                      />
+                    </th>
+                    <th className="text-left py-3 px-3">Producto / Tier</th>
+                    <th className="text-center py-3 px-3 w-24">Estado</th>
+                    <th className="text-right py-3 pr-4 pl-3 w-32">Cupo / noche</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.flatMap((p) => {
+                    const ids = p.options.map((o) => o.id);
+                    const allProdSel = ids.length > 0 && ids.every((id) => selected.has(id));
+                    const someProdSel = ids.some((id) => selected.has(id));
+                    return [
+                      <tr key={`p-${p.id}`} className="border-t border-gold/10 bg-ink-soft/30">
+                        <td className="py-2.5 pl-4 pr-2">
+                          <input
+                            type="checkbox" checked={allProdSel}
+                            ref={(el) => { if (el) el.indeterminate = someProdSel && !allProdSel; }}
+                            onChange={() => toggleProduct(p)}
+                            className="accent-gold" disabled={ids.length === 0}
+                          />
+                        </td>
+                        <td colSpan={3} className="py-2.5 px-3">
+                          <span className="font-semibold text-cream">{p.name}</span>
+                          <span className="ml-2 text-xs text-cream/40">{p.venue_name}</span>
+                          <span className="ml-2 text-xs text-cream/25">
+                            {p.options.length} tier{p.options.length === 1 ? '' : 's'}
+                          </span>
+                        </td>
+                      </tr>,
+                      ...p.options.map((opt) => {
+                        const isCapDirty = draftCaps.has(opt.id) && draftCaps.get(opt.id) !== opt.default_capacity_per_day;
+                        const isSel = selected.has(opt.id);
+                        return (
+                          <tr key={`o-${opt.id}`} className={`border-t border-gold/5 transition-colors ${isSel ? 'bg-gold/5' : 'hover:bg-white/[0.02]'}`}>
+                            <td className="py-2 pl-4 pr-2">
+                              <input type="checkbox" checked={isSel} onChange={() => toggleOption(opt.id)} className="accent-gold" />
+                            </td>
+                            <td className="py-2 px-3 pl-9">
+                              <span className={opt.is_active ? 'text-cream' : 'text-cream/40'}>{opt.name_es}</span>
+                              <span className="ml-2 text-xs text-cream/25 font-mono">{opt.code}</span>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              {opt.is_active
+                                ? <span className="inline-flex items-center gap-1 text-xs text-gold/80"><span className="w-1.5 h-1.5 rounded-full bg-gold/60 inline-block" />Visible</span>
+                                : <span className="text-xs text-cream/30">Oculto</span>
+                              }
+                            </td>
+                            <td className="py-2 pr-4 pl-3 text-right">
+                              <InlineNumberInput
+                                value={getCap(opt)} min={1} dirty={isCapDirty}
+                                onChange={(val) => handleCapChange(opt.id, val)}
+                              />
+                            </td>
+                          </tr>
+                        );
+                      }),
+                      ...(p.options.length === 0
+                        ? [<tr key={`p-${p.id}-empty`} className="border-t border-gold/5">
+                            <td colSpan={4} className="py-2.5 pl-9 text-xs text-cream/30 italic">Sin tiers configurados</td>
+                          </tr>]
+                        : []),
+                    ];
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
     </div>
   );
 }
 
-function InlineNumberInput({ value, min, dirty, onChange }: {
+function InlineNumberInput({ value, min, dirty, onChange }: Readonly<{
   value: number; min: number; dirty: boolean; onChange: (val: number) => void;
-}) {
+}>) {
   return (
     <input
       type="number" min={min}
       value={value}
       onChange={(e) => {
-        const v = parseInt(e.target.value, 10);
+        const v = Number.parseInt(e.target.value, 10);
         if (!Number.isNaN(v) && v >= min) onChange(v);
       }}
       className={`w-24 text-right rounded px-2 py-1 text-sm bg-ink tabular-nums

@@ -13,7 +13,7 @@ export default function BottomNavPublic() {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/96 backdrop-blur-md border-t border-gold/15"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/[0.97] backdrop-blur-xl border-t border-gold/20"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="flex h-16 items-stretch">
