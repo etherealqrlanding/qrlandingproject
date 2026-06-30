@@ -85,9 +85,10 @@ export default function SellersList() {
         acc.revenue += s.revenue_paid_usd ?? 0;
         acc.paid += s.commission_paid_usd ?? 0;
         acc.pending += s.commission_pending_payment_usd ?? 0;
+        acc.netPending += s.net_pending_settlement_usd ?? 0;
         return acc;
       },
-      { revenue: 0, paid: 0, pending: 0 },
+      { revenue: 0, paid: 0, pending: 0, netPending: 0 },
     );
   }, [sellers, showInactive]);
 
@@ -189,10 +190,11 @@ export default function SellersList() {
       </header>
 
       {totals && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 md:mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 md:mb-8">
           <SummaryCard label="Revenue generado" value={`USD ${totals.revenue.toLocaleString()}`} hint="Total ventas pagadas atribuidas" />
           <SummaryCard label="Comisiones" value={`USD ${totals.paid.toLocaleString()}`} hint="Acumulado de todas las ventas pagadas" />
-          <SummaryCard label="Pendiente de pago" value={`USD ${totals.pending.toLocaleString()}`} hint="A pagar a vendedores" highlight />
+          <SummaryCard label="A pagar (MP)" value={`USD ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight />
+          <SummaryCard label="A cobrar (efectivo)" value={`USD ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" />
         </div>
       )}
 

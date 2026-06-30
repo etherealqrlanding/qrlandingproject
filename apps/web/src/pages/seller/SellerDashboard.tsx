@@ -90,6 +90,7 @@ export default function SellerDashboard() {
   const pending = me.commission_pending_usd;
   const earned = me.commission_earned_usd;
   const paid = me.commission_paid_usd;
+  const netToSettle = me.net_pending_settlement_usd ?? 0;
   const refLink = `${window.location.origin}/?ref=${encodeURIComponent(me.code)}`;
 
   const handleDownloadQr = async () => {
@@ -122,14 +123,24 @@ export default function SellerDashboard() {
         <StatCard label="Facturación" value={fmt(me.revenue_paid_usd)} sub="suma de tus ventas" />
         <StatCard label="Comisión ganada" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
-        <StatCard label="Pendiente" value={fmt(pending)} sub={pending > 0 ? 'en proceso' : 'al día'} />
+        <StatCard label="Pendiente (MP)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
+        <StatCard label="Neto a rendir" value={fmt(netToSettle)} sub={netToSettle > 0 ? 'de ventas en efectivo' : 'al día'} />
       </section>
 
       {pending > 0 && (
         <div className="rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm text-cream/80 mb-5 md:mb-8">
           <p className="font-medium text-gold mb-1">Tenés comisión pendiente de liquidación</p>
           <p className="text-xs md:text-sm">
-            {fmt(pending)} no te fue transferido aún. Cuando el equipo procese el pago lo verás en <strong>Liquidaciones</strong>.
+            {fmt(pending)} (ventas por Mercado Pago) no te fue transferido aún. Cuando el equipo procese el pago lo verás en <strong>Liquidaciones</strong>.
+          </p>
+        </div>
+      )}
+
+      {netToSettle > 0 && (
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4 text-sm text-cream/80 mb-5 md:mb-8">
+          <p className="font-medium text-emerald-400 mb-1">Tenés neto pendiente de rendir</p>
+          <p className="text-xs md:text-sm">
+            Por tus ventas en <strong>efectivo</strong> cobraste el total y te quedaste con tu comisión. Nos tenés que rendir el neto: <strong>{fmt(netToSettle)}</strong>.
           </p>
         </div>
       )}

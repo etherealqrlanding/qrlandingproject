@@ -8,7 +8,7 @@ import { logPaymentEvent } from '../../repos/orders.js';
 export const adminOrdersRouter = Router();
 
 const listQuery = z.object({
-  status: z.enum(['pending', 'paid', 'failed', 'cancelled', 'refunded']).optional(),
+  status: z.enum(['pending', 'paid', 'failed', 'cancelled', 'refunded', 'expired']).optional(),
   ref: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -77,7 +77,8 @@ adminOrdersRouter.get('/:publicId', async (req, res, next) => {
          a.seller_id, s.code AS seller_code, s.name AS seller_name,
          a.commission_percent_snapshot, a.commission_amount_usd::float AS commission_amount_usd,
          a.commission_amount_ars::float AS commission_amount_ars,
-         a.paid_to_seller_at
+         a.net_total_usd_snapshot::float AS net_total_usd,
+         a.paid_to_seller_at, a.net_settled_at
          FROM orders o
          LEFT JOIN order_attributions a ON a.order_id = o.id
          LEFT JOIN sellers s ON s.id = a.seller_id

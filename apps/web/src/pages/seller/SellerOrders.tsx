@@ -1,22 +1,48 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerOrder } from '../../lib/sellerApi';
 
-const STATUS_LABEL: Record<string, string> = {
-  paid: 'Cobrada',
+// Estado mostrado al vendedor según método de pago + sub-estado real de la orden:
+//  - Pendiente: reservó, todavía no se cobró.
+//  - Cobrada:   efectivo cobrado por el vendedor, neto aún no rendido.
+//  - Rendida:   efectivo cobrado y neto ya rendido al operador.
+//  - Pagada:    Mercado Pago confirmado.
+//  - Caducada:  efectivo no cobrado dentro de las 24 hs (cancelada automáticamente).
+type DerivedKey = 'pending' | 'collected' | 'settled' | 'paid' | 'expired' | 'cancelled' | 'refunded' | 'failed';
+
+const STATUS_CLASS: Record<DerivedKey, string> = {
+  pending: 'bg-amber-900/30 text-amber-400 border border-amber-800/40',
+  collected: 'bg-sky-900/30 text-sky-400 border border-sky-800/40',
+  settled: 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/40',
+  paid: 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/40',
+  expired: 'bg-zinc-800/40 text-cream/40 border border-zinc-700/30',
+  cancelled: 'bg-zinc-800/40 text-cream/40 border border-zinc-700/30',
+  refunded: 'bg-blue-900/30 text-blue-400 border border-blue-800/40',
+  failed: 'bg-bordeaux-deep/40 text-bordeaux-light border border-bordeaux-light/30',
+};
+
+const DERIVED_LABEL: Record<DerivedKey, string> = {
   pending: 'Pendiente',
-  refunded: 'Reembolsada',
+  collected: 'Cobrada',
+  settled: 'Rendida',
+  paid: 'Pagada',
+  expired: 'Caducada',
   cancelled: 'Cancelada',
+  refunded: 'Reembolsada',
   failed: 'Fallida',
 };
 
-const STATUS_CLASS: Record<string, string> = {
-  paid: 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/40',
-  pending: 'bg-amber-900/30 text-amber-400 border border-amber-800/40',
-  refunded: 'bg-blue-900/30 text-blue-400 border border-blue-800/40',
-  cancelled: 'bg-zinc-800/40 text-cream/40 border border-zinc-700/30',
-  failed: 'bg-bordeaux-deep/40 text-bordeaux-light border border-bordeaux-light/30',
-};
+function derivedStatus(o: SellerOrder): { key: DerivedKey; label: string; cls: string } {
+  let key: DerivedKey;
+  if (o.status === 'expired') key = 'expired';
+  else if (o.status === 'cancelled') key = 'cancelled';
+  else if (o.status === 'refunded') key = 'refunded';
+  else if (o.status === 'failed') key = 'failed';
+  else if (o.status === 'pending') key = 'pending';
+  else if (o.payment_method === 'cash') key = o.net_settled_at ? 'settled' : 'collected';
+  else key = 'paid';
+  return { key, label: DERIVED_LABEL[key], cls: STATUS_CLASS[key] };
+}
 
 const PAYMENT_LABEL: Record<string, string> = {
   mercadopago: 'Mercado Pago',
@@ -57,7 +83,7 @@ export default function SellerOrders() {
   const [orders, setOrders] = useState<SellerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>(highlight ? 'pending' : 'pending');
+  const [filter, setFilter] = useState<string>(''); // '' = Todas (default)
   const [expanded, setExpanded] = useState<number | null>(null);
   const [collecting, setCollecting] = useState<string | null>(null);
   const [confirmPublicId, setConfirmPublicId] = useState<string | null>(null);
@@ -93,14 +119,21 @@ export default function SellerOrders() {
     }
   };
 
+  // Traemos todas las órdenes y filtramos en el cliente por estado derivado
+  // (Cobrada/Rendida son sub-estados de 'paid', no se pueden filtrar server-side).
   useEffect(() => {
     setLoading(true);
     setError(null);
-    sellerApi.orders(filter || undefined)
+    sellerApi.orders()
       .then((data) => { setOrders(data); setExpanded(null); })
       .catch((err) => setError((err as SellerApiError).message))
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, []);
+
+  const visible = useMemo(
+    () => (filter ? orders.filter((o) => derivedStatus(o).key === filter) : orders),
+    [orders, filter],
+  );
 
   const pendingOrder = confirmPublicId
     ? orders.find((o) => o.public_id === confirmPublicId)
@@ -170,9 +203,11 @@ export default function SellerOrders() {
         </div>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input w-36 md:w-44 text-sm">
           <option value="">Todas</option>
-          <option value="paid">Cobradas</option>
           <option value="pending">Pendientes</option>
-          <option value="refunded">Reembolsadas</option>
+          <option value="collected">Cobradas</option>
+          <option value="settled">Rendidas</option>
+          <option value="paid">Pagadas (MP)</option>
+          <option value="expired">Caducadas</option>
           <option value="cancelled">Canceladas</option>
         </select>
       </header>
@@ -180,9 +215,9 @@ export default function SellerOrders() {
       {filter && !loading && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2 text-xs md:text-sm">
           <span className="text-gold-soft">Filtro:</span>
-          <span className="text-cream/80 font-medium">{STATUS_LABEL[filter] ?? filter}</span>
+          <span className="text-cream/80 font-medium">{DERIVED_LABEL[filter as DerivedKey] ?? filter}</span>
           <span className="text-cream/40">·</span>
-          <span className="text-cream/50">{orders.length} resultado{orders.length !== 1 ? 's' : ''}</span>
+          <span className="text-cream/50">{visible.length} resultado{visible.length !== 1 ? 's' : ''}</span>
           <button type="button" onClick={() => setFilter('')}
             className="ml-auto text-xs text-gold-soft hover:text-gold transition underline underline-offset-2">
             Ver todas
@@ -200,7 +235,7 @@ export default function SellerOrders() {
             <div key={i} className="h-14 rounded-lg bg-ink-soft/60 animate-pulse" />
           ))}
         </div>
-      ) : orders.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="rounded-xl border border-gold/10 bg-ink-soft/30 p-8 text-center text-cream/40 text-sm">
           No hay ventas{filter ? ' con ese filtro' : ''} todavía.
         </div>
@@ -208,7 +243,7 @@ export default function SellerOrders() {
         <>
           {/* ── MOBILE: tarjetas ── */}
           <div className="md:hidden space-y-2">
-            {orders.map((o) => {
+            {visible.map((o) => {
               const isOpen = expanded === o.order_id;
               const isHighlighted = o.public_id === highlight;
               return (
@@ -224,8 +259,8 @@ export default function SellerOrders() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-0.5">
                         <p className="text-cream text-sm font-medium leading-tight truncate">{o.product_name}</p>
-                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs ${STATUS_CLASS[o.status] ?? STATUS_CLASS.cancelled}`}>
-                          {STATUS_LABEL[o.status] ?? o.status}
+                        <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs ${derivedStatus(o).cls}`}>
+                          {derivedStatus(o).label}
                         </span>
                       </div>
                       <p className="text-xs text-cream/50 truncate">{o.option_name}</p>
@@ -238,8 +273,8 @@ export default function SellerOrders() {
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-cream font-mono text-sm">{fmt(o.total_usd)}</p>
-                      {o.status === 'paid' && (
-                        <p className="text-gold font-mono text-xs">{fmt(o.commission_amount_usd)}</p>
+                      {(o.status === 'paid' || o.status === 'pending') && (
+                        <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmt(o.commission_amount_usd)}</p>
                       )}
                       <span className={`text-gold/50 text-xs inline-block mt-1 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                     </div>
@@ -255,16 +290,33 @@ export default function SellerOrders() {
                       <DetailRow label="Fecha servicio">{fmtDate(o.service_date)}</DetailRow>
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
                       <DetailRow label="Total"><span className="text-cream font-mono">{fmt(o.total_usd)}</span></DetailRow>
-                      {o.status === 'paid' && (
-                        <DetailRow label="Tu comisión"><span className="text-gold font-mono">{fmt(o.commission_amount_usd)}</span></DetailRow>
+                      {(o.status === 'paid' || o.status === 'pending') && (
+                        <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
+                          <span className="text-gold font-mono">{fmt(o.commission_amount_usd)}</span>
+                        </DetailRow>
                       )}
-                      <DetailRow label="Liquidación">
-                        {o.paid_to_seller_at
-                          ? <span className="text-emerald-400">✓ {fmtDate(o.paid_to_seller_at)}</span>
-                          : o.status === 'paid'
-                            ? <span className="text-amber-400">Pendiente</span>
-                            : <span className="text-cream/30">—</span>}
-                      </DetailRow>
+                      {o.payment_method === 'cash' ? (
+                        <>
+                          {o.status === 'paid' && (
+                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmt(o.net_total_usd ?? 0)}</span></DetailRow>
+                          )}
+                          <DetailRow label="Neto rendido">
+                            {o.net_settled_at
+                              ? <span className="text-emerald-400">✓ {fmtDate(o.net_settled_at)}</span>
+                              : o.status === 'paid'
+                                ? <span className="text-amber-400">Pendiente</span>
+                                : <span className="text-cream/30">—</span>}
+                          </DetailRow>
+                        </>
+                      ) : (
+                        <DetailRow label="Te liquidamos">
+                          {o.paid_to_seller_at
+                            ? <span className="text-emerald-400">✓ {fmtDate(o.paid_to_seller_at)}</span>
+                            : o.status === 'paid'
+                              ? <span className="text-amber-400">Pendiente</span>
+                              : <span className="text-cream/30">—</span>}
+                        </DetailRow>
+                      )}
                       {o.payment_method === 'cash' && o.status === 'pending' && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <button
@@ -299,7 +351,7 @@ export default function SellerOrders() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((o) => {
+                {visible.map((o) => {
                   const isOpen = expanded === o.order_id;
                   const isHighlighted = o.public_id === highlight;
                   return (
@@ -318,8 +370,8 @@ export default function SellerOrders() {
                         <td className="px-4 py-3 text-cream/70 text-xs whitespace-nowrap">{paxLabel(o.adults ?? 0, o.children ?? 0)}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-1">
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${STATUS_CLASS[o.status] ?? STATUS_CLASS.cancelled}`}>
-                              {STATUS_LABEL[o.status] ?? o.status}
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${derivedStatus(o).cls}`}>
+                              {derivedStatus(o).label}
                             </span>
                             {o.utm_source === 'seller_portal' && (
                               <span className="px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">Manual</span>
@@ -331,10 +383,10 @@ export default function SellerOrders() {
                         </td>
                         <td className="px-4 py-3 text-right text-cream font-mono whitespace-nowrap text-xs">{fmt(o.total_usd)}</td>
                         <td className="px-4 py-3 text-right text-gold font-mono whitespace-nowrap text-xs">
-                          {o.status === 'paid' ? fmt(o.commission_amount_usd) : '—'}
+                          {(o.status === 'paid' || o.status === 'pending') ? fmt(o.commission_amount_usd) : '—'}
                         </td>
                         <td className="px-4 py-3 text-center text-xs">
-                          {o.paid_to_seller_at
+                          {(o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at)
                             ? <span className="text-emerald-400">✓</span>
                             : o.status === 'paid'
                               ? <span className="text-amber-400">Pdte.</span>
@@ -369,16 +421,33 @@ export default function SellerOrders() {
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y comisión</p>
                                 <DetailRow label="Medio">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
                                 <DetailRow label="Total"><span className="text-cream font-mono">{fmt(o.total_usd)}</span></DetailRow>
-                                {o.status === 'paid' && (
-                                  <DetailRow label="Tu comisión"><span className="text-gold font-mono">{fmt(o.commission_amount_usd)}</span></DetailRow>
+                                {(o.status === 'paid' || o.status === 'pending') && (
+                                  <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
+                                    <span className="text-gold font-mono">{fmt(o.commission_amount_usd)}</span>
+                                  </DetailRow>
                                 )}
-                                <DetailRow label="Liquidación">
-                                  {o.paid_to_seller_at
-                                    ? <span className="text-emerald-400">✓ {fmtDate(o.paid_to_seller_at)}</span>
-                                    : o.status === 'paid'
-                                      ? <span className="text-amber-400">Pendiente</span>
-                                      : <span className="text-cream/30">—</span>}
-                                </DetailRow>
+                                {o.payment_method === 'cash' ? (
+                                  <>
+                                    {o.status === 'paid' && (
+                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmt(o.net_total_usd ?? 0)}</span></DetailRow>
+                                    )}
+                                    <DetailRow label="Neto rendido">
+                                      {o.net_settled_at
+                                        ? <span className="text-emerald-400">✓ {fmtDate(o.net_settled_at)}</span>
+                                        : o.status === 'paid'
+                                          ? <span className="text-amber-400">Pendiente</span>
+                                          : <span className="text-cream/30">—</span>}
+                                    </DetailRow>
+                                  </>
+                                ) : (
+                                  <DetailRow label="Te liquidamos">
+                                    {o.paid_to_seller_at
+                                      ? <span className="text-emerald-400">✓ {fmtDate(o.paid_to_seller_at)}</span>
+                                      : o.status === 'paid'
+                                        ? <span className="text-amber-400">Pendiente</span>
+                                        : <span className="text-cream/30">—</span>}
+                                  </DetailRow>
+                                )}
                                 <DetailRow label="N° orden"><span className="font-mono text-cream/50">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
                               </div>
                             </div>
@@ -406,9 +475,9 @@ export default function SellerOrders() {
         </>
       )}
 
-      {!loading && orders.length > 0 && (
+      {!loading && visible.length > 0 && (
         <p className="mt-3 text-xs text-cream/30 text-right">
-          {orders.length} resultado{orders.length !== 1 ? 's' : ''} · Tocá para ver el detalle
+          {visible.length} resultado{visible.length !== 1 ? 's' : ''} · Tocá para ver el detalle
         </p>
       )}
     </div>

@@ -141,6 +141,58 @@ export async function createCashBookingNotification(orderId: number): Promise<vo
   });
 }
 
+// Crea notificación cuando una reserva en efectivo caduca por no marcarse el cobro en 24 hs.
+export async function createOrderExpiredNotification(orderId: number): Promise<void> {
+  const { rows } = await pool.query<{
+    seller_id: number;
+    public_id: string;
+    customer_name: string;
+    option_name: string;
+    service_date: string;
+    total_usd: number;
+  }>(
+    `SELECT
+       a.seller_id,
+       o.public_id,
+       o.customer_name,
+       oi.option_name_snapshot AS option_name,
+       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+       o.total_usd::float AS total_usd
+     FROM order_attributions a
+     JOIN orders o  ON o.id  = a.order_id
+     JOIN order_items oi ON oi.order_id = o.id
+    WHERE a.order_id = $1
+    LIMIT 1`,
+    [orderId],
+  );
+  const row = rows[0];
+  if (!row) return;
+
+  await createNotification({
+    seller_id: row.seller_id,
+    type: 'order_expired',
+    title: '⏰ Reserva caducada',
+    body: `La reserva de ${row.customer_name} para "${row.option_name}" (${row.service_date}) caducó porque no se marcó el cobro dentro de las 24 hs. Si la cobraste igual, contactá al equipo.`,
+    metadata: { order_id: orderId, order_public_id: row.public_id, total_usd: row.total_usd, service_date: row.service_date },
+  });
+}
+
+// Efectivo: notifica al vendedor cuando el operador registra que rindió el neto.
+export async function createNetSettledNotification(
+  sellerId: number,
+  orderIds: number[],
+  totalNetUsd: number,
+): Promise<void> {
+  const count = orderIds.length;
+  await createNotification({
+    seller_id: sellerId,
+    type: 'net_settled',
+    title: 'Rendición registrada',
+    body: `Registramos la rendición del neto de ${count} venta${count !== 1 ? 's' : ''} en efectivo por un total de USD ${totalNetUsd.toFixed(2)}. Esas operaciones quedan como "Rendidas".`,
+    metadata: { order_ids: orderIds, total_net_usd: totalNetUsd, orders_count: count },
+  });
+}
+
 // Crea notificación cuando el admin marca comisiones como liquidadas.
 export async function createCommissionPaidNotification(
   sellerId: number,

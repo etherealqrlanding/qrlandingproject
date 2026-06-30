@@ -18,6 +18,7 @@ interface OrderFull {
   mp_payment_id: string | null;
   mp_payment_status: string | null;
   mp_payment_method: string | null;
+  payment_method: 'mercadopago' | 'cash';
   internal_notes: string | null;
   paid_at: string | null;
   created_at: string;
@@ -27,7 +28,9 @@ interface OrderFull {
   commission_percent_snapshot: string | null;
   commission_amount_usd: number | null;
   commission_amount_ars: number | null;
+  net_total_usd: number | null;
   paid_to_seller_at: string | null;
+  net_settled_at: string | null;
   items: Array<{
     id: number;
     product_name_snapshot: string;
@@ -105,6 +108,23 @@ export default function OrderDetail() {
       await load();
     } catch (err) {
       alert(`Error al marcar liquidación: ${(err as AdminApiError).message}`);
+    } finally {
+      setLiquidating(false);
+    }
+  };
+
+  const handleMarkNetSettled = async () => {
+    if (!order || !order.seller_id) return;
+    const confirm1 = confirm(
+      `¿Confirmar que ${order.seller_name} ya nos liquidó el neto de esta venta en efectivo?\n\nNeto: USD ${order.net_total_usd ?? 0}\n\nQueda registrado con fecha.`,
+    );
+    if (!confirm1) return;
+    try {
+      setLiquidating(true);
+      await adminApi.sellers.markNetSettled(order.seller_id, [order.id]);
+      await load();
+    } catch (err) {
+      alert(`Error al marcar el neto como cobrado: ${(err as AdminApiError).message}`);
     } finally {
       setLiquidating(false);
     }
@@ -240,25 +260,75 @@ export default function OrderDetail() {
                 {order.seller_name}
               </Link>
               <p className="text-xs text-gold-soft font-mono">{order.seller_code}</p>
-              <div className="mt-3 space-y-1.5">
-                <Row label="Comisión">{Number(order.commission_percent_snapshot ?? 0).toFixed(1)}%</Row>
-                <Row label="USD" highlight>USD {order.commission_amount_usd ?? 0}</Row>
-                <Row label="ARS">ARS {(order.commission_amount_ars ?? 0).toLocaleString('es-AR')}</Row>
-                <Row label="Pago al vendedor">
-                  {order.paid_to_seller_at
-                    ? <span className="text-gold-soft">✓ {new Date(order.paid_to_seller_at).toLocaleDateString()}</span>
-                    : <span className="text-bordeaux-light">Pendiente</span>}
-                </Row>
+
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-cream/15 px-2.5 py-0.5 text-[11px] text-cream/70">
+                {order.payment_method === 'cash' ? 'Pago en efectivo' : 'Pago por Mercado Pago'}
               </div>
-              {order.status === 'paid' && !order.paid_to_seller_at && order.commission_amount_usd != null && (
-                <button
-                  type="button"
-                  onClick={handleMarkCommissionPaid}
-                  disabled={liquidating}
-                  className="mt-4 w-full rounded-md border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-gold-soft hover:bg-gold/20 transition disabled:opacity-40"
-                >
-                  {liquidating ? 'Guardando...' : '✓ Marcar como liquidado'}
-                </button>
+
+              {order.payment_method === 'cash' ? (
+                <>
+                  {/* Efectivo: el vendedor cobró el total y NOS debe liquidar el neto */}
+                  <div className="mt-3 space-y-1.5">
+                    <Row label="Venta total">USD {order.total_usd}</Row>
+                    <Row label="Comisión del vendedor">USD {order.commission_amount_usd ?? 0}</Row>
+                    <Row label="% de ganancia">
+                      {order.total_usd > 0
+                        ? `${(((order.commission_amount_usd ?? 0) / order.total_usd) * 100).toFixed(1)}%`
+                        : '—'}
+                    </Row>
+                    <Row label="Nos liquida (neto)" highlight>USD {order.net_total_usd ?? 0}</Row>
+                  </div>
+                  <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
+                    ➜ El vendedor cobró los USD {order.total_usd} y <strong>nos tiene que rendir el neto (USD {order.net_total_usd ?? 0})</strong>.
+                  </p>
+                  <div className="mt-2">
+                    <Row label="Neto cobrado">
+                      {order.net_settled_at
+                        ? <span className="text-emerald-400">✓ {new Date(order.net_settled_at).toLocaleDateString()}</span>
+                        : <span className="text-bordeaux-light">Pendiente de cobro</span>}
+                    </Row>
+                  </div>
+                  {order.status === 'paid' && !order.net_settled_at && order.net_total_usd != null && (
+                    <button
+                      type="button"
+                      onClick={handleMarkNetSettled}
+                      disabled={liquidating}
+                      className="mt-4 w-full rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-40"
+                    >
+                      {liquidating ? 'Guardando...' : '✓ Marcar neto cobrado'}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Mercado Pago: nosotros cobramos y le liquidamos su comisión */}
+                  <div className="mt-3 space-y-1.5">
+                    <Row label="Venta total">USD {order.total_usd}</Row>
+                    <Row label="Comisión">{Number(order.commission_percent_snapshot ?? 0).toFixed(1)}%</Row>
+                    <Row label="Le liquidamos (USD)" highlight>USD {order.commission_amount_usd ?? 0}</Row>
+                    <Row label="ARS">ARS {(order.commission_amount_ars ?? 0).toLocaleString('es-AR')}</Row>
+                  </div>
+                  <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
+                    ➜ Cobramos por Mercado Pago y <strong>le liquidamos su comisión (USD {order.commission_amount_usd ?? 0})</strong> al vendedor.
+                  </p>
+                  <div className="mt-2">
+                    <Row label="Pago al vendedor">
+                      {order.paid_to_seller_at
+                        ? <span className="text-gold-soft">✓ {new Date(order.paid_to_seller_at).toLocaleDateString()}</span>
+                        : <span className="text-bordeaux-light">Pendiente</span>}
+                    </Row>
+                  </div>
+                  {order.status === 'paid' && !order.paid_to_seller_at && order.commission_amount_usd != null && (
+                    <button
+                      type="button"
+                      onClick={handleMarkCommissionPaid}
+                      disabled={liquidating}
+                      className="mt-4 w-full rounded-md border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-gold-soft hover:bg-gold/20 transition disabled:opacity-40"
+                    >
+                      {liquidating ? 'Guardando...' : '✓ Marcar como liquidado'}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           ) : (
@@ -491,9 +561,10 @@ function StatusBadge({ status, large }: { status: string; large?: boolean }) {
     pending: 'text-gold-soft border-gold-soft/30 bg-gold-soft/5',
     failed: 'text-bordeaux-light border-bordeaux-light/40 bg-bordeaux-deep/20',
     cancelled: 'text-cream/50 border-cream/20 bg-cream/5',
+    expired: 'text-cream/40 border-cream/15 bg-cream/5',
     refunded: 'text-cream/60 border-cream/20 bg-cream/5',
   }[status] ?? 'text-cream/60 border-cream/20';
-  const label = { paid: 'Pagada', pending: 'Pendiente', failed: 'Fallida', cancelled: 'Cancelada', refunded: 'Reintegrada' }[status] ?? status;
+  const label = { paid: 'Pagada', pending: 'Pendiente', failed: 'Fallida', cancelled: 'Cancelada', expired: 'Caducada', refunded: 'Reintegrada' }[status] ?? status;
   return (
     <span className={`inline-block mt-2 px-3 rounded-full border ${color} ${large ? 'py-1.5 text-sm' : 'py-0.5 text-xs'}`}>
       {label}

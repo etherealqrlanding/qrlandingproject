@@ -11,7 +11,15 @@
     "title": "Vivís el tango. No solo lo mirás.",
     "subtitle": "Cenas, shows y experiencias en las 14 casas de tango más emblemáticas de la ciudad. Reservas en minutos, traslado incluido.",
     "cta_primary": "Ver experiencias",
-    "cta_secondary": "Hablar por WhatsApp"
+    "cta_secondary": "Hablar por WhatsApp",
+    "how_title": "Cómo reservás, paso a paso",
+    "how_subtitle": "Llegaste recomendado: en pocos minutos elegís y asegurás tu noche de tango.",
+    "steps": [
+      { "title": "Elegí tu experiencia", "desc": "Explorá las casas de tango y compará sus opciones de cena, show y traslado." },
+      { "title": "Fecha y personas", "desc": "Seleccioná el día, cuántos van y el tier que más te guste." },
+      { "title": "Reservá y pagá online", "desc": "Pago seguro en minutos. Recibís la confirmación al instante por email." },
+      { "title": "Disfrutá la noche", "desc": "Te esperamos con todo listo, con traslado incluido cuando corresponde." }
+    ]
   },
   "home": {
     "featured_title": "Casas destacadas",

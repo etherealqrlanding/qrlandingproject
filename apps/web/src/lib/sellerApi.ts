@@ -130,7 +130,10 @@ export interface SellerMe {
   revenue_paid_usd: number;
   commission_earned_usd: number;
   commission_paid_usd: number;
+  // MP: comisión que el operador todavía te debe liquidar
   commission_pending_usd: number;
+  // Efectivo: neto que vos le tenés que rendir al operador
+  net_pending_settlement_usd: number;
   unread_notifications: number;
 }
 
@@ -149,7 +152,10 @@ export interface SellerOrder {
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
+  net_total_usd: number | null;
+  commission_percent_snapshot: number | null;
   paid_to_seller_at: string | null;
+  net_settled_at: string | null;
   cash_collected_at: string | null;
   created_at: string;
   utm_source: string | null;

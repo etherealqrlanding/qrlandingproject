@@ -3,13 +3,13 @@ import { z } from 'zod';
 import QRCode from 'qrcode';
 import {
   createSeller, deactivateSeller, deleteSeller, getSeller, listSellerOrders,
-  listSellersWithStats, markCommissionsPaid, updateSeller,
+  listSellersWithStats, markCommissionsPaid, markNetSettled, updateSeller,
 } from '../../repos/sellers.js';
 import { config } from '../../config.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
 import { sendSellerPortalInvite, sendSellerPasswordReset } from '../../services/email.js';
-import { createCommissionPaidNotification } from '../../repos/notifications.js';
+import { createCommissionPaidNotification, createNetSettledNotification } from '../../repos/notifications.js';
 
 export const adminSellersRouter = Router();
 
@@ -154,6 +154,33 @@ adminSellersRouter.post('/:id/commissions/mark-paid', async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
+// ─── Efectivo: marcar neto como rendido por el vendedor ──
+adminSellersRouter.post('/:id/net-settlements/mark-settled', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = markPaidSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    const updated = await markNetSettled(id, parsed.data.order_ids);
+
+    if (updated > 0) {
+      const { rows: sumRows } = await pool.query<{ total: string }>(
+        `SELECT SUM(a.net_total_usd_snapshot)::text AS total
+           FROM order_attributions a
+          WHERE a.seller_id = $1
+            AND a.order_id = ANY($2::int[])
+            AND a.net_settled_at IS NOT NULL`,
+        [id, parsed.data.order_ids],
+      );
+      const totalNetUsd = parseFloat(sumRows[0]?.total ?? '0');
+      createNetSettledNotification(id, parsed.data.order_ids, totalNetUsd)
+        .catch((e) => console.error('[notif] createNetSettledNotification failed:', e));
+    }
+
+    res.json({ data: { updated } });
+  } catch (err) { next(err); }
+});
+
 // ─── Invitación al portal self-service ───────────────────
 // POST /api/admin/sellers/:id/invite
 // Genera el link via Supabase Admin (sin enviar email desde Supabase — evita rate limit)
@@ -179,11 +206,18 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
       });
       if (linkError) return res.status(400).json({ error: linkError.message });
 
-      // Intentar enviar por email (fire-and-forget, no bloquea si falla)
-      sendSellerPasswordReset(seller.name, seller.contact_email, linkData.properties.action_link)
-        .catch((e) => console.warn('[invite] email send failed:', e));
+      // Esperamos el envío para reportar si realmente salió (no fire-and-forget).
+      const emailResult = await sendSellerPasswordReset(seller.name, seller.contact_email, linkData.properties.action_link);
 
-      return res.json({ data: { ok: true, action: 'password_reset_sent', link: linkData.properties.action_link } });
+      return res.json({
+        data: {
+          ok: true,
+          action: 'password_reset_sent',
+          link: linkData.properties.action_link,
+          email_sent: emailResult.sent,
+          email_error: emailResult.error ?? null,
+        },
+      });
     }
 
     // Sin cuenta — generar invite link
@@ -203,11 +237,18 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
       [linkData.user.id, id],
     );
 
-    // Intentar enviar por email (fire-and-forget)
-    sendSellerPortalInvite(seller.name, seller.contact_email, linkData.properties.action_link)
-      .catch((e) => console.warn('[invite] email send failed:', e));
+    // Esperamos el envío para reportar si realmente salió (no fire-and-forget).
+    const emailResult = await sendSellerPortalInvite(seller.name, seller.contact_email, linkData.properties.action_link);
 
-    res.json({ data: { ok: true, action: 'invite_sent', link: linkData.properties.action_link } });
+    res.json({
+      data: {
+        ok: true,
+        action: 'invite_sent',
+        link: linkData.properties.action_link,
+        email_sent: emailResult.sent,
+        email_error: emailResult.error ?? null,
+      },
+    });
   } catch (err) { next(err); }
 });
 

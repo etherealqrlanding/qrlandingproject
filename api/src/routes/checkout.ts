@@ -13,7 +13,6 @@ import {
   createPendingOrder,
   setOrderPreferenceId,
   updateOrderFromPayment,
-  updateCommissionForMpOrder,
   logPaymentEvent,
   findOrderByPublicId,
 } from '../repos/orders.js';
@@ -515,8 +514,7 @@ checkoutRouter.post('/webhook', async (req: Request, res: Response, next: NextFu
         // Disparar notificaciones por email solo cuando pasa a 'paid' por primera vez.
         // No bloqueamos el webhook esperando los emails: fire-and-forget con catch.
         if (newStatus === 'paid' && updated.status === 'paid') {
-          // Calcular comisión del vendedor usando el modelo neto (fee MP aplicado)
-          await updateCommissionForMpOrder(client, updated.id);
+          // La comisión del vendedor (% × total para MP) ya quedó calculada al crear la orden.
           sendOrderPaidNotifications(updated.id).catch((err) =>
             console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
           );

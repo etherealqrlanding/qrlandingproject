@@ -12,6 +12,7 @@ export default function InvitePortalSection({ seller, onUpdated }: Readonly<Prop
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [emailStatus, setEmailStatus] = useState<{ sent: boolean; error: string | null } | null>(null);
 
   const hasAccount = Boolean(seller.supabase_user_id);
   const hasEmail = Boolean(seller.contact_email);
@@ -26,9 +27,11 @@ export default function InvitePortalSection({ seller, onUpdated }: Readonly<Prop
     setLink(null);
     setError(null);
     setCopied(false);
+    setEmailStatus(null);
     try {
       const data = await adminApi.sellers.invite(seller.id);
       setLink(data.link);
+      setEmailStatus({ sent: data.email_sent, error: data.email_error });
       if (data.action === 'invite_sent') {
         const updated = await adminApi.sellers.get(seller.id);
         onUpdated(updated);
@@ -74,6 +77,18 @@ export default function InvitePortalSection({ seller, onUpdated }: Readonly<Prop
           {loading ? <><Spinner size="sm" className="mr-2" />Generando...</> : buttonLabel}
         </button>
       </div>
+
+      {emailStatus && (
+        emailStatus.sent ? (
+          <p className="mt-4 text-xs text-emerald-400 bg-emerald-500/5 border border-emerald-500/30 rounded-md px-3 py-2">
+            ✓ Email enviado a {seller.contact_email}. Igual podés compartir el link de abajo por las dudas.
+          </p>
+        ) : (
+          <p className="mt-4 text-xs text-amber-400 bg-amber-500/5 border border-amber-500/30 rounded-md px-3 py-2">
+            ⚠ El link se generó pero <strong>el email no se pudo enviar</strong>{emailStatus.error ? ` (${emailStatus.error})` : ''}. Compartí el link de abajo manualmente (WhatsApp, etc.).
+          </p>
+        )
+      )}
 
       {link && (
         <div className="mt-4 space-y-2">

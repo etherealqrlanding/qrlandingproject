@@ -11,7 +11,15 @@
     "title": "Live the tango. Don't just watch it.",
     "subtitle": "Dinners, shows and experiences in the 14 most iconic tango houses of the city. Book in minutes, transfer included.",
     "cta_primary": "Explore experiences",
-    "cta_secondary": "Chat on WhatsApp"
+    "cta_secondary": "Chat on WhatsApp",
+    "how_title": "How to book, step by step",
+    "how_subtitle": "You arrived through a recommendation: in just a few minutes you choose and secure your tango night.",
+    "steps": [
+      { "title": "Choose your experience", "desc": "Browse the tango houses and compare their dinner, show and transfer options." },
+      { "title": "Date and guests", "desc": "Pick the day, how many of you are coming and the tier you like best." },
+      { "title": "Book and pay online", "desc": "Secure payment in minutes. You get instant confirmation by email." },
+      { "title": "Enjoy the night", "desc": "We'll be ready for you, with transfer included when applicable." }
+    ]
   },
   "home": {
     "featured_title": "Featured houses",

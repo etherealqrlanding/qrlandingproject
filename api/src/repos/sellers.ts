@@ -26,8 +26,11 @@ export interface SellerWithStats {
   orders_total: number;                  // todas las órdenes atribuidas
   orders_paid: number;                   // órdenes en estado 'paid'
   revenue_paid_usd: number;              // suma total_usd de órdenes pagadas atribuidas
-  commission_paid_usd: number;           // comisión acumulada de órdenes pagadas
-  commission_pending_payment_usd: number;// comisión pagada-al-vendedor pendiente (paid_to_seller_at IS NULL)
+  commission_paid_usd: number;           // comisión acumulada de órdenes pagadas (ambos métodos)
+  // MP: comisión que NOSOTROS le debemos al vendedor y todavía no liquidamos (paid_to_seller_at NULL)
+  commission_pending_payment_usd: number;
+  // Efectivo: neto que el VENDEDOR nos debe liquidar y todavía no rindió (net_settled_at NULL)
+  net_pending_settlement_usd: number;
 }
 
 export async function listSellersWithStats(): Promise<SellerWithStats[]> {
@@ -40,7 +43,8 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
        COALESCE(stats.orders_paid, 0)::int AS orders_paid,
        COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
        COALESCE(stats.commission_paid_usd, 0)::float AS commission_paid_usd,
-       COALESCE(stats.commission_pending_payment_usd, 0)::float AS commission_pending_payment_usd
+       COALESCE(stats.commission_pending_payment_usd, 0)::float AS commission_pending_payment_usd,
+       COALESCE(stats.net_pending_settlement_usd, 0)::float AS net_pending_settlement_usd
        FROM sellers s
        LEFT JOIN LATERAL (
          SELECT
@@ -48,7 +52,14 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
            COUNT(*) FILTER (WHERE o.status = 'paid') AS orders_paid,
            SUM(o.total_usd) FILTER (WHERE o.status = 'paid') AS revenue_paid_usd,
            SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid') AS commission_paid_usd,
-           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND a.paid_to_seller_at IS NULL) AS commission_pending_payment_usd
+           -- MP: lo que le debemos liquidar al vendedor (comisión pendiente)
+           SUM(a.commission_amount_usd) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL
+           ) AS commission_pending_payment_usd,
+           -- Efectivo: neto que el vendedor nos debe rendir (pendiente)
+           SUM(a.net_total_usd_snapshot) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL
+           ) AS net_pending_settlement_usd
            FROM order_attributions a
            JOIN orders o ON o.id = a.order_id
           WHERE a.seller_id = s.id
@@ -176,7 +187,10 @@ export interface SellerOrder {
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
+  net_total_usd: number | null;
+  commission_percent_snapshot: number | null;
   paid_to_seller_at: string | null;
+  net_settled_at: string | null;
   cash_collected_at: string | null;
   created_at: string;
   utm_source: string | null;
@@ -200,7 +214,9 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
        a.commission_amount_usd::float AS commission_amount_usd,
-       a.paid_to_seller_at, o.cash_collected_at, o.created_at,
+       a.net_total_usd_snapshot::float AS net_total_usd,
+       a.commission_percent_snapshot::float AS commission_percent_snapshot,
+       a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.created_at,
        o.utm_source, o.payment_method
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
@@ -213,8 +229,8 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
 }
 
 /**
- * Marca como pagadas al vendedor todas las atribuciones de las órdenes indicadas.
- * Solo afecta órdenes pagadas (status='paid') y que no estaban ya marcadas.
+ * MP: marca como liquidada (pagada al vendedor) la comisión de las órdenes indicadas.
+ * Solo afecta órdenes de Mercado Pago, pagadas y no marcadas todavía.
  */
 export async function markCommissionsPaid(sellerId: number, orderIds: number[]): Promise<number> {
   if (orderIds.length === 0) return 0;
@@ -224,7 +240,35 @@ export async function markCommissionsPaid(sellerId: number, orderIds: number[]):
       WHERE seller_id = $1
         AND order_id = ANY($2::int[])
         AND paid_to_seller_at IS NULL
-        AND EXISTS (SELECT 1 FROM orders o WHERE o.id = order_attributions.order_id AND o.status = 'paid')`,
+        AND EXISTS (
+          SELECT 1 FROM orders o
+           WHERE o.id = order_attributions.order_id
+             AND o.status = 'paid'
+             AND o.payment_method = 'mercadopago'
+        )`,
+    [sellerId, orderIds],
+  );
+  return result.rowCount ?? 0;
+}
+
+/**
+ * Efectivo: marca como rendido el neto que el vendedor nos debía liquidar.
+ * Solo afecta órdenes en efectivo, pagadas (cobradas) y no marcadas todavía.
+ */
+export async function markNetSettled(sellerId: number, orderIds: number[]): Promise<number> {
+  if (orderIds.length === 0) return 0;
+  const result = await pool.query(
+    `UPDATE order_attributions
+        SET net_settled_at = NOW()
+      WHERE seller_id = $1
+        AND order_id = ANY($2::int[])
+        AND net_settled_at IS NULL
+        AND EXISTS (
+          SELECT 1 FROM orders o
+           WHERE o.id = order_attributions.order_id
+             AND o.status = 'paid'
+             AND o.payment_method = 'cash'
+        )`,
     [sellerId, orderIds],
   );
   return result.rowCount ?? 0;

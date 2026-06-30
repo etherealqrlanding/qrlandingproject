@@ -215,7 +215,10 @@ export interface AdminSeller {
   orders_paid?: number;
   revenue_paid_usd?: number;
   commission_paid_usd?: number;
+  // MP: comisión que le debemos liquidar al vendedor (pendiente)
   commission_pending_payment_usd?: number;
+  // Efectivo: neto que el vendedor nos debe rendir (pendiente)
+  net_pending_settlement_usd?: number;
 }
 
 export interface AdminSellerOrder {
@@ -229,14 +232,19 @@ export interface AdminSellerOrder {
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
+  net_total_usd: number | null;
+  commission_percent_snapshot: number | null;
   paid_to_seller_at: string | null;
+  net_settled_at: string | null;
+  cash_collected_at: string | null;
+  payment_method: 'mercadopago' | 'cash';
   created_at: string;
 }
 
 export interface AdminOrderListItem {
   id: number;
   public_id: string;
-  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded';
+  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' | 'expired';
   customer_name: string;
   customer_email: string;
   customer_nationality: string | null;
@@ -357,8 +365,20 @@ export const adminApi = {
         method: 'POST',
         body: JSON.stringify({ order_ids: orderIds }),
       }),
+    // Efectivo: marcar que el vendedor nos rindió el neto de esas órdenes.
+    markNetSettled: (id: number, orderIds: number[]) =>
+      request<{ updated: number }>(`/api/admin/sellers/${id}/net-settlements/mark-settled`, {
+        method: 'POST',
+        body: JSON.stringify({ order_ids: orderIds }),
+      }),
     invite: (id: number) =>
-      request<{ ok: true; action: 'invite_sent' | 'password_reset_sent'; link: string }>(`/api/admin/sellers/${id}/invite`, {
+      request<{
+        ok: true;
+        action: 'invite_sent' | 'password_reset_sent';
+        link: string;
+        email_sent: boolean;
+        email_error: string | null;
+      }>(`/api/admin/sellers/${id}/invite`, {
         method: 'POST',
       }),
     qrUrl: (id: number, format: 'png' | 'svg' = 'png', size = 512) =>
@@ -405,13 +425,6 @@ export const adminApi = {
       request<{ time: string | null }>('/api/admin/settings/booking-cutoff', {
         method: 'PUT',
         body: JSON.stringify({ time }),
-      }),
-    getMpFeePct: () =>
-      request<{ pct: number }>('/api/admin/settings/mp-fee-pct'),
-    updateMpFeePct: (pct: number) =>
-      request<{ pct: number }>('/api/admin/settings/mp-fee-pct', {
-        method: 'PUT',
-        body: JSON.stringify({ pct }),
       }),
   },
 };

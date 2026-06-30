@@ -11,6 +11,7 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendiente' },
   { value: 'failed', label: 'Fallida' },
   { value: 'cancelled', label: 'Cancelada' },
+  { value: 'expired', label: 'Caducada' },
   { value: 'refunded', label: 'Reintegrada' },
 ];
 
@@ -27,10 +28,11 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
     pending: 'text-gold-soft border-gold-soft/30 bg-gold-soft/5',
     failed: 'text-bordeaux-light border-bordeaux-light/40 bg-bordeaux-deep/20',
     cancelled: 'text-cream/50 border-cream/20 bg-cream/5',
+    expired: 'text-cream/40 border-cream/15 bg-cream/5',
     refunded: 'text-cream/60 border-cream/20 bg-cream/5',
   }[status] ?? 'text-cream/60 border-cream/20';
   const label = {
-    paid: 'Pagada', pending: 'Pendiente', failed: 'Fallida', cancelled: 'Cancelada', refunded: 'Reintegrada',
+    paid: 'Pagada', pending: 'Pendiente', failed: 'Fallida', cancelled: 'Cancelada', expired: 'Caducada', refunded: 'Reintegrada',
   }[status] ?? status;
   return <span className={`text-[10px] px-2 py-0.5 rounded-full border ${color}`}>{label}</span>;
 }

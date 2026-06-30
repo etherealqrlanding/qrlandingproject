@@ -1,30 +1,68 @@
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 import { config } from '../config.js';
 import { pool } from '../db.js';
 
+// Transporte preferido: SMTP (ej. Gmail) si está configurado. Mandar vía el SMTP del
+// proveedor del remitente (Gmail) mantiene SPF/DKIM/DMARC alineados → buena entregabilidad
+// sin dominio propio. Si no hay SMTP, caemos a Resend (requiere dominio verificado).
+const smtpTransport =
+  config.SMTP_HOST && config.SMTP_USER && config.SMTP_PASS
+    ? nodemailer.createTransport({
+        host: config.SMTP_HOST,
+        port: config.SMTP_PORT ?? 465,
+        secure: (config.SMTP_PORT ?? 465) === 465, // 465 = SSL; 587 = STARTTLS
+        auth: { user: config.SMTP_USER, pass: config.SMTP_PASS },
+      })
+    : null;
+
 const resend = config.RESEND_API_KEY ? new Resend(config.RESEND_API_KEY) : null;
 
-function isEnabled(): boolean {
-  return resend !== null;
+export type EmailTransport = 'smtp' | 'resend' | 'none';
+
+export function activeTransport(): EmailTransport {
+  if (smtpTransport) return 'smtp';
+  if (resend) return 'resend';
+  return 'none';
 }
 
-async function send(to: string | string[], subject: string, html: string): Promise<void> {
-  if (!resend) {
-    console.warn(`[email] RESEND_API_KEY not configured. Would have sent "${subject}" to ${to}`);
-    return;
+function isEnabled(): boolean {
+  return activeTransport() !== 'none';
+}
+
+export interface SendResult {
+  sent: boolean;
+  transport: EmailTransport;
+  error?: string;
+}
+
+/**
+ * Envía un email por el transporte activo. Nunca lanza: devuelve { sent, error } para que
+ * quien llama decida si avisar al usuario. Loguea siempre el fallo.
+ */
+async function send(to: string | string[], subject: string, html: string): Promise<SendResult> {
+  const transport = activeTransport();
+  const recipients = Array.isArray(to) ? to : [to];
+
+  if (transport === 'none') {
+    console.warn(`[email] Sin transporte configurado (SMTP/Resend). No se envió "${subject}" a ${recipients.join(', ')}`);
+    return { sent: false, transport, error: 'No hay transporte de email configurado.' };
   }
+
   try {
-    const { error } = await resend.emails.send({
-      from: config.EMAIL_FROM,
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html,
-    });
+    if (transport === 'smtp') {
+      await smtpTransport!.sendMail({ from: config.EMAIL_FROM, to: recipients, subject, html });
+      return { sent: true, transport };
+    }
+    const { error } = await resend!.emails.send({ from: config.EMAIL_FROM, to: recipients, subject, html });
     if (error) {
       console.error('[email] Resend error:', error);
+      return { sent: false, transport, error: error.message ?? String(error) };
     }
+    return { sent: true, transport };
   } catch (err) {
     console.error('[email] Send failed:', err);
+    return { sent: false, transport, error: (err as Error).message };
   }
 }
 
@@ -459,7 +497,7 @@ export async function sendSellerPortalInvite(
   sellerName: string,
   sellerEmail: string,
   inviteLink: string,
-): Promise<void> {
+): Promise<SendResult> {
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -479,14 +517,14 @@ export async function sendSellerPortalInvite(
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo pediste vos, podés ignorar este email.</p>
   <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
 </div></body></html>`;
-  await send(sellerEmail, 'Acceso a tu portal de ventas — Ethereal Tours', html);
+  return send(sellerEmail, 'Acceso a tu portal de ventas — Ethereal Tours', html);
 }
 
 export async function sendSellerPasswordReset(
   sellerName: string,
   sellerEmail: string,
   resetLink: string,
-): Promise<void> {
+): Promise<SendResult> {
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -505,7 +543,7 @@ export async function sendSellerPasswordReset(
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo pediste vos, podés ignorar este email.</p>
   <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
 </div></body></html>`;
-  await send(sellerEmail, 'Restablecé tu acceso al portal — Ethereal Tours', html);
+  return send(sellerEmail, 'Restablecé tu acceso al portal — Ethereal Tours', html);
 }
 
 /**

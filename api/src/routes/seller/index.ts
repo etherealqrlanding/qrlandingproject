@@ -70,6 +70,7 @@ sellerRouter.get('/me', async (req, res, next) => {
          COALESCE(stats.commission_earned_usd, 0)::float AS commission_earned_usd,
          COALESCE(stats.commission_paid_usd, 0)::float   AS commission_paid_usd,
          COALESCE(stats.commission_pending_usd, 0)::float AS commission_pending_usd,
+         COALESCE(stats.net_pending_settlement_usd, 0)::float AS net_pending_settlement_usd,
          COALESCE(notifs.unread_count, 0)::int AS unread_notifications
        FROM sellers s
        LEFT JOIN LATERAL (
@@ -77,8 +78,18 @@ sellerRouter.get('/me', async (req, res, next) => {
            COUNT(*) FILTER (WHERE o.status = 'paid') AS orders_paid,
            SUM(o.total_usd) FILTER (WHERE o.status = 'paid') AS revenue_paid_usd,
            SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid') AS commission_earned_usd,
-           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND a.paid_to_seller_at IS NOT NULL) AS commission_paid_usd,
-           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND a.paid_to_seller_at IS NULL) AS commission_pending_usd
+           -- MP: comisión que ya te liquidamos
+           SUM(a.commission_amount_usd) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NOT NULL
+           ) AS commission_paid_usd,
+           -- MP: comisión que te debemos liquidar (pendiente)
+           SUM(a.commission_amount_usd) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL
+           ) AS commission_pending_usd,
+           -- Efectivo: neto que tenés que rendirnos (pendiente)
+           SUM(a.net_total_usd_snapshot) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL
+           ) AS net_pending_settlement_usd
          FROM order_attributions a
          JOIN orders o ON o.id = a.order_id
         WHERE a.seller_id = s.id
