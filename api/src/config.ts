@@ -5,6 +5,10 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  // Orígenes adicionales permitidos por CORS (coma-separados). Útil durante la
+  // transición a un dominio propio: el front se sirve en el dominio nuevo pero
+  // WEB_ORIGIN (usado para redirects/links) puede seguir apuntando al anterior.
+  CORS_EXTRA_ORIGINS: z.string().optional(),
   DATABASE_URL: z.string().min(1),
   COOKIE_SECRET: z.string().min(8),
   // Mercado Pago

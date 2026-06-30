@@ -17,7 +17,10 @@ app.use(helmet());
 // CORS: en producción exigimos el origin configurado (WEB_ORIGIN). En desarrollo
 // aceptamos cualquier localhost/127.0.0.1 sin importar el puerto, porque Vite cambia
 // de puerto (5174, 5175…) si el 5173 está ocupado y eso rompía el login por CORS.
-const allowedOrigins = new Set([config.WEB_ORIGIN]);
+const allowedOrigins = new Set([
+  config.WEB_ORIGIN,
+  ...(config.CORS_EXTRA_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? []),
+]);
 const isDevLocalhost = (origin: string) =>
   config.NODE_ENV !== 'production' && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
 
