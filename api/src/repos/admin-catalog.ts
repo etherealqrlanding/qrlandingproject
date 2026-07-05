@@ -71,7 +71,22 @@ export async function adminGetProduct(id: number) {
       [id],
     ),
   ]);
-  return { ...prod[0], options: optsRes.rows, images: imgsRes.rows };
+  // Postgres devuelve columnas NUMERIC como string en un SELECT *. El front espera
+  // números (y al reenviarlos en el PATCH, zod los rechazaría como string). Coaccionamos.
+  const num = (v: unknown) => (v == null ? v : Number(v));
+  const options = optsRes.rows.map((o) => ({
+    ...o,
+    price_adult_usd: num(o.price_adult_usd),
+    price_child_usd: num(o.price_child_usd),
+    net_price_adult_usd: num(o.net_price_adult_usd),
+    net_price_child_usd: num(o.net_price_child_usd),
+    net_transfer_price_usd: num(o.net_transfer_price_usd),
+    transfer_price_usd: num(o.transfer_price_usd),
+    net_price_adult_ars: num(o.net_price_adult_ars),
+    net_price_child_ars: num(o.net_price_child_ars),
+    net_transfer_price_ars: num(o.net_transfer_price_ars),
+  }));
+  return { ...prod[0], starting_price_usd: num(prod[0].starting_price_usd), options, images: imgsRes.rows };
 }
 
 export async function adminCreateProduct(input: AdminProductInput): Promise<number> {

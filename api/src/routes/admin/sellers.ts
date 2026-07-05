@@ -198,6 +198,19 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
     const portalUrl = `${config.WEB_ORIGIN.replace(/\/$/, '')}/seller/login`;
 
     if (seller.supabase_user_id) {
+      // Ya tiene cuenta. Sincronizamos el email del usuario de Auth con el contact_email
+      // actual: si se cambió el email después de crear la cuenta, el usuario de Auth
+      // seguía con el viejo y el recovery fallaba con "User with this email not found".
+      const { error: syncErr } = await supabaseAdmin.auth.admin.updateUserById(seller.supabase_user_id, {
+        email: seller.contact_email,
+        email_confirm: true,
+      });
+      if (syncErr) {
+        return res.status(409).json({
+          error: `No se pudo asignar el email "${seller.contact_email}" al portal del vendedor: ${syncErr.message}. Es probable que ya esté en uso por otro usuario (el admin u otro vendedor). Usá un email exclusivo para este vendedor.`,
+        });
+      }
+
       // Ya tiene cuenta — generar link de reset
       const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
         type: 'recovery',
@@ -229,7 +242,11 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
         data: { seller_id: id, seller_name: seller.name, role: 'seller' },
       },
     });
-    if (linkError) return res.status(400).json({ error: linkError.message });
+    if (linkError) {
+      return res.status(409).json({
+        error: `No se pudo generar la invitación para "${seller.contact_email}": ${linkError.message}. Puede que ese email ya esté registrado como otro usuario (el admin u otro vendedor). Usá un email exclusivo para este vendedor.`,
+      });
+    }
 
     // Vincular el user_id generado por Supabase al seller
     await pool.query(

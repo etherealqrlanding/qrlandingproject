@@ -199,6 +199,33 @@ export default function OrderDetail() {
         <p className="mt-1 text-sm text-cream/50">Creada el {new Date(order.created_at).toLocaleString()}</p>
       </header>
 
+      {/* Acceso destacado al reintegro — acción crítica para cancelaciones sin cupo */}
+      {order.status === 'paid' && order.payment_method === 'mercadopago' && (
+        <div className="mb-8 rounded-xl border-2 border-bordeaux-light/50 bg-bordeaux-deep/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-bordeaux-light">Sin cupo / cancelación</p>
+            <p className="mt-1 font-display text-xl text-cream">Reintegrar el dinero al cliente</p>
+            <p className="mt-1 text-sm text-cream/70">
+              Devolvé el monto al medio de pago original de forma segura (total o parcial).
+              Total pagado: <strong className="text-cream">USD {order.total_usd}</strong>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRefundOpen(true)}
+            className="btn-primary shrink-0 bg-bordeaux-light hover:bg-bordeaux-light/90 focus:ring-bordeaux-light/40 px-6 py-3 text-base"
+          >
+            ↩ Reintegrar al cliente
+          </button>
+        </div>
+      )}
+
+      {order.status === 'refunded' && (
+        <div className="mb-8 rounded-xl border border-gold/25 bg-gold/5 p-4 text-sm text-cream/80">
+          ✓ Esta orden ya fue <strong className="text-gold">reintegrada</strong>. El cliente recibió el crédito en su medio de pago original.
+        </div>
+      )}
+
       <div className="grid lg:grid-cols-[1fr_320px] gap-8">
         <div className="space-y-6">
           <Section title="Cliente">
@@ -338,22 +365,6 @@ export default function OrderDetail() {
               {order.ref_code && (
                 <p className="mt-1 text-xs text-cream/40">Ref: <span className="font-mono">{order.ref_code}</span></p>
               )}
-            </div>
-          )}
-
-          {/* Acción crítica: cancelar y reintegrar (solo si está pagada y no fue ya reintegrada) */}
-          {order.status === 'paid' && order.mp_payment_id && (
-            <div className="rounded-lg border border-bordeaux-light/40 bg-bordeaux-deep/15 p-5">
-              <p className="text-xs uppercase tracking-widest text-bordeaux-light">Sin cupo / cancelar</p>
-              <p className="mt-2 text-sm text-cream/70">
-                Si la casa no puede confirmar, podés <strong>cancelar la reserva y reintegrar</strong> el monto completo
-                al cliente en su medio de pago original.
-              </p>
-              <button type="button" onClick={() => setRefundOpen(true)}
-                className="btn-primary mt-4 w-full text-sm bg-bordeaux-light hover:bg-bordeaux-light/90 focus:ring-bordeaux-light/40"
-              >
-                Cancelar y reintegrar
-              </button>
             </div>
           )}
 

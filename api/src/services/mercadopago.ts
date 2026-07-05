@@ -99,14 +99,16 @@ export async function fetchPayment(paymentId: string) {
  * MP devuelve un objeto con el refund creado. Si el pago era con tarjeta, los fondos
  * vuelven a la tarjeta en 2-5 días hábiles. Si era efectivo/transferencia, depende del medio.
  */
-export async function refundPayment(paymentId: string, amount?: number) {
-  if (amount != null) {
-    return refundApi.create({
-      payment_id: paymentId,
-      body: { amount },
-    });
-  }
-  return refundApi.create({ payment_id: paymentId });
+export async function refundPayment(paymentId: string, amount?: number, idempotencyKey?: string) {
+  // La idempotency key es CLAVE: ante un doble clic, un reintento por timeout o un
+  // reproceso, MP devuelve el mismo refund en vez de crear uno nuevo → nunca se
+  // reintegra dos veces. La key debe ser determinística por intento de refund.
+  const requestOptions = idempotencyKey ? { idempotencyKey } : undefined;
+  return refundApi.create({
+    payment_id: paymentId,
+    body: amount != null ? { amount } : {},
+    requestOptions,
+  });
 }
 
 export type MpPaymentStatus =

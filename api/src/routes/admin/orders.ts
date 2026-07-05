@@ -167,10 +167,12 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
       amountArs = Math.round(parsed.data.amount_usd * order.exchange_rate_used * 100) / 100;
     }
 
-    // 2) Disparar el refund en MP
+    // 2) Disparar el refund en MP con idempotency key determinística.
+    //    Así, si se reintenta (doble clic, timeout, reproceso), MP NO reintegra dos veces.
+    const idempotencyKey = `refund:${order.id}:${isPartial ? amountArs : 'full'}`;
     let refundResponse;
     try {
-      refundResponse = await refundPayment(order.mp_payment_id, amountArs);
+      refundResponse = await refundPayment(order.mp_payment_id, amountArs, idempotencyKey);
     } catch (err) {
       const message = (err as Error).message ?? 'Refund failed';
       await logPaymentEvent(order.id, 'refund_failed', order.mp_payment_id, {
