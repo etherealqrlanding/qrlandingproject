@@ -55,7 +55,7 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 app.listen(config.PORT, () => {
-  console.log(`🎭 Ethereal API listening on http://localhost:${config.PORT}`);
+  console.log(`🎭 Tangos y Milongas Tickets API listening on http://localhost:${config.PORT}`);
   console.log(`   Environment: ${config.NODE_ENV}`);
   console.log(`   MP Access Token: ${config.MP_ACCESS_TOKEN.slice(0, 30)}...`);
   console.log(`   Resend: ${config.RESEND_API_KEY ? 'enabled (' + config.EMAIL_FROM + ')' : 'disabled'}`);

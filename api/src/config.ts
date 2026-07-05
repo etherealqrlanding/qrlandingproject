@@ -23,7 +23,7 @@ const schema = z.object({
   // Emails — opcionales para que el server arranque sin estar configurado todavía.
   // Transporte preferido: SMTP (ej. Gmail) si SMTP_* está configurado; si no, Resend.
   RESEND_API_KEY: z.string().min(10).optional(),
-  EMAIL_FROM: z.string().default('Ethereal Tours <onboarding@resend.dev>'),
+  EMAIL_FROM: z.string().default('Tangos y Milongas Tickets <onboarding@resend.dev>'),
   ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   // SMTP (Gmail u otro). Para Gmail: host=smtp.gmail.com, port=465, user=tu@gmail.com,
   // pass=contraseña de aplicación (requiere 2FA). EMAIL_FROM debe usar ese mismo gmail.

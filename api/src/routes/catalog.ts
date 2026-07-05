@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getProductBySlug, listCategories, listProducts } from '../repos/catalog.js';
 import { pool } from '../db.js';
 import { getSameDayCutoff, getExchangeRate } from '../services/settings.js';
+import { getAbout, getFaq } from '../services/content.js';
 
 export const catalogRouter = Router();
 
@@ -115,6 +116,19 @@ catalogRouter.get('/settings/booking-cutoff', async (_req, res, next) => {
   try {
     const time = await getSameDayCutoff();
     res.json({ data: { time } });
+  } catch (err) { next(err); }
+});
+
+// Contenido editable — endpoints públicos (solo lectura)
+catalogRouter.get('/content/about', async (_req, res, next) => {
+  try {
+    res.json({ data: await getAbout() });
+  } catch (err) { next(err); }
+});
+
+catalogRouter.get('/content/faq', async (_req, res, next) => {
+  try {
+    res.json({ data: await getFaq() });
   } catch (err) { next(err); }
 });
 

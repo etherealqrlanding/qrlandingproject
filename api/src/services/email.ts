@@ -97,7 +97,7 @@ function htmlForCustomer(data: OrderEmailData): string {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
   <p>Hola ${escapeHtml(data.customer_name)}, recibimos tu pago para una experiencia inolvidable en Buenos Aires.</p>
   <div style="${baseStyles.card}">
@@ -110,7 +110,7 @@ function htmlForCustomer(data: OrderEmailData): string {
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
   <p>Te vamos a contactar en las próximas horas con los detalles del traslado y horarios definitivos. Si tenés cualquier consulta, respondé este email o escribinos por WhatsApp.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
 }
 
@@ -118,7 +118,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
   <h1 style="${baseStyles.title}">Nueva venta confirmada</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden</p>
@@ -139,7 +139,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     <div style="${baseStyles.row}"><span>Comisión a pagar</span><strong style="color:#c8a85a">USD ${data.commission_usd ?? 0}</strong></div>
   </div>` : ''}
-  <p style="${baseStyles.footer}">Notificación automática · Ethereal Tours admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
 }
 
@@ -149,7 +149,7 @@ function htmlForSellerRefund(data: OrderEmailData & {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
   <h1 style="${baseStyles.title}">Una venta tuya fue cancelada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, te avisamos que una venta atribuida a tu código fue ${data.is_partial ? 'reintegrada parcialmente' : 'cancelada y reintegrada al cliente'}${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   ${data.is_partial
@@ -163,7 +163,7 @@ function htmlForSellerRefund(data: OrderEmailData & {
     <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
   </div>
   <p>Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
 }
 
@@ -171,7 +171,7 @@ function htmlForRefund(data: OrderEmailData & { reason?: string | null }): strin
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
   <p>Hola ${escapeHtml(data.customer_name)}, lamentamos comunicarte que no pudimos confirmar tu reserva${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   <p><strong style="color:#c8a85a">Te reintegramos el monto completo: USD ${data.total_usd}</strong>. El reintegro tarda entre 2 y 5 días hábiles en aparecer en el medio de pago original.</p>
@@ -184,7 +184,7 @@ function htmlForRefund(data: OrderEmailData & { reason?: string | null }): strin
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
   <p>Si querés reservar otra fecha u otra casa, escribinos por WhatsApp o respondé este email y te ayudamos a coordinar.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
 }
 
@@ -192,7 +192,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
   <h1 style="${baseStyles.title}">¡Tenés una nueva venta!</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, un cliente que escaneó tu QR acaba de comprar una experiencia. Te corresponde una comisión.</p>
   <div style="${baseStyles.card}">
@@ -202,7 +202,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
     <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">USD ${data.commission_usd}</strong></div>
   </div>
   <p>Vamos a procesar el pago de tu comisión junto con las del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
 }
 
@@ -331,7 +331,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
   <h1 style="${baseStyles.title}">Nueva reserva en efectivo</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden</p>
@@ -351,7 +351,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Comisión estimada</span><strong style="color:#c8a85a">USD ${data.commission_usd ?? 0}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el vendedor confirme el cobro desde su portal.</p>
-  <p style="${baseStyles.footer}">Notificación automática · Ethereal Tours admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (USD ${baseData.total_usd})`, adminHtml);
   }
@@ -361,7 +361,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
   <h1 style="${baseStyles.title}">Tenés una reserva para cobrar</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, registramos una reserva a tu nombre. Coordiná el cobro con el cliente.</p>
   <div style="${baseStyles.card}">
@@ -373,7 +373,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent ?? 0}%)</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
   </div>
   <p>Una vez que recibas el dinero del pasajero, confirmá el cobro desde tu portal para que se envíe el email de confirmación.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
     await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (USD ${baseData.total_usd})`, sellerHtml);
   }
@@ -422,7 +422,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
   <p>Hola ${escapeHtml(baseData.customer_name)}, tu reserva está confirmada. ¡Nos vemos pronto en Buenos Aires!</p>
   <div style="${baseStyles.card}">
@@ -436,7 +436,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${baseData.public_id}</span></div>
   </div>
   <p>Si tenés alguna consulta, respondé este email o escribinos por WhatsApp.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `¡Reserva confirmada! — ${baseData.option_name}`, customerHtml);
 
@@ -445,7 +445,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
   <h1 style="${baseStyles.title}">Reserva cobrada y confirmada</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden</p>
@@ -465,7 +465,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <div style="${baseStyles.row}"><span>Comisión</span><strong style="color:#c8a85a">USD ${data.commission_usd ?? 0}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">✓ El vendedor confirmó la recepción del dinero. La orden fue marcada como <strong>pagada</strong>.</p>
-  <p style="${baseStyles.footer}">Notificación automática · Ethereal Tours admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (USD ${baseData.total_usd})`, adminHtml);
   }
@@ -475,7 +475,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
   <h1 style="${baseStyles.title}">¡Cobro registrado!</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, confirmaste la recepción del dinero. La reserva quedó confirmada y el email fue enviado al pasajero.</p>
   <div style="${baseStyles.card}">
@@ -486,7 +486,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <div style="${baseStyles.row}"><span>Total cobrado</span><strong style="color:#c8a85a;font-size:18px">USD ${baseData.total_usd}</strong></div>
     <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent ?? 0}%)</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
   </div>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
     await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (USD ${baseData.total_usd})`, sellerHtml);
   }
@@ -501,9 +501,9 @@ export async function sendSellerPortalInvite(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Portal de vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de vendedores</p>
   <h1 style="${baseStyles.title}">¡Bienvenido al portal!</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Ethereal Tours te invitó a acceder a tu portal de ventas.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets te invitó a acceder a tu portal de ventas.</p>
   <p>Desde ahí vas a poder ver tus ventas, comisiones y liquidaciones en tiempo real.</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic en el botón para crear tu contraseña e ingresar:</p>
@@ -515,9 +515,9 @@ export async function sendSellerPortalInvite(
     <span style="font-family:monospace;font-size:11px;word-break:break-all;">${inviteLink}</span>
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo pediste vos, podés ignorar este email.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-  return send(sellerEmail, 'Acceso a tu portal de ventas — Ethereal Tours', html);
+  return send(sellerEmail, 'Acceso a tu portal de ventas — Tangos y Milongas Tickets', html);
 }
 
 export async function sendSellerPasswordReset(
@@ -528,9 +528,9 @@ export async function sendSellerPasswordReset(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Portal de vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de vendedores</p>
   <h1 style="${baseStyles.title}">Acceso a tu portal</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Ethereal Tours te envió un nuevo link de acceso.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets te envió un nuevo link de acceso.</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic para crear una nueva contraseña:</p>
     <a href="${resetLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
@@ -541,9 +541,9 @@ export async function sendSellerPasswordReset(
     <span style="font-family:monospace;font-size:11px;word-break:break-all;">${resetLink}</span>
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo pediste vos, podés ignorar este email.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-  return send(sellerEmail, 'Restablecé tu acceso al portal — Ethereal Tours', html);
+  return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html);
 }
 
 /**
@@ -646,9 +646,9 @@ export async function sendSellerCommissionPaid(input: {
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Ethereal Tours · Liquidaciones</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Liquidaciones</p>
   <h1 style="${baseStyles.title}">¡Liquidación procesada!</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Ethereal Tours procesó una liquidación de comisiones a tu favor.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets procesó una liquidación de comisiones a tu favor.</p>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Detalle de la liquidación</p>
     <div style="${baseStyles.row}"><span>Ventas liquidadas</span><strong>${ordersCount} venta${ordersCount === 1 ? '' : 's'}</strong></div>
@@ -661,7 +661,7 @@ export async function sendSellerCommissionPaid(input: {
     </a>
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Tenés alguna duda sobre el monto o las ventas incluidas? Escribinos por WhatsApp y te respondemos a la brevedad.</p>
-  <p style="${baseStyles.footer}">Ethereal Tours · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
   await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html);
 }

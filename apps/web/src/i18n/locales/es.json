@@ -3,8 +3,19 @@
     "home": "Inicio",
     "shows": "Shows de Tango",
     "about": "Nosotros",
+    "faq": "Preguntas Frecuentes",
     "contact": "Contacto",
     "book": "Reservar"
+  },
+  "about": {
+    "default_title": "Nosotros",
+    "empty": "Contenido próximamente.",
+    "error": "No pudimos cargar esta sección"
+  },
+  "faq": {
+    "title": "Preguntas Frecuentes",
+    "empty": "Todavía no hay preguntas cargadas.",
+    "error": "No pudimos cargar esta sección"
   },
   "hero": {
     "eyebrow": "Buenos Aires · Casas de Tango",
@@ -116,7 +127,7 @@
     "transfers": "Traslados"
   },
   "footer": {
-    "tagline": "ticketstangoshow · Buenos Aires desde 2026",
+    "tagline": "Tangos y Milongas Tickets · Buenos Aires desde 2026",
     "rights": "Todos los derechos reservados."
   },
   "ref": {
@@ -130,7 +141,7 @@
   },
   "seller_welcome": {
     "badge": "Vendedor Verificado",
-    "message": "Escaneaste el QR de {{name}}, un vendedor registrado y autorizado por ticketstangoshow. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
+    "message": "Escaneaste el QR de {{name}}, un vendedor registrado y autorizado por Tangos y Milongas Tickets. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
     "steps_title": "¿Qué podés hacer?",
     "step1": "Explorá shows de tango en Buenos Aires",
     "step2": "Elegí fecha, cantidades y tu experiencia",

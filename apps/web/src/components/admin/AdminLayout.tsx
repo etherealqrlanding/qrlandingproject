@@ -2,12 +2,14 @@ import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 import BottomNavAdmin from './BottomNavAdmin';
+import Logo from '../Logo';
 
 const NAV = [
   { to: '/admin', label: 'Dashboard', icon: '◆', end: true },
   { to: '/admin/products', label: 'Productos', icon: '⌂' },
   { to: '/admin/sellers', label: 'Vendedores', icon: '☉' },
   { to: '/admin/orders', label: 'Órdenes', icon: '✦' },
+  { to: '/admin/content', label: 'Contenido', icon: '✎' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -31,8 +33,8 @@ export default function AdminLayout() {
       {/* Sidebar — solo desktop */}
       <aside className="hidden md:flex w-64 shrink-0 border-r border-gold/10 bg-ink-soft/40 flex-col">
         <div className="px-6 py-5 border-b border-gold/10">
-          <p className="font-display text-xl text-gold">ticketstangoshow</p>
-          <p className="text-xs text-cream/50">Panel administrativo</p>
+          <Logo className="h-9 w-auto" />
+          <p className="text-xs text-cream/50 mt-2">Panel administrativo</p>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -76,7 +78,7 @@ export default function AdminLayout() {
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header móvil */}
         <header className="md:hidden sticky top-0 z-30 bg-ink-soft/90 backdrop-blur border-b border-gold/10 flex items-center justify-between px-4 h-12">
-          <p className="font-display text-lg text-gold">ticketstangoshow</p>
+          <Logo className="h-8 w-auto" />
           <div className="flex items-center gap-4">
             {me && <p className="text-xs text-cream/50 truncate max-w-[140px]">{me.admin.email}</p>}
             <button

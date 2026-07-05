@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { sellerApi, getNotificationStreamUrl, type SellerNotification } from '../../lib/sellerApi';
 import BottomNavSeller from './BottomNavSeller';
+import Logo from '../Logo';
 
 const NAV = [
   { to: '/seller', label: 'Resumen', icon: '◆', end: true },
@@ -140,8 +141,8 @@ export default function SellerLayout() {
       )}
       <aside className="hidden md:flex w-64 shrink-0 border-r border-gold/10 bg-ink-soft/40 flex-col">
         <div className="px-6 py-5 border-b border-gold/10">
-          <p className="font-display text-xl text-gold">ticketstangoshow</p>
-          <p className="text-xs text-cream/50">Portal de vendedores</p>
+          <Logo className="h-9 w-auto" />
+          <p className="text-xs text-cream/50 mt-2">Portal de vendedores</p>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -193,7 +194,7 @@ export default function SellerLayout() {
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header móvil */}
         <header className="md:hidden sticky top-0 z-30 bg-ink-soft/90 backdrop-blur border-b border-gold/10 flex items-center justify-between px-4 h-12">
-          <p className="font-display text-lg text-gold">ticketstangoshow</p>
+          <Logo className="h-8 w-auto" />
           <div className="flex items-center gap-3">
             {me && (
               <span className="text-[10px] font-mono uppercase tracking-wider text-gold-soft">{me.code}</span>

@@ -4,6 +4,7 @@ import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { supabase } from '../../lib/supabase';
 import { sellerApi } from '../../lib/sellerApi';
 import Spinner, { LoadingScreen } from '../../components/Spinner';
+import Logo from '../../components/Logo';
 
 // El cliente Supabase tiene detectSessionInUrl: false (para no interferir con el admin).
 // Cuando llegamos vía link de invite/recovery, necesitamos establecer la sesión manualmente
@@ -159,9 +160,9 @@ export default function SellerLogin() {
   return (
     <div className="h-[100dvh] overflow-y-auto flex flex-col items-center bg-ink px-4">
       <div className="w-full max-w-md my-auto py-6">
-        <p className="block text-center font-display text-3xl text-gold mb-1">
-          ticketstangoshow
-        </p>
+        <div className="flex justify-center mb-3">
+          <Logo className="h-20 w-auto" />
+        </div>
         <p className="text-center text-xs uppercase tracking-[0.3em] text-gold-soft mb-4 sm:mb-8">
           Portal de vendedores
         </p>
@@ -175,7 +176,7 @@ export default function SellerLogin() {
               </h1>
               <p className="mt-1 text-sm text-cream/50">
                 {isInvite
-                  ? 'Bienvenido a ticketstangoshow. Elegí una contraseña para acceder al portal cuando quieras.'
+                  ? 'Bienvenido a Tangos y Milongas Tickets. Elegí una contraseña para acceder al portal cuando quieras.'
                   : 'Ingresá y confirmá tu nueva contraseña.'}
               </p>
             </div>

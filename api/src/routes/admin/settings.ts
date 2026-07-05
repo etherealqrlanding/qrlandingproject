@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { getExchangeRate, setExchangeRate, getSameDayCutoff, setSameDayCutoff } from '../../services/settings.js';
+import { getAbout, setAbout, getFaq, setFaq } from '../../services/content.js';
 
 export const adminSettingsRouter = Router();
 
@@ -40,5 +41,51 @@ adminSettingsRouter.put('/booking-cutoff', async (req, res, next) => {
     await setSameDayCutoff(parsed.data.time);
     const time = await getSameDayCutoff();
     res.json({ data: { time } });
+  } catch (err) { next(err); }
+});
+
+// ─── Contenido: Nosotros ─────────────────────────────────
+const aboutSchema = z.object({
+  title_es: z.string().max(200),
+  title_en: z.string().max(200),
+  body_es: z.string().max(20000),
+  body_en: z.string().max(20000),
+});
+
+adminSettingsRouter.get('/content/about', async (_req, res, next) => {
+  try {
+    res.json({ data: await getAbout() });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/content/about', async (req, res, next) => {
+  try {
+    const parsed = aboutSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    res.json({ data: await setAbout(parsed.data) });
+  } catch (err) { next(err); }
+});
+
+// ─── Contenido: Preguntas Frecuentes ─────────────────────
+const faqSchema = z.object({
+  items: z.array(z.object({
+    q_es: z.string().max(500),
+    q_en: z.string().max(500),
+    a_es: z.string().max(5000),
+    a_en: z.string().max(5000),
+  })).max(100),
+});
+
+adminSettingsRouter.get('/content/faq', async (_req, res, next) => {
+  try {
+    res.json({ data: await getFaq() });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/content/faq', async (req, res, next) => {
+  try {
+    const parsed = faqSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    res.json({ data: await setFaq(parsed.data.items) });
   } catch (err) { next(err); }
 });

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import Logo from './Logo';
 
 export default function Navbar() {
   const { t, i18n } = useTranslation();
@@ -12,13 +13,13 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-30 backdrop-blur bg-ink/70 border-b border-gold/10">
       <div className="container-narrow flex items-center justify-between h-16">
-        <Link to="/" className="font-display text-2xl tracking-wide text-gold">
-          ticketstangoshow
+        <Link to="/" aria-label="Tangos y Milongas Tickets" className="flex items-center">
+          <Logo className="h-11 w-auto" />
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm">
           <Link to="/shows" className="hover:text-gold transition">{t('nav.shows')}</Link>
-          <a href="#about" className="hover:text-gold transition">{t('nav.about')}</a>
-          <a href="#contact" className="hover:text-gold transition">{t('nav.contact')}</a>
+          <Link to="/nosotros" className="hover:text-gold transition">{t('nav.about')}</Link>
+          <Link to="/preguntas-frecuentes" className="hover:text-gold transition">{t('nav.faq')}</Link>
         </nav>
         <div className="flex items-center gap-3">
           <button

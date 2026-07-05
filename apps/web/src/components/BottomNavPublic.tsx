@@ -27,13 +27,15 @@ export default function BottomNavPublic() {
           <span className="text-[10px] leading-none mt-0.5">Shows</span>
         </NavLink>
 
-        <a
-          href="/#contact"
-          className="flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-2 text-cream/40 transition-colors active:text-cream/60"
-        >
-          <span className="text-xl leading-none">✉</span>
-          <span className="text-[10px] leading-none mt-0.5">{t('nav.contact')}</span>
-        </a>
+        <NavLink to="/nosotros" className={tab}>
+          <span className="text-xl leading-none">✧</span>
+          <span className="text-[10px] leading-none mt-0.5">{t('nav.about')}</span>
+        </NavLink>
+
+        <NavLink to="/preguntas-frecuentes" className={tab}>
+          <span className="text-xl leading-none">?</span>
+          <span className="text-[10px] leading-none mt-0.5">{t('nav.faq')}</span>
+        </NavLink>
 
         <button
           onClick={toggleLang}

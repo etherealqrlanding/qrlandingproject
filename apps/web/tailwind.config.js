@@ -4,15 +4,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta tentativa — Tango Buenos Aires
+        // Paleta — Tangos & Milongas Tickets · Buenos Aires
+        // Base oscura + dorado protagonista, con azul marino y rojo terracota de marca.
         ink: {
           DEFAULT: '#0d0a0a',
           soft: '#1a1414',
         },
+        // Rojo terracota de la marca (antes bordó). Se conserva el nombre del token
+        // para no tocar sus ~79 usos; ahora tira al rojo del logo.
         bordeaux: {
-          DEFAULT: '#6b1a2a',
-          deep: '#4a0f1d',
-          light: '#8c2438',
+          DEFAULT: '#b23a2e',
+          deep: '#7f2015',
+          light: '#c9503f',
+        },
+        // Azul marino de la marca (nuevo acento secundario).
+        navy: {
+          DEFAULT: '#3a4d73',
+          deep: '#26324d',
+          light: '#5a6d94',
         },
         gold: {
           DEFAULT: '#c8a85a',

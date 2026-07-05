@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed.ts",
-    "admin:bootstrap": "tsx src/scripts/bootstrap-admin.ts"
+    "admin:bootstrap": "tsx src/scripts/bootstrap-admin.ts",
+    "import:houses": "tsx src/scripts/import-houses.ts",
+    "import:images": "tsx src/scripts/import-house-images.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

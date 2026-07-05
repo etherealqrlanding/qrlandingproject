@@ -325,7 +325,7 @@ export default function SellerCommissions() {
         <div className="rounded-xl border border-amber-700/30 bg-amber-900/10 p-3 md:p-4 mb-4 md:mb-6 text-sm">
           <p className="text-amber-400 font-medium mb-1">Comisión en proceso</p>
           <p className="text-cream/70 text-xs md:text-sm">
-            Tenés {fmt(me.commission_pending_usd)} pendientes de liquidar. El equipo de ticketstangoshow lo procesa periódicamente.
+            Tenés {fmt(me.commission_pending_usd)} pendientes de liquidar. El equipo de Tangos y Milongas Tickets lo procesa periódicamente.
           </p>
         </div>
       )}

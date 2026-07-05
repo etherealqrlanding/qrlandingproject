@@ -1,4 +1,4 @@
-import type { ApiResponse, Category, ProductDetail, ProductSummary } from '../types/api';
+import type { AboutContent, ApiResponse, Category, FaqContent, ProductDetail, ProductSummary } from '../types/api';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
 
@@ -112,6 +112,10 @@ export const api = {
   settings: {
     bookingCutoff: () => request<{ time: string | null }>('/api/settings/booking-cutoff'),
     exchangeRate: () => request<{ rate: number }>('/api/settings/exchange-rate'),
+  },
+  content: {
+    about: () => request<AboutContent>('/api/content/about'),
+    faq: () => request<FaqContent>('/api/content/faq'),
   },
   checkout: {
     createPreference: (input: CheckoutInput) =>

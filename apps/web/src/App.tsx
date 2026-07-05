@@ -8,6 +8,8 @@ import SellerWelcomeModal from './components/SellerWelcomeModal';
 import Home from './pages/Home';
 import ShowsList from './pages/ShowsList';
 import ProductPage from './pages/ProductPage';
+import About from './pages/About';
+import Faq from './pages/Faq';
 import CheckoutReturn from './pages/CheckoutReturn';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
@@ -25,6 +27,7 @@ import SellerForm from './pages/admin/SellerForm';
 import OrdersList from './pages/admin/OrdersList';
 import OrderDetail from './pages/admin/OrderDetail';
 import SettingsPage from './pages/admin/SettingsPage';
+import ContentPage from './pages/admin/ContentPage';
 
 import SellerLogin from './pages/seller/SellerLogin';
 import SellerLayout from './components/seller/SellerLayout';
@@ -64,6 +67,7 @@ export default function App() {
             <Route path="sellers/:id" element={<SellerForm />} />
             <Route path="orders" element={<OrdersList />} />
             <Route path="orders/:publicId" element={<OrderDetail />} />
+            <Route path="content" element={<ContentPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
@@ -111,6 +115,8 @@ function PublicApp() {
           <Route path="/" element={<Home />} />
           <Route path="/shows" element={<ShowsList />} />
           <Route path="/shows/:slug" element={<ProductPage />} />
+          <Route path="/nosotros" element={<About />} />
+          <Route path="/preguntas-frecuentes" element={<Faq />} />
           <Route path="/checkout/success" element={<CheckoutReturn variant="success" />} />
           <Route path="/checkout/pending" element={<CheckoutReturn variant="pending" />} />
           <Route path="/checkout/failure" element={<CheckoutReturn variant="failure" />} />

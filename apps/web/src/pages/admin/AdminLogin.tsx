@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 import Spinner, { LoadingScreen } from '../../components/Spinner';
+import Logo from '../../components/Logo';
 
 function EyeIcon() {
   return (
@@ -56,8 +57,8 @@ export default function AdminLogin() {
   return (
     <div className="h-[100dvh] overflow-y-auto flex flex-col items-center bg-ink px-4">
       <div className="w-full max-w-md my-auto py-6">
-        <Link to="/" className="block text-center font-display text-3xl text-gold mb-1">
-          ticketstangoshow
+        <Link to="/" className="flex justify-center mb-3" aria-label="Tangos y Milongas Tickets">
+          <Logo className="h-20 w-auto" />
         </Link>
         <p className="text-center text-xs uppercase tracking-[0.3em] text-gold-soft mb-4 sm:mb-8">
           Panel administrativo

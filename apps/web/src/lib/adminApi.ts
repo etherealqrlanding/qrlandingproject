@@ -274,6 +274,26 @@ export interface AdminSetting {
   updated_at: string;
 }
 
+export interface AboutContent {
+  title_es: string;
+  title_en: string;
+  body_es: string;
+  body_en: string;
+  updated_at: string | null;
+}
+
+export interface FaqItem {
+  q_es: string;
+  q_en: string;
+  a_es: string;
+  a_en: string;
+}
+
+export interface FaqContent {
+  items: FaqItem[];
+  updated_at: string | null;
+}
+
 export const adminApi = {
   me: () => request<AdminMe>('/api/admin/me'),
   categories: {
@@ -425,6 +445,18 @@ export const adminApi = {
       request<{ time: string | null }>('/api/admin/settings/booking-cutoff', {
         method: 'PUT',
         body: JSON.stringify({ time }),
+      }),
+    getAbout: () => request<AboutContent>('/api/admin/settings/content/about'),
+    updateAbout: (input: Omit<AboutContent, 'updated_at'>) =>
+      request<AboutContent>('/api/admin/settings/content/about', {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    getFaq: () => request<FaqContent>('/api/admin/settings/content/faq'),
+    updateFaq: (items: FaqItem[]) =>
+      request<FaqContent>('/api/admin/settings/content/faq', {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
       }),
   },
 };

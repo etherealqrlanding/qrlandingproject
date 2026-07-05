@@ -65,6 +65,26 @@ export interface ProductDetail extends ProductSummary {
   options: ProductOption[];
 }
 
+export interface AboutContent {
+  title_es: string;
+  title_en: string;
+  body_es: string;
+  body_en: string;
+  updated_at: string | null;
+}
+
+export interface FaqItem {
+  q_es: string;
+  q_en: string;
+  a_es: string;
+  a_en: string;
+}
+
+export interface FaqContent {
+  items: FaqItem[];
+  updated_at: string | null;
+}
+
 export interface ApiResponse<T> {
   data: T;
 }

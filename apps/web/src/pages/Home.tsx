@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import RefBadge from '../components/RefBadge';
+import Logo from '../components/Logo';
 import ProductCard from '../components/ProductCard';
 import { api } from '../lib/api';
 import type { ProductSummary } from '../types/api';
@@ -30,10 +31,11 @@ export default function Home() {
         <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-bordeaux-deep/40 via-ink to-ink" />
         <div
           aria-hidden
-          className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,#c8a85a40,transparent_50%),radial-gradient(circle_at_80%_60%,#6b1a2a55,transparent_55%)]"
+          className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,#c8a85a40,transparent_50%),radial-gradient(circle_at_80%_60%,#3a4d7355,transparent_55%)]"
         />
         <div className="relative container-narrow pt-20 pb-28">
           <RefBadge />
+          <Logo className="mt-8 h-28 md:h-36 w-auto" />
           <p className="mt-8 text-xs uppercase tracking-[0.3em] text-gold-soft">
             {t('hero.eyebrow')}
           </p>

@@ -72,7 +72,7 @@ export async function createPreference(input: CreatePreferenceInput): Promise<{ 
       },
       ...(isLocalOrigin ? {} : { auto_return: 'approved' as const }),
       notification_url: `${process.env.WEBHOOK_PUBLIC_URL ?? input.webOrigin}/api/checkout/webhook`,
-      statement_descriptor: 'ETHEREAL TOURS',
+      statement_descriptor: 'TANGOS Y MILONGAS',
       metadata: input.metadata,
       binary_mode: false,
     },
