@@ -4,6 +4,10 @@ import { useRefCapture } from './hooks/useRefCapture';
 import { AdminAuthProvider } from './hooks/useAdminAuth';
 import { SellerAuthProvider } from './hooks/useSellerAuth';
 import SellerWelcomeModal from './components/SellerWelcomeModal';
+import AccessGate from './components/AccessGate';
+import { LoadingScreen } from './components/Spinner';
+import { api, ApiError } from './lib/api';
+import { getStoredRef, clearRef } from './lib/referral';
 
 import Home from './pages/Home';
 import ShowsList from './pages/ShowsList';
@@ -99,13 +103,48 @@ export default function App() {
   return <PublicApp />;
 }
 
+type GateState = 'checking' | 'ok' | 'missing' | 'invalid';
+
 function PublicApp() {
   const { freshCode, freshTick } = useRefCapture();
+  const location = useLocation();
   const [welcomeCode, setWelcomeCode] = useState<string | null>(null);
+  const [gate, setGate] = useState<GateState>('checking');
 
   useEffect(() => {
     if (freshCode) setWelcomeCode(freshCode);
   }, [freshCode, freshTick]);
+
+  // Exclusividad de venta: solo se accede con el código de un vendedor activo.
+  useEffect(() => {
+    const code = getStoredRef();
+    if (!code) { setGate('missing'); return; }
+    let cancelled = false;
+    setGate('checking');
+    api.checkout.sellerInfo(code)
+      .then(() => { if (!cancelled) setGate('ok'); })
+      .catch((err) => {
+        if (cancelled) return;
+        // 404 (no existe) o 410 (inactivo) => código inválido: limpiamos y bloqueamos.
+        if (err instanceof ApiError && (err.status === 404 || err.status === 410)) {
+          clearRef();
+          setGate('invalid');
+        } else {
+          // Ante cualquier otro error bloqueamos igual (fail closed).
+          setGate('missing');
+        }
+      });
+    return () => { cancelled = true; };
+  }, [freshTick]);
+
+  // Los retornos de pago (/checkout/*) siempre pasan, para no atrapar al que vuelve de MP.
+  const isCheckoutReturn = location.pathname.startsWith('/checkout');
+  if (!isCheckoutReturn) {
+    if (gate === 'checking') return <LoadingScreen />;
+    if (gate === 'missing' || gate === 'invalid') {
+      return <AccessGate reason={gate === 'invalid' ? 'invalid' : 'missing'} />;
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col pb-24 md:pb-0">

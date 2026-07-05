@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import RefBadge from '../components/RefBadge';
 import Logo from '../components/Logo';
 import ProductCard from '../components/ProductCard';
+import HeroSlideshow from '../components/HeroSlideshow';
 import { api } from '../lib/api';
 import type { ProductSummary } from '../types/api';
 
@@ -15,12 +16,19 @@ interface HeroStep {
 export default function Home() {
   const { t } = useTranslation();
   const [featured, setFeatured] = useState<ProductSummary[]>([]);
+  const [heroImages, setHeroImages] = useState<string[]>([]);
   const steps = t('hero.steps', { returnObjects: true }) as HeroStep[];
 
   useEffect(() => {
     let cancelled = false;
     api.products.list({ category: 'shows-de-tango' })
-      .then((rows) => { if (!cancelled) setFeatured(rows.slice(0, 3)); })
+      .then((rows) => {
+        if (cancelled) return;
+        setFeatured(rows.slice(0, 6));
+        setHeroImages(
+          rows.map((r) => r.hero_image).filter((u): u is string => !!u).slice(0, 5),
+        );
+      })
       .catch(() => { /* silencioso en home; lo verán en /shows */ });
     return () => { cancelled = true; };
   }, []);
@@ -28,10 +36,12 @@ export default function Home() {
   return (
     <>
       <section className="relative overflow-hidden">
-        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-bordeaux-deep/40 via-ink to-ink" />
+        <HeroSlideshow images={heroImages} />
+        {/* Oscurecido para legibilidad del texto sobre las fotos */}
+        <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-ink/80 via-ink/85 to-ink" />
         <div
           aria-hidden
-          className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_20%_20%,#c8a85a40,transparent_50%),radial-gradient(circle_at_80%_60%,#3a4d7355,transparent_55%)]"
+          className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,#c8a85a40,transparent_50%),radial-gradient(circle_at_80%_60%,#3a4d7355,transparent_55%)]"
         />
         <div className="relative container-narrow pt-20 pb-28">
           <RefBadge />
@@ -96,17 +106,26 @@ export default function Home() {
               {t('home.featured_title')}
             </h2>
           </div>
-          <Link to="/shows" className="text-sm text-gold hover:underline">
+          <Link
+            to="/shows"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-4 py-2 text-sm text-gold hover:bg-gold/10 transition"
+          >
             {t('home.view_all')} →
           </Link>
         </div>
 
         <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {featured.length === 0
-            ? [0, 1, 2].map((i) => (
+            ? [0, 1, 2, 3, 4, 5].map((i) => (
                 <div key={i} className="aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
               ))
             : featured.map((p) => <ProductCard key={p.id} product={p} />)}
+        </div>
+
+        <div className="mt-12 flex justify-center">
+          <Link to="/shows" className="btn-primary text-base px-8">
+            {t('home.view_all_cta')} →
+          </Link>
         </div>
       </section>
     </>

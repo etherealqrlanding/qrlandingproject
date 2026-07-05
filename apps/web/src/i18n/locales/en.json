@@ -7,6 +7,13 @@
     "contact": "Contact",
     "book": "Book now"
   },
+  "gate": {
+    "badge": "Exclusive access",
+    "title": "Enter with your authorized seller",
+    "message": "This platform is exclusive to customers referred by our sellers. Ask your seller for their access link or QR code to browse the tango houses and book.",
+    "invalid": "The code you used is not valid or the seller is no longer active. Please request a new access link.",
+    "footer": "Tangos y Milongas Tickets · Buenos Aires"
+  },
   "about": {
     "default_title": "About Us",
     "empty": "Content coming soon.",
@@ -34,7 +41,8 @@
   },
   "home": {
     "featured_title": "Featured houses",
-    "view_all": "View all"
+    "view_all": "View all",
+    "view_all_cta": "View all houses"
   },
   "shows": {
     "title": "The 14 tango houses of Buenos Aires",

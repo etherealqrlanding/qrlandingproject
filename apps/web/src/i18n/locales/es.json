@@ -7,6 +7,13 @@
     "contact": "Contacto",
     "book": "Reservar"
   },
+  "gate": {
+    "badge": "Acceso exclusivo",
+    "title": "Ingresá con tu vendedor autorizado",
+    "message": "Esta plataforma es exclusiva para clientes referidos por nuestros vendedores. Pedí a tu vendedor su link o QR de acceso para ver las casas de tango y reservar.",
+    "invalid": "El código con el que ingresaste no es válido o el vendedor ya no está activo. Pedí un nuevo link de acceso.",
+    "footer": "Tangos y Milongas Tickets · Buenos Aires"
+  },
   "about": {
     "default_title": "Nosotros",
     "empty": "Contenido próximamente.",
@@ -34,7 +41,8 @@
   },
   "home": {
     "featured_title": "Casas destacadas",
-    "view_all": "Ver todos"
+    "view_all": "Ver todos",
+    "view_all_cta": "Ver todas las casas"
   },
   "shows": {
     "title": "Las 14 casas de tango de Buenos Aires",

@@ -1,14 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Logo from './Logo';
+import LanguageSwitcher from './LanguageSwitcher';
 
 export default function Navbar() {
-  const { t, i18n } = useTranslation();
-  const lang = i18n.resolvedLanguage ?? 'es';
-
-  const toggleLang = () => {
-    i18n.changeLanguage(lang === 'es' ? 'en' : 'es');
-  };
+  const { t } = useTranslation();
 
   return (
     <header className="sticky top-0 z-30 backdrop-blur bg-ink/70 border-b border-gold/10">
@@ -21,14 +17,8 @@ export default function Navbar() {
           <Link to="/nosotros" className="hover:text-gold transition">{t('nav.about')}</Link>
           <Link to="/preguntas-frecuentes" className="hover:text-gold transition">{t('nav.faq')}</Link>
         </nav>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={toggleLang}
-            className="text-xs uppercase tracking-widest text-gold-soft hover:text-gold transition"
-            aria-label="Toggle language"
-          >
-            {lang === 'es' ? 'EN' : 'ES'}
-          </button>
+        <div className="flex items-center gap-4">
+          <LanguageSwitcher />
           <Link to="/shows" className="hidden md:inline-flex btn-primary text-sm py-2 px-4">{t('nav.book')}</Link>
         </div>
       </div>

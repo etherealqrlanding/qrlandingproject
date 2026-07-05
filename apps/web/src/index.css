@@ -14,6 +14,16 @@
   }
 }
 
+@layer utilities {
+  @keyframes kenburns {
+    from { transform: scale(1); }
+    to { transform: scale(1.09); }
+  }
+  .animate-kenburns {
+    animation: kenburns 18s ease-in-out infinite alternate;
+  }
+}
+
 @layer components {
   .btn-primary {
     @apply inline-flex items-center justify-center px-6 py-3 rounded-md bg-gold text-ink font-medium tracking-wide transition hover:bg-gold-soft focus:outline-none focus:ring-2 focus:ring-gold/60;

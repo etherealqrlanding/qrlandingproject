@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 
 export default function BottomNavPublic() {
   const { t, i18n } = useTranslation();
-  const lang = i18n.resolvedLanguage ?? 'es';
-  const toggleLang = () => i18n.changeLanguage(lang === 'es' ? 'en' : 'es');
+  const order = ['es', 'en', 'pt'];
+  const lang = order.includes(i18n.resolvedLanguage ?? 'es') ? (i18n.resolvedLanguage ?? 'es') : 'es';
+  const cycleLang = () => i18n.changeLanguage(order[(order.indexOf(lang) + 1) % order.length]);
 
   const tab = ({ isActive }: { isActive: boolean }) =>
     `flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-2 transition-colors ${
@@ -38,13 +39,13 @@ export default function BottomNavPublic() {
         </NavLink>
 
         <button
-          onClick={toggleLang}
+          onClick={cycleLang}
           className="flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-2 text-cream/40 transition-colors active:text-cream/60"
-          aria-label="Toggle language"
+          aria-label="Cambiar idioma"
         >
           <span className="text-lg leading-none">🌐</span>
-          <span className="text-[10px] leading-none mt-0.5 uppercase tracking-widest">
-            {lang === 'es' ? 'EN' : 'ES'}
+          <span className="text-[10px] leading-none mt-0.5 uppercase tracking-widest text-gold">
+            {lang.toUpperCase()}
           </span>
         </button>
       </div>

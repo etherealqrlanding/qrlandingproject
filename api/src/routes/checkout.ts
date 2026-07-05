@@ -34,7 +34,8 @@ const createCheckoutSchema = z.object({
     phone: z.string().max(40).optional().nullable(),
     nationality: z.string().max(80).optional().nullable(),
   }),
-  ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional().nullable(),
+  // Exclusividad de venta: toda reserva debe venir de un vendedor autorizado.
+  ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/, 'Se requiere el código de un vendedor autorizado'),
   utm: z.object({
     source: z.string().max(80).optional().nullable(),
     medium: z.string().max(80).optional().nullable(),
@@ -52,6 +53,16 @@ checkoutRouter.post('/preferences', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     }
     const input = parsed.data;
+
+    // 0) Exclusividad de venta: el ref_code debe pertenecer a un vendedor activo.
+    //    Sin esto, cualquiera podría reservar por fuera de la red de vendedores.
+    const { rows: sellerCheck } = await pool.query<{ id: number }>(
+      `SELECT id FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+      [input.ref_code],
+    );
+    if (sellerCheck.length === 0) {
+      return res.status(403).json({ error: 'SELLER_REQUIRED' });
+    }
 
     // 1) Cargar option + product (precios autoritativos del backend, NO confiar en el cliente)
     const { rows: optionRows } = await pool.query<{

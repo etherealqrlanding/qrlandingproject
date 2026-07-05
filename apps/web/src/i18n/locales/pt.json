@@ -1,0 +1,168 @@
+{
+  "nav": {
+    "home": "Início",
+    "shows": "Shows de Tango",
+    "about": "Sobre nós",
+    "faq": "Perguntas Frequentes",
+    "contact": "Contato",
+    "book": "Reservar"
+  },
+  "gate": {
+    "badge": "Acesso exclusivo",
+    "title": "Entre com seu vendedor autorizado",
+    "message": "Esta plataforma é exclusiva para clientes indicados pelos nossos vendedores. Peça ao seu vendedor o link ou QR code de acesso para ver as casas de tango e reservar.",
+    "invalid": "O código utilizado não é válido ou o vendedor não está mais ativo. Solicite um novo link de acesso.",
+    "footer": "Tangos y Milongas Tickets · Buenos Aires"
+  },
+  "about": {
+    "default_title": "Sobre nós",
+    "empty": "Conteúdo em breve.",
+    "error": "Não foi possível carregar esta seção"
+  },
+  "faq": {
+    "title": "Perguntas Frequentes",
+    "empty": "Ainda não há perguntas cadastradas.",
+    "error": "Não foi possível carregar esta seção"
+  },
+  "hero": {
+    "eyebrow": "Buenos Aires · Casas de Tango",
+    "title": "Viva o tango. Não apenas assista.",
+    "subtitle": "Jantares, shows e experiências nas 14 casas de tango mais emblemáticas da cidade. Reservas em minutos, translado incluído.",
+    "cta_primary": "Ver experiências",
+    "cta_secondary": "Falar pelo WhatsApp",
+    "how_title": "Como reservar, passo a passo",
+    "how_subtitle": "Você chegou por indicação: em poucos minutos você escolhe e garante sua noite de tango.",
+    "steps": [
+      { "title": "Escolha sua experiência", "desc": "Explore as casas de tango e compare as opções de jantar, show e translado." },
+      { "title": "Data e pessoas", "desc": "Selecione o dia, quantos vão e o tier que você mais gostar." },
+      { "title": "Reserve e pague online", "desc": "Pagamento seguro em minutos. Você recebe a confirmação na hora por e-mail." },
+      { "title": "Aproveite a noite", "desc": "Esperamos você com tudo pronto, com translado incluído quando for o caso." }
+    ]
+  },
+  "home": {
+    "featured_title": "Casas em destaque",
+    "view_all": "Ver todas",
+    "view_all_cta": "Ver todas as casas"
+  },
+  "shows": {
+    "title": "As 14 casas de tango de Buenos Aires",
+    "subtitle": "Cada casa com seu estilo, seu cardápio e sua própria personalidade. Encontre a que mais combina com você.",
+    "empty": "Ainda não há shows publicados.",
+    "error": "Não foi possível carregar o catálogo"
+  },
+  "product": {
+    "from": "A partir de",
+    "view_more": "Ver mais",
+    "about": "Sobre a experiência",
+    "schedule": "Dias e horários",
+    "options_title": "Escolha sua experiência",
+    "options_subtitle": "Diferentes níveis para você montar a noite do seu jeito.",
+    "per_adult": "por adulto",
+    "per_adult_short": "adulto",
+    "children": "Crianças (3-10)",
+    "your_selection": "Sua escolha",
+    "book_cta": "Reservar agora",
+    "book_option": "Reservar esta opção",
+    "secure_payment": "Pagamento seguro com Mercado Pago",
+    "back_to_list": "Voltar à lista",
+    "error": "Não foi possível carregar este serviço",
+    "currency_notice": "Os valores serão processados em pesos argentinos (ARS) e convertidos pela taxa de câmbio que o operador determinar.",
+    "ars_estimate": "≈ ARS {{amount}} (est.)"
+  },
+  "checkout": {
+    "name": "Nome completo",
+    "email": "E-mail",
+    "email_confirm": "Confirmar e-mail",
+    "email_mismatch": "Os e-mails não coincidem. Por favor, verifique.",
+    "contact_info_notice": "Seu telefone e e-mail são essenciais para enviarmos a confirmação da sua reserva e contatar você em caso de novidades. Certifique-se de informá-los corretamente.",
+    "phone": "Telefone / WhatsApp",
+    "nationality": "Nacionalidade",
+    "service_date": "Data do serviço",
+    "adults": "Adultos",
+    "children": "Crianças",
+    "select": "Selecionar...",
+    "tickets": "Ingressos",
+    "transfer": "Translado",
+    "total": "Total",
+    "charged_in_ars": "A cobrança é processada em pesos argentinos (ARS) conforme a taxa de câmbio atual.",
+    "usd_ref": "≈ USD {{amount}} pela taxa de câmbio de referência",
+    "dollar_account_notice": "Se você pagar com uma conta em dólares, o valor no extrato do seu banco pode variar conforme a taxa de câmbio aplicada pela sua instituição no momento da operação.",
+    "pay_with_mp": "Pagar com Mercado Pago",
+    "pay_with_seller": "Pagar ao vendedor (dinheiro)",
+    "confirm_booking": "Confirmar reserva",
+    "processing": "Processando...",
+    "cash_note": "O vendedor coordenará o pagamento no momento do serviço. A reserva fica pendente de confirmação.",
+    "mp_redirect_note": "Levamos você ao ambiente seguro do Mercado Pago. Aceitamos cartões, transferência e dinheiro.",
+    "checking_availability": "Verificando disponibilidade...",
+    "date_full": "Sem vagas para esta data. Escolha outro dia.",
+    "date_closed": "A casa não opera nessa data. Escolha outro dia.",
+    "date_closed_cutoff": "O horário limite de reservas do dia já passou. Escolha outra data.",
+    "date_closed_day": "O serviço não opera nesse dia da semana. Escolha outro dia.",
+    "date_low": "Restam poucas vagas para esta data.",
+    "choose_another_date": "Escolha outra data",
+    "cutoff_notice": "Reservas para hoje são aceitas até as {{time}} h (horário de Buenos Aires)",
+    "capacity_max_reached": "Capacidade máxima atingida para esta data",
+    "currency_notice": "Os preços são exibidos em dólares (USD) e pesos argentinos (ARS). A cobrança é processada em ARS pela taxa de câmbio que o operador determinar; o valor em ARS é estimado.",
+    "ars_estimate": "≈ ARS {{amount}} (estimado pela taxa atual)"
+  },
+  "return": {
+    "success_title": "Reserva confirmada!",
+    "success_subtitle": "Enviamos os detalhes por e-mail. Até breve em Buenos Aires!",
+    "cash_title": "Reserva registrada!",
+    "cash_subtitle": "Sua reserva foi registrada. O vendedor coordenará o pagamento e os detalhes do serviço.",
+    "cash_method": "Pagamento: dinheiro ao vendedor",
+    "pending_title": "Pagamento em processamento",
+    "pending_subtitle": "Seu pagamento está sendo processado. Avisaremos por e-mail assim que for confirmado.",
+    "failure_title": "O pagamento não foi concluído",
+    "failure_subtitle": "Nenhuma cobrança foi realizada. Você pode tentar novamente ou falar conosco pelo WhatsApp.",
+    "order_ref": "Referência do pedido",
+    "amount": "Valor",
+    "status": "Status",
+    "status_pending": "Pendente",
+    "status_paid": "Pago",
+    "status_failed": "Falhou",
+    "status_cancelled": "Cancelado",
+    "status_refunded": "Reembolsado",
+    "order_not_found": "Não foi possível encontrar o pedido. Verifique seu e-mail ou fale conosco.",
+    "back_to_shows": "Ver outros shows",
+    "back_home": "Voltar ao início"
+  },
+  "categories": {
+    "shows": "Shows de Tango",
+    "tours": "Tours e Excursões",
+    "programs": "Programas",
+    "lodging": "Hospedagem",
+    "transfers": "Translados"
+  },
+  "footer": {
+    "tagline": "Tangos y Milongas Tickets · Buenos Aires desde 2026",
+    "rights": "Todos os direitos reservados."
+  },
+  "ref": {
+    "welcome": "Reservando com {{name}}",
+    "inactive": "Este vendedor não está disponível no momento"
+  },
+  "seller_inactive": {
+    "title": "Vendedor indisponível",
+    "message": "Este QR pertence a um vendedor que não está mais ativo. Por favor, entre em contato com quem o compartilhou.",
+    "cta": "Fechar"
+  },
+  "seller_welcome": {
+    "badge": "Vendedor Verificado",
+    "message": "Você escaneou o QR de {{name}}, um vendedor registrado e autorizado pela Tangos y Milongas Tickets. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
+    "steps_title": "O que você pode fazer?",
+    "step1": "Explore shows de tango em Buenos Aires",
+    "step2": "Escolha data, quantidades e sua experiência",
+    "step3": "Pague com segurança pelo Mercado Pago",
+    "cta": "Explorar experiências →",
+    "kind": {
+      "uber": "Motorista / Translados",
+      "hotel": "Concierge de Hotel",
+      "concierge": "Concierge",
+      "agency": "Agência de Viagens",
+      "guide": "Guia Turístico",
+      "influencer": "Influenciador",
+      "other": "Vendedor Autorizado"
+    }
+  }
+}
