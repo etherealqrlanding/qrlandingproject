@@ -7,7 +7,7 @@ import SellerWelcomeModal from './components/SellerWelcomeModal';
 import AccessGate from './components/AccessGate';
 import { LoadingScreen } from './components/Spinner';
 import { api, ApiError } from './lib/api';
-import { getStoredRef, clearRef } from './lib/referral';
+import { getStoredRef, clearRef, storeRef } from './lib/referral';
 
 import Home from './pages/Home';
 import ShowsList from './pages/ShowsList';
@@ -142,7 +142,12 @@ function PublicApp() {
   if (!isCheckoutReturn) {
     if (gate === 'checking') return <LoadingScreen />;
     if (gate === 'missing' || gate === 'invalid') {
-      return <AccessGate reason={gate === 'invalid' ? 'invalid' : 'missing'} />;
+      return (
+        <AccessGate
+          reason={gate === 'invalid' ? 'invalid' : 'missing'}
+          onValid={(code) => { storeRef(code); setWelcomeCode(code); setGate('ok'); }}
+        />
+      );
     }
   }
 

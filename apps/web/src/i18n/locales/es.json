@@ -12,6 +12,13 @@
     "title": "Ingresá con tu vendedor autorizado",
     "message": "Esta plataforma es exclusiva para clientes referidos por nuestros vendedores. Pedí a tu vendedor su link o QR de acceso para ver las casas de tango y reservar.",
     "invalid": "El código con el que ingresaste no es válido o el vendedor ya no está activo. Pedí un nuevo link de acceso.",
+    "have_code": "¿Ya tenés un código de vendedor?",
+    "placeholder": "Ingresá tu código",
+    "enter": "Entrar",
+    "checking": "Verificando...",
+    "code_invalid": "Código inválido. Revisá que esté bien escrito.",
+    "code_inactive": "Ese vendedor ya no está activo. Pedí un nuevo código.",
+    "code_error": "No pudimos verificar el código. Intentá de nuevo.",
     "footer": "Tangos y Milongas Tickets · Buenos Aires"
   },
   "about": {

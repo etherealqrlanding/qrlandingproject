@@ -12,6 +12,13 @@
     "title": "Enter with your authorized seller",
     "message": "This platform is exclusive to customers referred by our sellers. Ask your seller for their access link or QR code to browse the tango houses and book.",
     "invalid": "The code you used is not valid or the seller is no longer active. Please request a new access link.",
+    "have_code": "Already have a seller code?",
+    "placeholder": "Enter your code",
+    "enter": "Enter",
+    "checking": "Checking...",
+    "code_invalid": "Invalid code. Please check the spelling.",
+    "code_inactive": "That seller is no longer active. Please request a new code.",
+    "code_error": "We couldn't verify the code. Please try again.",
     "footer": "Tangos y Milongas Tickets · Buenos Aires"
   },
   "about": {
