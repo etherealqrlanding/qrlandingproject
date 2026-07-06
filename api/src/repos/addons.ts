@@ -60,8 +60,11 @@ export async function createOrderAddon(input: CreateAddonInput): Promise<Created
   }
 }
 
-export async function setAddonPreferenceId(addonId: number, preferenceId: string): Promise<void> {
-  await pool.query(`UPDATE order_addons SET mp_preference_id = $1 WHERE id = $2`, [preferenceId, addonId]);
+export async function setAddonPreferenceId(addonId: number, preferenceId: string, initPoint?: string): Promise<void> {
+  await pool.query(
+    `UPDATE order_addons SET mp_preference_id = $1, mp_init_point = COALESCE($2, mp_init_point) WHERE id = $3`,
+    [preferenceId, initPoint ?? null, addonId],
+  );
 }
 
 export interface AddonLookup {

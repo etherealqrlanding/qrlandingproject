@@ -164,6 +164,7 @@ export interface SellerOrder {
   created_at: string;
   utm_source: string | null;
   payment_method: string;
+  mp_init_point: string | null;
 }
 
 export interface SellerBookingInput {

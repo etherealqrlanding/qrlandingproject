@@ -199,6 +199,7 @@ export interface SellerOrder {
   created_at: string;
   utm_source: string | null;
   payment_method: string;
+  mp_init_point: string | null;
 }
 
 export async function listSellerOrders(sellerId: number, opts?: { status?: string }): Promise<SellerOrder[]> {
@@ -225,7 +226,7 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        a.net_total_usd_snapshot::float AS net_total_usd,
        a.commission_percent_snapshot::float AS commission_percent_snapshot,
        a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.created_at,
-       o.utm_source, o.payment_method
+       o.utm_source, o.payment_method, o.mp_init_point
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id

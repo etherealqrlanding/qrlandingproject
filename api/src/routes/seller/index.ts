@@ -347,7 +347,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       webOrigin: config.WEB_ORIGIN,
     });
 
-    await setOrderPreferenceId(order.id, pref.id);
+    await setOrderPreferenceId(order.id, pref.id, pref.init_point);
     await logPaymentEvent(order.id, 'preference_created_by_seller', pref.id, { init_point: pref.init_point });
 
     res.json({

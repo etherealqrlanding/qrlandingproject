@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError } from '../../lib/adminApi';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
+import PaymentLinkShare from '../../components/PaymentLinkShare';
 
 interface OrderFull {
   id: number;
@@ -19,6 +20,7 @@ interface OrderFull {
   mp_payment_id: string | null;
   mp_payment_status: string | null;
   mp_payment_method: string | null;
+  mp_init_point: string | null;
   payment_method: 'mercadopago' | 'cash';
   internal_notes: string | null;
   paid_at: string | null;
@@ -398,6 +400,18 @@ export default function OrderDetail() {
               {order.ref_code && (
                 <p className="mt-1 text-xs text-cream/40">Ref: <span className="font-mono">{order.ref_code}</span></p>
               )}
+            </div>
+          )}
+
+          {order.status === 'pending' && order.payment_method === 'mercadopago' && order.mp_init_point && (
+            <div className="rounded-lg border border-gold/20 bg-ink-soft/70 p-5">
+              <p className="text-xs uppercase tracking-widest text-gold-soft mb-3">Link de pago (re-compartir)</p>
+              <p className="text-sm text-cream/60 mb-3">La reserva está pendiente de pago. Reenviale el link al pasajero.</p>
+              <PaymentLinkShare
+                link={order.mp_init_point}
+                phone={order.customer_phone}
+                waMessage={`Hola ${order.customer_name}, te dejo el link para pagar tu reserva. Total USD ${order.total_usd}. Pagá acá: ${order.mp_init_point}`}
+              />
             </div>
           )}
 

@@ -128,7 +128,7 @@ export async function createAddonForOrder(params: {
     webOrigin: config.WEB_ORIGIN,
   });
 
-  await setAddonPreferenceId(addon.id, pref.id);
+  await setAddonPreferenceId(addon.id, pref.id, pref.init_point);
 
   return {
     ok: true,

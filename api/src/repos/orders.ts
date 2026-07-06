@@ -139,10 +139,10 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
   }
 }
 
-export async function setOrderPreferenceId(orderId: number, preferenceId: string): Promise<void> {
+export async function setOrderPreferenceId(orderId: number, preferenceId: string, initPoint?: string): Promise<void> {
   await pool.query(
-    `UPDATE orders SET mp_preference_id = $1, updated_at = NOW() WHERE id = $2`,
-    [preferenceId, orderId],
+    `UPDATE orders SET mp_preference_id = $1, mp_init_point = COALESCE($2, mp_init_point), updated_at = NOW() WHERE id = $3`,
+    [preferenceId, initPoint ?? null, orderId],
   );
 }
 

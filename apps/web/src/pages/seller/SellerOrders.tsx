@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerOrder } from '../../lib/sellerApi';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
+import PaymentLinkShare from '../../components/PaymentLinkShare';
 
 // Estado mostrado al vendedor según método de pago + sub-estado real de la orden:
 //  - Pendiente: reservó, todavía no se cobró.
@@ -353,6 +354,16 @@ export default function SellerOrders() {
                               : <span className="text-cream/30">—</span>}
                         </DetailRow>
                       )}
+                      {o.status === 'pending' && o.payment_method === 'mercadopago' && o.mp_init_point && (
+                        <div className="mt-3 pt-3 border-t border-gold/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Link de pago (re-compartir)</p>
+                          <PaymentLinkShare
+                            link={o.mp_init_point}
+                            phone={o.customer_phone}
+                            waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmt(o.total_usd)}. Pagá acá: ${o.mp_init_point}`}
+                          />
+                        </div>
+                      )}
                       {o.payment_method === 'cash' && o.status === 'pending' && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <button
@@ -498,6 +509,16 @@ export default function SellerOrders() {
                                 <DetailRow label="N° orden"><span className="font-mono text-cream/50">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
                               </div>
                             </div>
+                            {o.status === 'pending' && o.payment_method === 'mercadopago' && o.mp_init_point && (
+                              <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
+                                <PaymentLinkShare
+                                  link={o.mp_init_point}
+                                  phone={o.customer_phone}
+                                  label="Link de pago (re-compartir)"
+                                  waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmt(o.total_usd)}. Pagá acá: ${o.mp_init_point}`}
+                                />
+                              </div>
+                            )}
                             {o.payment_method === 'cash' && o.status === 'pending' && (
                               <div className="mt-4 pt-4 border-t border-gold/10">
                                 <button
