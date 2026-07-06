@@ -24,6 +24,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SellerBookingResult | null>(null);
+  const [copied, setCopied] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash'>(isPermanent ? 'cash' : 'mercadopago');
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
@@ -156,11 +157,8 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
         transfer_hotel: (option.has_transfer && wantsTransfer) ? (transferHotel || null) : null,
       });
 
-      if (paymentMethod === 'mercadopago' && res.init_point) {
-        globalThis.location.href = res.init_point;
-        return;
-      }
-
+      // MP: NO redirigimos al vendedor. El pago es del pasajero (su cuenta/tarjeta),
+      // así que le mostramos el link generado para que se lo pase al cliente.
       setResult(res);
     } catch (err) {
       const message = err instanceof SellerApiError ? err.message : (err as Error).message;
@@ -169,40 +167,105 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
     }
   };
 
-  // ── Pantalla de éxito (pago en efectivo) ──────────────────
+  // ── Pantalla de éxito: MP (link para el cliente) o efectivo ──────────────
   if (result) {
+    const isMpLink = result.payment_method === 'mercadopago' && Boolean(result.init_point);
+    const payLink = result.init_point ?? '';
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    const arsHint = result.total_ars != null ? ` (≈ ARS ${Math.round(result.total_ars).toLocaleString('es-AR')})` : '';
+    const waMessage = `Hola ${form.name}, te dejo el link para pagar tu reserva de ${option.name_es} para el ${form.service_date}. Total USD ${result.total_usd}${arsHint}. Pagá de forma segura acá: ${payLink}`;
+    const waUrl = phoneDigits
+      ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(waMessage)}`
+      : `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
+
+    const copyLink = async () => {
+      try {
+        await navigator.clipboard.writeText(payLink);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch { /* clipboard no disponible */ }
+    };
+
     return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm"
-      >
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm">
         <div className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-8 text-center">
           <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-gold" aria-hidden>
               <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <h2 className="font-display text-2xl text-cream mb-2">¡Reserva ingresada!</h2>
-          <p className="text-sm text-cream/60 mb-1">
-            Ref. <span className="font-mono text-gold-soft">{result.order_public_id.slice(0, 8).toUpperCase()}</span>
-          </p>
-          <p className="text-sm text-cream/70 mb-6">
-            La reserva fue registrada como <strong className="text-cream/90">ingresada manualmente por el vendedor</strong>.
-            Coordiná el cobro en efectivo con el pasajero.
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => navigate('/seller/ventas')}
-              className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
-            >
-              Ver mis ventas
-            </button>
-            <button
-              onClick={onClose}
-              className="flex-1 rounded-lg border border-gold/20 px-4 py-2.5 text-sm text-cream/70 hover:border-gold/40 transition-colors"
-            >
-              Nueva reserva
-            </button>
-          </div>
+
+          {isMpLink ? (
+            <>
+              <h2 className="font-display text-2xl text-cream mb-2">¡Link de pago generado!</h2>
+              <p className="text-sm text-cream/60 mb-1">
+                Ref. <span className="font-mono text-gold-soft">{result.order_public_id.slice(0, 8).toUpperCase()}</span>
+              </p>
+              <p className="text-sm text-cream/70 mb-5">
+                Enviale este link al pasajero para que <strong className="text-cream/90">pague con su propia cuenta o tarjeta</strong>.
+                La reserva queda pendiente hasta que complete el pago.
+              </p>
+
+              <div className="flex items-center gap-2 rounded-lg border border-gold/20 bg-ink/40 p-2 mb-3">
+                <span className="flex-1 truncate text-left text-xs text-cream/60 px-1">{payLink}</span>
+                <button
+                  onClick={copyLink}
+                  className="shrink-0 rounded-md border border-gold/30 px-3 py-1.5 text-xs text-cream hover:bg-gold/10 transition-colors"
+                >
+                  {copied ? '✓ Copiado' : 'Copiar'}
+                </button>
+              </div>
+
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full rounded-lg bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-ink hover:brightness-95 transition mb-3"
+              >
+                Enviar por WhatsApp{phoneDigits ? ' al pasajero' : ''}
+              </a>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigate('/seller/ventas')}
+                  className="flex-1 rounded-lg border border-gold/20 px-4 py-2.5 text-sm text-cream/70 hover:border-gold/40 transition-colors"
+                >
+                  Ver mis ventas
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 rounded-lg border border-gold/20 px-4 py-2.5 text-sm text-cream/70 hover:border-gold/40 transition-colors"
+                >
+                  Nueva reserva
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-2xl text-cream mb-2">¡Reserva ingresada!</h2>
+              <p className="text-sm text-cream/60 mb-1">
+                Ref. <span className="font-mono text-gold-soft">{result.order_public_id.slice(0, 8).toUpperCase()}</span>
+              </p>
+              <p className="text-sm text-cream/70 mb-6">
+                La reserva fue registrada como <strong className="text-cream/90">ingresada manualmente por el vendedor</strong>.
+                Coordiná el cobro en efectivo con el pasajero.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => navigate('/seller/ventas')}
+                  className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
+                >
+                  Ver mis ventas
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex-1 rounded-lg border border-gold/20 px-4 py-2.5 text-sm text-cream/70 hover:border-gold/40 transition-colors"
+                >
+                  Nueva reserva
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
