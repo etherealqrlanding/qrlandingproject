@@ -52,13 +52,24 @@ async function runAvailabilityCheck(
     return { ok: false, reason: 'no_capacity', message: 'No hay cupos disponibles para esa fecha.' };
   }
 
+  // Cupo ocupado = pax de órdenes pagadas/pendientes + pax extra de addons pendientes
+  // (los agregados con link de MP sin pagar todavía reservan su lugar hasta que caducan).
   const { rows: bookingRows } = await q.query<{ total_pax: number }>(
-    `SELECT COALESCE(SUM(oi.adults + oi.children), 0)::int AS total_pax
-       FROM order_items oi
-       JOIN orders o ON o.id = oi.order_id
-      WHERE oi.option_id = $1
-        AND oi.service_date = $2::date
-        AND o.status IN ('paid', 'pending')`,
+    `SELECT (
+       COALESCE((
+         SELECT SUM(oi.adults + oi.children)
+           FROM order_items oi
+           JOIN orders o ON o.id = oi.order_id
+          WHERE oi.option_id = $1 AND oi.service_date = $2::date
+            AND o.status IN ('paid', 'pending')
+       ), 0)
+       + COALESCE((
+         SELECT SUM(ad.extra_adults + ad.extra_children)
+           FROM order_addons ad
+          WHERE ad.option_id = $1 AND ad.service_date = $2::date
+            AND ad.status = 'pending'
+       ), 0)
+     )::int AS total_pax`,
     [optionId, serviceDate],
   );
   const booked = bookingRows[0]?.total_pax ?? 0;

@@ -1,12 +1,15 @@
 import { pool } from '../db.js';
 import { logPaymentEvent } from '../repos/orders.js';
 import { createOrderExpiredNotification } from '../repos/notifications.js';
-import { syncOrderWithMp } from '../routes/checkout.js';
+import { syncOrderWithMp, syncAddonWithMp } from '../routes/checkout.js';
+import { listStalePendingAddons, expireAddon } from '../repos/addons.js';
 
 const EXPIRY_HOURS = 24;
 // MP: abandonos de checkout. Se caducan antes que el efectivo porque el link de pago
 // ya venció y la orden pendiente estaría reteniendo cupos sin un pago real detrás.
 const MP_EXPIRY_HOURS = 3;
+// Addons (ampliaciones con link de MP): mismo criterio que las órdenes MP.
+const ADDON_EXPIRY_HOURS = 3;
 const SWEEP_INTERVAL_MS = 15 * 60_000; // cada 15 minutos
 
 async function expireOrder(id: number, reason: string): Promise<void> {
@@ -95,9 +98,38 @@ export async function expireStaleMpOrders(): Promise<number> {
   return expired;
 }
 
+/**
+ * Caduca las ampliaciones (addons) con link de MP no pagadas: libera el cupo que reservaban.
+ * Igual que las órdenes MP, antes de caducar consulta MP (vía syncAddonWithMp): si hay un
+ * pago aprobado lo aplica; solo caduca las que MP no conoce.
+ */
+export async function expireStaleMpAddons(): Promise<number> {
+  const stale = await listStalePendingAddons(ADDON_EXPIRY_HOURS);
+  let expired = 0;
+  for (const { id, public_id, order_id } of stale) {
+    try {
+      const result = await syncAddonWithMp(public_id);
+      if (result.status !== 'paid' && !result.hasPayment) {
+        await expireAddon(id);
+        await logPaymentEvent(order_id, 'addon_expired_auto', null, {
+          reason: `Ampliación con link de MP no pagada (>${ADDON_EXPIRY_HOURS} hs)`,
+        }).catch(() => {});
+        expired += 1;
+      }
+    } catch (e) {
+      console.error('[expire] sync addon falló para', id, e);
+    }
+  }
+  if (expired > 0) {
+    console.log(`[expire] ${expired} ampliación(es) de MP caducada(s) por abandono.`);
+  }
+  return expired;
+}
+
 async function runSweep(): Promise<void> {
   await expireStaleCashOrders().catch((e) => console.error('[expire] sweep efectivo falló:', e));
   await expireStaleMpOrders().catch((e) => console.error('[expire] sweep MP falló:', e));
+  await expireStaleMpAddons().catch((e) => console.error('[expire] sweep addons falló:', e));
 }
 
 /** Arranca el barrido periódico de caducidad (más un barrido inicial al iniciar). */

@@ -17,9 +17,10 @@ import {
   logPaymentEvent,
   findOrderByPublicId,
 } from '../repos/orders.js';
-import { sendOrderPaidNotifications, sendCashOrderNotifications } from '../services/email.js';
+import { sendOrderPaidNotifications, sendCashOrderNotifications, sendOrderIncreasedNotifications } from '../services/email.js';
 import { createOrderPaidNotification, createCashBookingNotification } from '../repos/notifications.js';
 import { checkSingleDateAvailability } from '../repos/availability.js';
+import { findAddonByPublicId, applyAddonPayment } from '../repos/addons.js';
 import { checkoutLimiter } from '../middleware/rateLimit.js';
 
 export const checkoutRouter = Router();
@@ -516,6 +517,30 @@ export async function syncOrderWithMp(publicId: string): Promise<{ found: boolea
   return { found: result.applied, status: result.status };
 }
 
+// Aplica el pago aprobado de un addon a su orden y notifica (solo en la primera aplicación).
+async function applyAddonAndNotify(publicId: string, mpPaymentId: string | null): Promise<void> {
+  const r = await applyAddonPayment(publicId, mpPaymentId);
+  if (r.applied && !r.alreadyApplied && r.orderId != null) {
+    sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
+      console.error('[email] addon increase notification failed for order', r.orderId, e),
+    );
+  }
+}
+
+// Respaldo del webhook para addons: consulta MP por la ref del addon y lo aplica si está aprobado.
+export async function syncAddonWithMp(publicId: string): Promise<{ found: boolean; status: string; hasPayment: boolean }> {
+  const addon = await findAddonByPublicId(publicId);
+  if (!addon) return { found: false, status: 'not_found', hasPayment: false };
+  if (addon.status === 'paid') return { found: true, status: 'paid', hasPayment: true };
+  const payment = await searchPaymentByExternalRef(publicId);
+  if (!payment) return { found: true, status: addon.status, hasPayment: false };
+  if (mapMpStatusToOrderStatus(payment.status) === 'paid') {
+    await applyAddonAndNotify(publicId, payment.id != null ? String(payment.id) : null);
+    return { found: true, status: 'paid', hasPayment: true };
+  }
+  return { found: true, status: addon.status, hasPayment: true };
+}
+
 // ─── POST /api/checkout/webhook ──────────────────────────
 // MP envía notificaciones cuando cambia el estado de un pago.
 // Firma: header x-signature con HMAC-SHA256(`id:${data.id};request-id:${x-request-id};ts:${ts}`, secret)
@@ -562,6 +587,18 @@ checkoutRouter.post('/webhook', async (req: Request, res: Response, next: NextFu
       return res.status(200).json({ received: true, note: 'no external_reference' });
     }
 
+    // ¿La referencia es un ADDON (ampliación) o una orden normal?
+    const addon = await findAddonByPublicId(externalRef);
+    if (addon) {
+      await logPaymentEvent(addon.order_id, `addon_webhook_${payment.status ?? 'unknown'}`, dataId, {
+        addon_public_id: externalRef,
+      });
+      if (mapMpStatusToOrderStatus(payment.status) === 'paid') {
+        await applyAddonAndNotify(externalRef, payment.id != null ? String(payment.id) : null);
+      }
+      return res.status(200).json({ received: true, addon: true });
+    }
+
     await applyPaymentToOrder(
       {
         id: payment.id,
@@ -588,7 +625,25 @@ checkoutRouter.get('/orders/:publicId', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid id' });
     }
     const order = await findOrderByPublicId(publicId);
-    if (!order) return res.status(404).json({ error: 'Not found' });
+    if (!order) {
+      // Puede ser una ampliación (addon) con su propio link de pago.
+      const addon = await findAddonByPublicId(publicId);
+      if (addon) {
+        return res.json({
+          data: {
+            public_id: publicId,
+            status: addon.status === 'paid' ? 'paid' : 'pending',
+            total_usd: addon.charge_usd,
+            total_ars: addon.charge_ars,
+            customer_email: addon.customer_email,
+            customer_name: addon.customer_name,
+            payment_method: 'mercadopago',
+            is_addon: true,
+          },
+        });
+      }
+      return res.status(404).json({ error: 'Not found' });
+    }
     res.json({
       data: {
         public_id: publicId,
@@ -614,7 +669,16 @@ checkoutRouter.post('/orders/:publicId/sync', async (req, res, next) => {
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
 
     const order = await findOrderByPublicId(publicId);
-    if (!order) return res.status(404).json({ error: 'Not found' });
+    if (!order) {
+      // ¿Es una ampliación (addon)? Sincronizamos su pago aparte.
+      const addon = await findAddonByPublicId(publicId);
+      if (addon) {
+        if (addon.status === 'paid') return res.json({ data: { status: 'paid', synced: false, is_addon: true } });
+        const r = await syncAddonWithMp(publicId);
+        return res.json({ data: { status: r.status, synced: true, is_addon: true } });
+      }
+      return res.status(404).json({ error: 'Not found' });
+    }
 
     // Ya confirmada con payment_id → no hace falta consultar MP.
     if (order.status === 'paid' && order.mp_payment_id) {

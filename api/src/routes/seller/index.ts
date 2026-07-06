@@ -9,6 +9,7 @@ import { config } from '../../config.js';
 import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications } from '../../services/email.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../../services/orderIncrease.js';
 import { cashIncreaseCommission } from '../../services/orderCommission.js';
+import { createAddonForOrder } from '../../services/orderAddon.js';
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs } from '../../services/settings.js';
@@ -526,6 +527,31 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
     }
 
     res.json({ data: { ok: true, charge_usd: calc.chargeUsd, charge_ars: calc.chargeArs, new_total_usd: calc.newSubtotalUsd } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/add-mp — el vendedor genera un link incremental
+// de MP para sumar pasajeros a una reserva SUYA pagada por MP. El link es para el pasajero.
+const sellerAddMpSchema = z.object({
+  adults: z.number().int().min(1).max(20),
+  children: z.number().int().min(0).max(20),
+});
+
+sellerRouter.post('/me/orders/:publicId/add-mp', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
+    const parsed = sellerAddMpSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const result = await createAddonForOrder({
+      orderPublicId: publicId,
+      adults: parsed.data.adults,
+      children: parsed.data.children,
+      restrictSellerId: req.seller!.sellerId,
+    });
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: result.data });
   } catch (err) { next(err); }
 });
 

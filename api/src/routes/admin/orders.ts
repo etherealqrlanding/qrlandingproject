@@ -7,6 +7,7 @@ import { logPaymentEvent, applyOrderReduction, applyOrderIncrease } from '../../
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../../services/orderIncrease.js';
 import { cashIncreaseCommission } from '../../services/orderCommission.js';
+import { createAddonForOrder } from '../../services/orderAddon.js';
 import { syncOrderWithMp } from '../checkout.js';
 
 export const adminOrdersRouter = Router();
@@ -476,6 +477,31 @@ adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
         new_children: parsed.data.children,
       },
     });
+  } catch (err) { next(err); }
+});
+
+// ─── Ampliar reserva de MP: genera link incremental por la diferencia ─────────
+// El pasajero suma acompañantes en una reserva pagada por MP: se genera un cobro NUEVO
+// solo por el delta (link para el cliente). Reserva el cupo hasta que se pague o caduque.
+const addMpSchema = z.object({
+  adults: z.number().int().min(1).max(20),
+  children: z.number().int().min(0).max(20),
+});
+
+adminOrdersRouter.post('/:publicId/add-mp', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = addMpSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const result = await createAddonForOrder({
+      orderPublicId: publicId,
+      adults: parsed.data.adults,
+      children: parsed.data.children,
+    });
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: result.data });
   } catch (err) { next(err); }
 });
 
