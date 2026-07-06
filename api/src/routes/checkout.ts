@@ -6,6 +6,7 @@ import { config } from '../config.js';
 import {
   createPreference,
   fetchPayment,
+  searchPaymentByExternalRef,
   mapMpStatusToOrderStatus,
 } from '../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs, getSameDayCutoff } from '../services/settings.js';
@@ -460,6 +461,58 @@ checkoutRouter.post('/cash', async (req, res, next) => {
   }
 });
 
+// Aplica un pago de MP a su orden: actualiza estado + payment_id y, si pasa a
+// 'paid' por primera vez, dispara las notificaciones. Idempotente: chequea el
+// estado previo, así no re-envía emails si la orden ya estaba pagada.
+async function applyPaymentToOrder(
+  payment: { id?: number | string; status?: string; payment_method_id?: string; external_reference?: string | null },
+  eventDataId?: string | null,
+): Promise<{ applied: boolean; status?: string; orderId?: number }> {
+  const externalRef = payment.external_reference;
+  if (!externalRef) return { applied: false };
+  const newStatus = mapMpStatusToOrderStatus(payment.status);
+  const paymentIdStr = payment.id != null ? String(payment.id) : null;
+  const client = await pool.connect();
+  try {
+    const prior = await client.query<{ status: string }>(
+      `SELECT status::text AS status FROM orders WHERE public_id = $1 LIMIT 1`, [externalRef],
+    );
+    const wasPaid = prior.rows[0]?.status === 'paid';
+    const updated = await updateOrderFromPayment(client, externalRef, {
+      status: newStatus,
+      mp_payment_id: paymentIdStr,
+      mp_payment_status: payment.status ?? null,
+      mp_payment_method: payment.payment_method_id ?? null,
+      paid_at: newStatus === 'paid' ? new Date() : null,
+    });
+    if (!updated) return { applied: false };
+    await logPaymentEvent(updated.id, `order_${newStatus}`, eventDataId ?? paymentIdStr, {
+      payment_id: payment.id, status: payment.status,
+    });
+    // Notificar solo en la transición a 'paid' (primera vez) → nunca duplica emails.
+    if (newStatus === 'paid' && !wasPaid) {
+      sendOrderPaidNotifications(updated.id).catch((err) =>
+        console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
+      );
+      createOrderPaidNotification(updated.id).catch((err) =>
+        console.error('[notif] createOrderPaidNotification failed for order', updated.id, err),
+      );
+    }
+    return { applied: true, status: newStatus, orderId: updated.id };
+  } finally {
+    client.release();
+  }
+}
+
+// Respaldo del webhook: consulta MP por la referencia (public_id) de la orden y la
+// sincroniza. Se usa desde el retorno del checkout y desde el admin.
+export async function syncOrderWithMp(publicId: string): Promise<{ found: boolean; status?: string }> {
+  const payment = await searchPaymentByExternalRef(publicId);
+  if (!payment) return { found: false };
+  const result = await applyPaymentToOrder({ ...payment, external_reference: publicId });
+  return { found: result.applied, status: result.status };
+}
+
 // ─── POST /api/checkout/webhook ──────────────────────────
 // MP envía notificaciones cuando cambia el estado de un pago.
 // Firma: header x-signature con HMAC-SHA256(`id:${data.id};request-id:${x-request-id};ts:${ts}`, secret)
@@ -506,37 +559,15 @@ checkoutRouter.post('/webhook', async (req: Request, res: Response, next: NextFu
       return res.status(200).json({ received: true, note: 'no external_reference' });
     }
 
-    const newStatus = mapMpStatusToOrderStatus(payment.status);
-    const client = await pool.connect();
-    try {
-      const updated = await updateOrderFromPayment(client, externalRef, {
-        status: newStatus,
-        mp_payment_id: String(payment.id ?? ''),
-        mp_payment_status: payment.status ?? null,
-        mp_payment_method: payment.payment_method_id ?? null,
-        paid_at: newStatus === 'paid' ? new Date() : null,
-      });
-      if (updated) {
-        await logPaymentEvent(updated.id, `order_${newStatus}`, dataId, {
-          payment_id: payment.id,
-          status: payment.status,
-          status_detail: payment.status_detail,
-        });
-        // Disparar notificaciones por email solo cuando pasa a 'paid' por primera vez.
-        // No bloqueamos el webhook esperando los emails: fire-and-forget con catch.
-        if (newStatus === 'paid' && updated.status === 'paid') {
-          // La comisión del vendedor (% × total para MP) ya quedó calculada al crear la orden.
-          sendOrderPaidNotifications(updated.id).catch((err) =>
-            console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
-          );
-          createOrderPaidNotification(updated.id).catch((err) =>
-            console.error('[notif] createOrderPaidNotification failed for order', updated.id, err),
-          );
-        }
-      }
-    } finally {
-      client.release();
-    }
+    await applyPaymentToOrder(
+      {
+        id: payment.id,
+        status: payment.status,
+        payment_method_id: payment.payment_method_id,
+        external_reference: externalRef,
+      },
+      dataId,
+    );
 
     res.status(200).json({ received: true });
   } catch (err) {
@@ -566,6 +597,34 @@ checkoutRouter.get('/orders/:publicId', async (req, res, next) => {
         payment_method: order.payment_method,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/checkout/orders/:publicId/sync ─────────────
+// Respaldo del webhook: la pantalla de retorno lo llama para confirmar el pago
+// consultando MP directamente (por si el webhook no llegó). Idempotente.
+checkoutRouter.post('/orders/:publicId/sync', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const order = await findOrderByPublicId(publicId);
+    if (!order) return res.status(404).json({ error: 'Not found' });
+
+    // Ya confirmada con payment_id → no hace falta consultar MP.
+    if (order.status === 'paid' && order.mp_payment_id) {
+      return res.json({ data: { status: 'paid', synced: false } });
+    }
+    // El efectivo no pasa por MP.
+    if (order.payment_method !== 'mercadopago') {
+      return res.json({ data: { status: order.status, synced: false } });
+    }
+
+    await syncOrderWithMp(publicId);
+    const fresh = await findOrderByPublicId(publicId);
+    res.json({ data: { status: fresh?.status ?? order.status, synced: true } });
   } catch (err) {
     next(err);
   }

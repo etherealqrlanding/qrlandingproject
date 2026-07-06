@@ -20,12 +20,22 @@ export default function CheckoutReturn({ variant }: Props) {
   useEffect(() => {
     if (!orderId) { setLoading(false); return; }
     let cancelled = false;
-    api.checkout.getOrder(orderId)
-      .then((o) => { if (!cancelled) setOrder(o); })
-      .catch(() => { /* mostramos el mensaje genérico igual */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    const load = async () => {
+      // En los retornos de Mercado Pago confirmamos el pago consultando MP
+      // directamente (respaldo del webhook): si el cobro se aprobó, la orden
+      // queda 'paid' y se dispara el email, aunque el webhook no haya llegado.
+      if (variant === 'success' || variant === 'pending') {
+        try { await api.checkout.syncOrder(orderId); } catch { /* seguimos igual */ }
+      }
+      try {
+        const o = await api.checkout.getOrder(orderId);
+        if (!cancelled) setOrder(o);
+      } catch { /* mostramos el mensaje genérico igual */ }
+      if (!cancelled) setLoading(false);
+    };
+    load();
     return () => { cancelled = true; };
-  }, [orderId]);
+  }, [orderId, variant]);
 
   const config = VARIANTS[variant];
 

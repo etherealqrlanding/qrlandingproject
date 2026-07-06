@@ -67,6 +67,7 @@ export default function OrderDetail() {
   const [refundMode, setRefundMode] = useState<'total' | 'partial'>('total');
   const [refundAmount, setRefundAmount] = useState('');
   const [liquidating, setLiquidating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const load = async () => {
     if (!publicId) return;
@@ -93,6 +94,20 @@ export default function OrderDetail() {
       await load();
     } catch (err) {
       alert((err as AdminApiError).message);
+    }
+  };
+
+  const handleSyncMp = async () => {
+    if (!publicId) return;
+    try {
+      setSyncing(true);
+      const r = await adminApi.orders.syncMp(publicId);
+      await load();
+      alert(`✓ Sincronizado con Mercado Pago.\nEstado de la orden: ${r.status}.`);
+    } catch (err) {
+      alert(`No se pudo sincronizar: ${(err as AdminApiError).message}`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -365,6 +380,22 @@ export default function OrderDetail() {
               {order.ref_code && (
                 <p className="mt-1 text-xs text-cream/40">Ref: <span className="font-mono">{order.ref_code}</span></p>
               )}
+            </div>
+          )}
+
+          {order.payment_method === 'mercadopago' && (order.status === 'pending' || (order.status === 'paid' && !order.mp_payment_id)) && (
+            <div className="rounded-lg border border-gold/25 bg-gold/5 p-5">
+              <p className="text-xs uppercase tracking-widest text-gold-soft">Sincronizar con Mercado Pago</p>
+              <p className="mt-2 text-sm text-cream/70">
+                {order.status === 'pending'
+                  ? 'Consultá el estado real del pago en MP (por si el webhook no llegó). Si el cobro se aprobó, la orden pasa a Pagada y se envía el email al cliente.'
+                  : 'Esta orden figura pagada pero sin ID de pago de MP. Sincronizá para recuperar el pago y poder reintegrar.'}
+              </p>
+              <button type="button" onClick={handleSyncMp} disabled={syncing}
+                className="btn-primary w-full text-sm mt-4 disabled:opacity-50"
+              >
+                {syncing ? 'Sincronizando...' : '↻ Sincronizar con Mercado Pago'}
+              </button>
             </div>
           )}
 

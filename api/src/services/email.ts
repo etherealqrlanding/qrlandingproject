@@ -81,6 +81,20 @@ interface OrderEmailData {
   adults: number;
   children: number;
   mp_payment_id: string | null;
+  // Campos extendidos (opcionales) para el detalle completo de la reserva.
+  customer_phone?: string | null;
+  customer_nationality?: string | null;
+  unit_price_adult_usd?: number | null;
+  unit_price_child_usd?: number | null;
+  transfer_requested?: boolean | null;
+  transfer_hotel?: string | null;
+  pickup_window?: string | null;
+  dinner_time?: string | null;
+  show_time?: string | null;
+  includes?: string[] | null;
+  address?: string | null;
+  seller_name?: string | null;
+  seller_email?: string | null;
 }
 
 const baseStyles = {
@@ -93,23 +107,75 @@ const baseStyles = {
   footer: 'color:rgba(245,239,230,0.4);font-size:12px;text-align:center;margin-top:40px;',
 };
 
+// Número de soporte por WhatsApp (formato internacional AR: 54 9 11 3236-8312).
+const SUPPORT_WHATSAPP = '5491132368312';
+
+// Bloque de soporte con botón de WhatsApp — el pago es una operación sensible,
+// así el cliente/vendedor tiene contacto directo ante cualquier inconveniente.
+function supportBlock(): string {
+  return `<div style="text-align:center;margin:28px 0 4px">
+    <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0 0 10px">¿Algún inconveniente con tu pago o tu reserva? Estamos para ayudarte al instante.</p>
+    <a href="https://wa.me/${SUPPORT_WHATSAPP}" style="display:inline-block;background:#25D366;color:#0d0a0a;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px">Escribinos por WhatsApp</a>
+  </div>`;
+}
+
+// Fila etiqueta/valor reutilizable.
+function emailRow(label: string, value: string, accent = false): string {
+  return `<div style="${baseStyles.row}"><span>${label}</span><strong${accent ? ' style="color:#c8a85a"' : ''}>${value}</strong></div>`;
+}
+
+// Bloque de detalle COMPLETO de la reserva, reutilizado en todos los emails al cliente
+// y al vendedor. Renderiza solo lo que existe (campos opcionales). La idea es que el
+// cliente tenga TODA la info y no tenga que consultar nada.
+function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; showContact?: boolean }): string {
+  const rows: string[] = [];
+  rows.push(emailRow('Casa de tango', escapeHtml(d.product_name)));
+  rows.push(emailRow('Experiencia', escapeHtml(d.option_name)));
+  if (d.address) rows.push(emailRow('Dirección', escapeHtml(d.address)));
+  rows.push(emailRow('Fecha', d.service_date));
+
+  let pax = `${d.adults} adulto(s)`;
+  if (d.unit_price_adult_usd != null) pax += ` · USD ${d.unit_price_adult_usd} c/u`;
+  rows.push(emailRow('Adultos', pax));
+  if (d.children > 0) {
+    let ch = `${d.children} menor(es)`;
+    if (d.unit_price_child_usd != null) ch += ` · USD ${d.unit_price_child_usd} c/u`;
+    rows.push(emailRow('Menores', ch));
+  }
+
+  if (d.pickup_window) rows.push(emailRow('Horario de traslado', escapeHtml(d.pickup_window)));
+  if (d.dinner_time) rows.push(emailRow('Cena', escapeHtml(d.dinner_time)));
+  if (d.show_time) rows.push(emailRow('Show', escapeHtml(d.show_time)));
+  if (d.transfer_requested) {
+    rows.push(emailRow('Traslado', `Incluido${d.transfer_hotel ? ` — retiro en ${escapeHtml(d.transfer_hotel)}` : ''}`));
+  }
+
+  if (opts?.showAmounts !== false) {
+    rows.push(emailRow('Total', `USD ${d.total_usd} · ARS ${d.total_ars.toLocaleString('es-AR')}`, true));
+  }
+  rows.push(`<div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${d.public_id}</span></div>`);
+
+  const includesBlock = (d.includes && d.includes.length > 0)
+    ? `<div style="${baseStyles.card}"><p style="${baseStyles.eyebrow}">Qué incluye tu experiencia</p><ul style="margin:0;padding-left:18px;line-height:1.8;color:#f5efe6">${d.includes.map((i) => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>`
+    : '';
+
+  const contactBlock = (opts?.showContact && d.seller_name)
+    ? `<p style="font-size:13px;color:rgba(245,239,230,0.6)">Tu reserva fue gestionada por <strong style="color:#e0c787">${escapeHtml(d.seller_name)}</strong>. Ante cualquier duda podés contactarnos y mencionar tu número de referencia.</p>`
+    : '';
+
+  return `<div style="${baseStyles.card}"><p style="${baseStyles.eyebrow}">Detalles de tu reserva</p>${rows.join('')}</div>${includesBlock}${contactBlock}`;
+}
+
 function htmlForCustomer(data: OrderEmailData): string {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
-  <p>Hola ${escapeHtml(data.customer_name)}, recibimos tu pago para una experiencia inolvidable en Buenos Aires.</p>
-  <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Detalles de tu reserva</p>
-    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(data.option_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(data.product_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Fecha</span><strong>${data.service_date}</strong></div>
-    <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${data.adults} adulto(s)${data.children > 0 ? ` · ${data.children} menor(es)` : ''}</strong></div>
-    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">USD ${data.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
-  </div>
-  <p>Te vamos a contactar en las próximas horas con los detalles del traslado y horarios definitivos. Si tenés cualquier consulta, respondé este email o escribinos por WhatsApp.</p>
+  <p>Hola ${escapeHtml(data.customer_name)}, recibimos tu pago para una experiencia inolvidable en Buenos Aires. Acá tenés todos los detalles de tu reserva:</p>
+  ${reservationCard(data, { showContact: true })}
+  <p>Guardá este email como comprobante. Si tenés cualquier consulta, respondé este mismo correo o escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
 }
@@ -163,6 +229,7 @@ function htmlForSellerRefund(data: OrderEmailData & {
     <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
   </div>
   <p>Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
 }
@@ -174,16 +241,10 @@ function htmlForRefund(data: OrderEmailData & { reason?: string | null }): strin
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
   <p>Hola ${escapeHtml(data.customer_name)}, lamentamos comunicarte que no pudimos confirmar tu reserva${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
-  <p><strong style="color:#c8a85a">Te reintegramos el monto completo: USD ${data.total_usd}</strong>. El reintegro tarda entre 2 y 5 días hábiles en aparecer en el medio de pago original.</p>
-  <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Reserva cancelada</p>
-    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(data.option_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(data.product_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Fecha solicitada</span><strong>${data.service_date}</strong></div>
-    <div style="${baseStyles.row}"><span>Monto a reintegrar</span><strong style="color:#c8a85a">USD ${data.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
-  </div>
+  <p><strong style="color:#c8a85a">Te reintegramos ARS ${data.total_ars.toLocaleString('es-AR')}</strong> al mismo medio de pago con el que abonaste. El reintegro tarda entre 2 y 5 días hábiles en aparecer.</p>
+  ${reservationCard(data, { showAmounts: false })}
   <p>Si querés reservar otra fecha u otra casa, escribinos por WhatsApp o respondé este email y te ayudamos a coordinar.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
 }
@@ -196,18 +257,84 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   <h1 style="${baseStyles.title}">¡Tenés una nueva venta!</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, un cliente que escaneó tu QR acaba de comprar una experiencia. Te corresponde una comisión.</p>
   <div style="${baseStyles.card}">
-    <div style="${baseStyles.row}"><span>Servicio vendido</span><strong>${escapeHtml(data.option_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${data.service_date}</strong></div>
+    <p style="${baseStyles.eyebrow}">Tu comisión</p>
     <div style="${baseStyles.row}"><span>Valor de la venta</span><strong>USD ${data.total_usd}</strong></div>
     <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">USD ${data.commission_usd}</strong></div>
   </div>
+  <div style="${baseStyles.card}">
+    <p style="${baseStyles.eyebrow}">Datos de la reserva</p>
+    ${emailRow('Cliente', escapeHtml(data.customer_name))}
+    ${data.customer_phone ? emailRow('Teléfono', escapeHtml(data.customer_phone)) : ''}
+    ${emailRow('Casa de tango', escapeHtml(data.product_name))}
+    ${emailRow('Experiencia', escapeHtml(data.option_name))}
+    ${emailRow('Fecha', data.service_date)}
+    ${emailRow('Pasajeros', `${data.adults} adulto(s)${data.children > 0 ? ` · ${data.children} menor(es)` : ''}`)}
+    ${data.transfer_requested ? emailRow('Traslado', `Incluido${data.transfer_hotel ? ` — retiro en ${escapeHtml(data.transfer_hotel)}` : ''}`) : ''}
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
+  </div>
   <p>Vamos a procesar el pago de tu comisión junto con las del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+// SELECT compartido con TODOS los datos de la orden para los emails detallados.
+const ORDER_EMAIL_SELECT = `
+       o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
+       o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
+       o.mp_payment_id,
+       oi.product_name_snapshot AS product_name,
+       oi.option_name_snapshot AS option_name,
+       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+       oi.adults, oi.children,
+       oi.unit_price_adult_usd::float AS unit_price_adult_usd,
+       oi.unit_price_child_usd::float AS unit_price_child_usd,
+       oi.transfer_requested, oi.transfer_hotel,
+       opt.pickup_window_es, opt.dinner_time_es, opt.show_time_es, opt.includes_es,
+       p.address_es,
+       s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
+       a.commission_amount_usd::float AS commission_usd,
+       a.commission_percent_snapshot::float AS commission_percent
+     FROM orders o
+     LEFT JOIN order_items oi ON oi.order_id = o.id
+     LEFT JOIN product_options opt ON opt.id = oi.option_id
+     LEFT JOIN products p ON p.id = oi.product_id
+     LEFT JOIN order_attributions a ON a.order_id = o.id
+     LEFT JOIN sellers s ON s.id = a.seller_id
+    WHERE o.id = $1 LIMIT 1`;
+
+// Mapea una fila (con los alias de ORDER_EMAIL_SELECT) al OrderEmailData completo.
+function toOrderData(data: Record<string, unknown>): OrderEmailData {
+  return {
+    public_id: data.public_id as string,
+    customer_name: data.customer_name as string,
+    customer_email: data.customer_email as string,
+    total_usd: data.total_usd as number,
+    total_ars: data.total_ars as number,
+    product_name: (data.product_name as string) ?? 'Experiencia',
+    option_name: (data.option_name as string) ?? 'Tier',
+    service_date: (data.service_date as string) ?? '',
+    adults: (data.adults as number) ?? 1,
+    children: (data.children as number) ?? 0,
+    mp_payment_id: (data.mp_payment_id as string) ?? null,
+    customer_phone: (data.customer_phone as string) ?? null,
+    customer_nationality: (data.customer_nationality as string) ?? null,
+    unit_price_adult_usd: (data.unit_price_adult_usd as number) ?? null,
+    unit_price_child_usd: (data.unit_price_child_usd as number) ?? null,
+    transfer_requested: (data.transfer_requested as boolean) ?? null,
+    transfer_hotel: (data.transfer_hotel as string) ?? null,
+    pickup_window: (data.pickup_window_es as string) ?? null,
+    dinner_time: (data.dinner_time_es as string) ?? null,
+    show_time: (data.show_time_es as string) ?? null,
+    includes: (data.includes_es as string[]) ?? null,
+    address: (data.address_es as string) ?? null,
+    seller_name: (data.seller_name as string) ?? null,
+    seller_email: (data.seller_email as string) ?? null,
+  };
 }
 
 // ─── Función principal: notifica los 3 destinatarios cuando una orden se paga ──
@@ -218,38 +345,11 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
   }
 
   // Cargamos toda la data necesaria en una query
-  const { rows } = await pool.query(
-    `SELECT
-       o.public_id, o.customer_name, o.customer_email,
-       o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
-       o.mp_payment_id,
-       oi.product_name_snapshot AS product_name,
-       oi.option_name_snapshot AS option_name,
-       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       oi.adults, oi.children,
-       s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
-       a.commission_amount_usd::float AS commission_usd,
-       a.commission_percent_snapshot::float AS commission_percent
-       FROM orders o
-       LEFT JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN order_attributions a ON a.order_id = o.id
-       LEFT JOIN sellers s ON s.id = a.seller_id
-      WHERE o.id = $1
-      LIMIT 1`,
-    [orderId],
-  );
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
   const data = rows[0];
   if (!data) return;
 
-  const orderData: OrderEmailData = {
-    public_id: data.public_id, customer_name: data.customer_name, customer_email: data.customer_email,
-    total_usd: data.total_usd, total_ars: data.total_ars,
-    product_name: data.product_name ?? 'Experiencia',
-    option_name: data.option_name ?? 'Tier',
-    service_date: data.service_date ?? '',
-    adults: data.adults ?? 1, children: data.children ?? 0,
-    mp_payment_id: data.mp_payment_id ?? null,
-  };
+  const orderData = toOrderData(data);
 
   // 1) Cliente
   await send(
@@ -291,37 +391,11 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
 export async function sendCashOrderNotifications(orderId: number): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
-  const { rows } = await pool.query(
-    `SELECT
-       o.public_id, o.customer_name, o.customer_email,
-       o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
-       o.mp_payment_id,
-       oi.product_name_snapshot AS product_name,
-       oi.option_name_snapshot AS option_name,
-       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       oi.adults, oi.children,
-       s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
-       a.commission_amount_usd::float AS commission_usd,
-       a.commission_percent_snapshot::float AS commission_percent
-     FROM orders o
-     LEFT JOIN order_items oi ON oi.order_id = o.id
-     LEFT JOIN order_attributions a ON a.order_id = o.id
-     LEFT JOIN sellers s ON s.id = a.seller_id
-    WHERE o.id = $1 LIMIT 1`,
-    [orderId],
-  );
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
   const data = rows[0];
   if (!data) return;
 
-  const baseData: OrderEmailData = {
-    public_id: data.public_id, customer_name: data.customer_name, customer_email: data.customer_email,
-    total_usd: data.total_usd, total_ars: data.total_ars,
-    product_name: data.product_name ?? 'Experiencia',
-    option_name: data.option_name ?? 'Tier',
-    service_date: data.service_date ?? '',
-    adults: data.adults ?? 1, children: data.children ?? 0,
-    mp_payment_id: null,
-  };
+  const baseData: OrderEmailData = toOrderData(data);
 
   // El cliente NO recibe email aquí — se envía recién cuando el vendedor confirma el cobro
   // (ver sendCashCollectedNotifications)
@@ -373,6 +447,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent ?? 0}%)</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
   </div>
   <p>Una vez que recibas el dinero del pasajero, confirmá el cobro desde tu portal para que se envíe el email de confirmación.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
     await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (USD ${baseData.total_usd})`, sellerHtml);
@@ -383,40 +458,11 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
 export async function sendCashCollectedNotifications(orderId: number): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
-  const { rows } = await pool.query(
-    `SELECT
-       o.public_id, o.customer_name, o.customer_email,
-       o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
-       oi.product_name_snapshot AS product_name,
-       oi.option_name_snapshot AS option_name,
-       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       oi.adults, oi.children,
-       s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
-       a.commission_amount_usd::float AS commission_usd,
-       a.commission_percent_snapshot::float AS commission_percent
-     FROM orders o
-     LEFT JOIN order_items oi ON oi.order_id = o.id
-     LEFT JOIN order_attributions a ON a.order_id = o.id
-     LEFT JOIN sellers s ON s.id = a.seller_id
-    WHERE o.id = $1 LIMIT 1`,
-    [orderId],
-  );
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
   const data = rows[0];
   if (!data) return;
 
-  const baseData: OrderEmailData = {
-    public_id: data.public_id, customer_name: data.customer_name, customer_email: data.customer_email,
-    total_usd: data.total_usd, total_ars: data.total_ars,
-    product_name: data.product_name ?? 'Experiencia',
-    option_name: data.option_name ?? 'Tier',
-    service_date: data.service_date ?? '',
-    adults: data.adults ?? 1, children: data.children ?? 0,
-    mp_payment_id: null,
-  };
-
-  const adultLabel = `${baseData.adults} adulto${baseData.adults === 1 ? '' : 's'}`;
-  const childLabel = baseData.children === 0 ? '' : ` · ${baseData.children} menor${baseData.children === 1 ? '' : 'es'}`;
-  const paxSummary = `${adultLabel}${childLabel}`;
+  const baseData: OrderEmailData = toOrderData(data);
 
   // 1) Cliente — primera y única notificación que recibe
   const customerHtml = `
@@ -424,18 +470,10 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
-  <p>Hola ${escapeHtml(baseData.customer_name)}, tu reserva está confirmada. ¡Nos vemos pronto en Buenos Aires!</p>
-  <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Detalles de tu reserva</p>
-    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(baseData.option_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Fecha</span><strong>${baseData.service_date}</strong></div>
-    <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${paxSummary}</strong></div>
-    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">USD ${baseData.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Forma de pago</span><strong>Efectivo</strong></div>
-    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${baseData.public_id}</span></div>
-  </div>
-  <p>Si tenés alguna consulta, respondé este email o escribinos por WhatsApp.</p>
+  <p>Hola ${escapeHtml(baseData.customer_name)}, tu reserva está confirmada (pago en efectivo). ¡Nos vemos pronto en Buenos Aires! Acá tenés todos los detalles:</p>
+  ${reservationCard(baseData, { showContact: true })}
+  <p>Guardá este email como comprobante. Si tenés alguna consulta, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `¡Reserva confirmada! — ${baseData.option_name}`, customerHtml);
@@ -486,6 +524,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <div style="${baseStyles.row}"><span>Total cobrado</span><strong style="color:#c8a85a;font-size:18px">USD ${baseData.total_usd}</strong></div>
     <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent ?? 0}%)</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
   </div>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
     await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (USD ${baseData.total_usd})`, sellerHtml);
@@ -515,6 +554,7 @@ export async function sendSellerPortalInvite(
     <span style="font-family:monospace;font-size:11px;word-break:break-all;">${inviteLink}</span>
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo pediste vos, podés ignorar este email.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
   return send(sellerEmail, 'Acceso a tu portal de ventas — Tangos y Milongas Tickets', html);
@@ -541,6 +581,7 @@ export async function sendSellerPasswordReset(
     <span style="font-family:monospace;font-size:11px;word-break:break-all;">${resetLink}</span>
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo pediste vos, podés ignorar este email.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
   return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html);
@@ -561,24 +602,7 @@ export async function sendOrderRefundedNotifications(
     console.warn('[email] Resend not configured; skipping refund notif for order', orderId);
     return;
   }
-  const { rows } = await pool.query(
-    `SELECT
-       o.public_id, o.customer_name, o.customer_email,
-       o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
-       o.mp_payment_id,
-       oi.product_name_snapshot AS product_name,
-       oi.option_name_snapshot AS option_name,
-       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       oi.adults, oi.children,
-       s.name AS seller_name, s.contact_email AS seller_email,
-       a.commission_amount_usd::float AS commission_usd
-       FROM orders o
-       LEFT JOIN order_items oi ON oi.order_id = o.id
-       LEFT JOIN order_attributions a ON a.order_id = o.id
-       LEFT JOIN sellers s ON s.id = a.seller_id
-      WHERE o.id = $1 LIMIT 1`,
-    [orderId],
-  );
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
   const data = rows[0];
   if (!data) return;
 
@@ -586,14 +610,17 @@ export async function sendOrderRefundedNotifications(
   const refundedUsd = refundedAmountUsd != null && refundedAmountUsd > 0 ? refundedAmountUsd : totalUsd;
   const isPartial = refundedUsd < totalUsd;
 
+  // El reintegro se hace en PESOS (moneda del cobro en MP). En un refund total es
+  // exactamente el total_ars que pagó el cliente; en uno parcial, el proporcional.
+  const refundedArs = isPartial
+    ? Math.round((refundedUsd * data.total_ars) / data.total_usd)
+    : data.total_ars;
+  const arsStr = refundedArs.toLocaleString('es-AR');
+
   const orderData: OrderEmailData & { reason?: string | null } = {
-    public_id: data.public_id, customer_name: data.customer_name, customer_email: data.customer_email,
-    total_usd: refundedUsd, total_ars: data.total_ars,
-    product_name: data.product_name ?? 'Experiencia',
-    option_name: data.option_name ?? 'Tier',
-    service_date: data.service_date ?? '',
-    adults: data.adults ?? 1, children: data.children ?? 0,
-    mp_payment_id: data.mp_payment_id ?? null,
+    ...toOrderData(data),
+    total_usd: refundedUsd,
+    total_ars: refundedArs,
     reason,
   };
 
@@ -601,8 +628,8 @@ export async function sendOrderRefundedNotifications(
   await send(
     data.customer_email,
     isPartial
-      ? `Reintegro parcial de tu reserva — USD ${refundedUsd}`
-      : `Tu reserva fue cancelada — reintegro USD ${refundedUsd}`,
+      ? `Reintegro parcial de tu reserva — ARS ${arsStr}`
+      : `Tu reserva fue cancelada — reintegro ARS ${arsStr}`,
     htmlForRefund(orderData),
   );
 
@@ -611,8 +638,8 @@ export async function sendOrderRefundedNotifications(
     await send(
       config.ADMIN_NOTIFICATION_EMAIL,
       isPartial
-        ? `[Reintegro parcial] ${orderData.customer_name} — USD ${refundedUsd} de ${totalUsd}`
-        : `[Reintegro procesado] ${orderData.customer_name} — USD ${refundedUsd}`,
+        ? `[Reintegro parcial] ${orderData.customer_name} — ARS ${arsStr} (de ARS ${data.total_ars.toLocaleString('es-AR')})`
+        : `[Reintegro procesado] ${orderData.customer_name} — ARS ${arsStr}`,
       htmlForRefund(orderData),
     );
   }
@@ -661,6 +688,7 @@ export async function sendSellerCommissionPaid(input: {
     </a>
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Tenés alguna duda sobre el monto o las ventas incluidas? Escribinos por WhatsApp y te respondemos a la brevedad.</p>
+  ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
   await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html);

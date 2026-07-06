@@ -130,6 +130,11 @@ export const api = {
       }),
     getOrder: (publicId: string) =>
       request<OrderStatus>(`/api/checkout/orders/${encodeURIComponent(publicId)}`),
+    syncOrder: (publicId: string) =>
+      request<{ status: OrderStatus['status']; synced: boolean }>(
+        `/api/checkout/orders/${encodeURIComponent(publicId)}/sync`,
+        { method: 'POST' },
+      ),
     sellerInfo: (code: string) =>
       request<SellerPublicInfo>(`/api/checkout/seller-info?code=${encodeURIComponent(code)}`, { cache: 'no-store' }),
   },

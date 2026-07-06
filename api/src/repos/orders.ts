@@ -185,12 +185,13 @@ export async function findOrderByPublicId(publicId: string): Promise<{
   customer_email: string;
   customer_name: string;
   mp_preference_id: string | null;
+  mp_payment_id: string | null;
   payment_method: string;
 } | null> {
   const { rows } = await pool.query(
     `SELECT id, status::text AS status, total_usd::float AS total_usd,
             total_ars::float AS total_ars, customer_email, customer_name,
-            mp_preference_id, payment_method
+            mp_preference_id, mp_payment_id, payment_method
        FROM orders WHERE public_id = $1 LIMIT 1`,
     [publicId],
   );

@@ -92,6 +92,20 @@ export async function fetchPayment(paymentId: string) {
   return paymentApi.get({ id: paymentId });
 }
 
+// Busca el pago asociado a una orden por su external_reference (= public_id de la orden).
+// Sirve de respaldo cuando el webhook no llegó: consultamos MP directamente.
+// Devuelve el pago aprobado si existe; sino el más reciente; null si no hay ninguno.
+export async function searchPaymentByExternalRef(externalReference: string): Promise<{
+  id?: number | string; status?: string; payment_method_id?: string; external_reference?: string;
+} | null> {
+  const res = await paymentApi.search({ options: { external_reference: externalReference } });
+  const results = (res.results ?? []) as Array<{
+    id?: number | string; status?: string; payment_method_id?: string; external_reference?: string;
+  }>;
+  if (results.length === 0) return null;
+  return results.find((p) => p.status === 'approved') ?? results[results.length - 1];
+}
+
 /**
  * Refund completo o parcial de un pago.
  * Si amount es undefined, refund total. Si es número, refund parcial por ese monto en ARS.

@@ -58,7 +58,7 @@ export default function Home() {
           <div className="mt-10 flex flex-wrap gap-3">
             <Link to="/shows" className="btn-primary">{t('hero.cta_primary')}</Link>
             <a
-              href="https://wa.me/5491100000000"
+              href="https://wa.me/5491132368312"
               target="_blank"
               rel="noreferrer"
               className="btn-ghost"

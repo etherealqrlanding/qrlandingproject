@@ -115,7 +115,7 @@ export default function SellerNotifications() {
             Te respondemos a la brevedad.
           </p>
           <a
-            href="https://wa.me/5491100000000"
+            href="https://wa.me/5491132368312"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-2 mt-3 rounded-lg border border-gold/20 bg-gold/5 px-4 py-2 text-sm text-gold-soft hover:bg-gold/10 transition"

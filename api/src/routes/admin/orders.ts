@@ -4,6 +4,7 @@ import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications } from '../../services/email.js';
 import { logPaymentEvent } from '../../repos/orders.js';
+import { syncOrderWithMp } from '../checkout.js';
 
 export const adminOrdersRouter = Router();
 
@@ -219,6 +220,21 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
         new_status: newStatus,
       },
     });
+  } catch (err) { next(err); }
+});
+
+// ─── Sincronizar con Mercado Pago (respaldo del webhook) ──────
+// Consulta MP por la referencia de la orden y actualiza estado + payment_id.
+// Útil si el webhook no llegó: deja la orden en su estado real (y reintegrable).
+adminOrdersRouter.post('/:publicId/sync-mp', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const result = await syncOrderWithMp(publicId);
+    if (!result.found) {
+      return res.status(404).json({ error: 'No se encontró ningún pago en Mercado Pago para esta orden. Si el cobro no se completó, la orden no debería figurar como pagada.' });
+    }
+    res.json({ data: { ok: true, status: result.status } });
   } catch (err) { next(err); }
 });
 

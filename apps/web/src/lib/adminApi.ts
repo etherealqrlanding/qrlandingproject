@@ -431,6 +431,11 @@ export const adminApi = {
         `/api/admin/orders/${encodeURIComponent(publicId)}/refund`,
         { method: 'POST', body: JSON.stringify(options ?? {}) },
       ),
+    syncMp: (publicId: string) =>
+      request<{ ok: true; status: string }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/sync-mp`,
+        { method: 'POST' },
+      ),
   },
   settings: {
     list: () => request<AdminSetting[]>('/api/admin/settings'),
