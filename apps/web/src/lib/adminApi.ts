@@ -436,6 +436,28 @@ export const adminApi = {
         `/api/admin/orders/${encodeURIComponent(publicId)}/sync-mp`,
         { method: 'POST' },
       ),
+    // Modificar reserva — reducir (reintegro MP o devolución en efectivo) / agregar
+    // (cobro en efectivo o link incremental de MP).
+    modifyMp: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean }) =>
+      request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/modify`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean }) =>
+      request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/reduce-cash`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    increaseCash: (publicId: string, body: { adults: number; children: number; reason?: string; notify_customer?: boolean }) =>
+      request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/increase-cash`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    addMp: (publicId: string, body: { adults: number; children: number }) =>
+      request<{ addon_public_id: string; order_public_id: string; init_point: string; sandbox_init_point: string; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/add-mp`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
   },
   settings: {
     list: () => request<AdminSetting[]>('/api/admin/settings'),

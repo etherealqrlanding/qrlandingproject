@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError } from '../../lib/adminApi';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 
 interface OrderFull {
   id: number;
@@ -68,6 +69,7 @@ export default function OrderDetail() {
   const [refundAmount, setRefundAmount] = useState('');
   const [liquidating, setLiquidating] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [modifyOpen, setModifyOpen] = useState(false);
 
   const load = async () => {
     if (!publicId) return;
@@ -295,6 +297,22 @@ export default function OrderDetail() {
             </div>
           </div>
 
+          {/* Modificar reserva: reducir (reintegro/devolución) o agregar (cobro/link) */}
+          {order.status === 'paid' && order.items.length > 0 && (
+            <div className="rounded-lg border border-gold/20 bg-ink-soft/70 p-5">
+              <p className="text-xs uppercase tracking-widest text-gold-soft">Modificar reserva</p>
+              <p className="mt-2 text-sm text-cream/60">
+                Sumá o bajá pasajeros / traslado. {order.payment_method === 'mercadopago'
+                  ? 'Reducir reintegra por MP; agregar genera un link para el cliente.'
+                  : 'En efectivo: el vendedor devuelve o cobra la diferencia en el momento.'}
+              </p>
+              <button type="button" onClick={() => setModifyOpen(true)}
+                className="btn-ghost w-full text-sm mt-4">
+                ✎ Modificar pasajeros / traslado
+              </button>
+            </div>
+          )}
+
           {order.seller_name ? (
             <div className="rounded-lg border border-gold/20 bg-gold/5 p-5">
               <p className="text-xs uppercase tracking-widest text-gold-soft">Atribución</p>
@@ -460,6 +478,23 @@ export default function OrderDetail() {
         onConfirm={runDelete}
         onCancel={() => setDeleteOpen(false)}
       />
+
+      {/* Modal de modificación de reserva */}
+      {modifyOpen && order.items[0] && (
+        <ModifyReservationModal
+          order={{
+            public_id: order.public_id,
+            payment_method: order.payment_method,
+            customer_name: order.customer_name,
+            customer_phone: order.customer_phone,
+            total_usd: order.total_usd,
+            total_ars: order.total_ars,
+          }}
+          item={order.items[0]}
+          onClose={() => setModifyOpen(false)}
+          onDone={() => { setModifyOpen(false); load(); }}
+        />
+      )}
 
       {/* Modal de confirmación de refund */}
       {refundOpen && (
