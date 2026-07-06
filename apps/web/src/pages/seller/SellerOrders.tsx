@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerOrder } from '../../lib/sellerApi';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
+import OrderHistory from '../../components/OrderHistory';
+import type { OrderEvent } from '../../lib/orderEvents';
 
 // Estado mostrado al vendedor según método de pago + sub-estado real de la orden:
 //  - Pendiente: reservó, todavía no se cobró.
@@ -91,11 +93,22 @@ export default function SellerOrders() {
   const [confirmPublicId, setConfirmPublicId] = useState<string | null>(null);
   const [collectError, setCollectError] = useState<string | null>(null);
   const [modifyOrder, setModifyOrder] = useState<SellerOrder | null>(null);
+  const [eventsByOrder, setEventsByOrder] = useState<Record<string, OrderEvent[]>>({});
 
   const reload = async () => {
     const data = await sellerApi.orders();
     setOrders(data);
   };
+
+  // Al expandir una orden, traemos su histórico de pasos (una sola vez por orden).
+  useEffect(() => {
+    if (expanded == null) return;
+    const o = orders.find((x) => x.order_id === expanded);
+    if (!o || eventsByOrder[o.public_id]) return;
+    sellerApi.orderEvents(o.public_id)
+      .then((ev) => setEventsByOrder((prev) => ({ ...prev, [o.public_id]: ev })))
+      .catch(() => {});
+  }, [expanded, orders, eventsByOrder]);
   const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
 
   // Auto-expand y scroll a la orden destacada una vez que carguen los datos
@@ -386,6 +399,12 @@ export default function SellerOrders() {
                           </button>
                         </div>
                       )}
+                      {eventsByOrder[o.public_id] && (
+                        <div className="mt-3 pt-3 border-t border-gold/10">
+                          <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Histórico</p>
+                          <OrderHistory events={eventsByOrder[o.public_id]} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -545,6 +564,12 @@ export default function SellerOrders() {
                                     ? 'Sumás/bajás pax y cobrás o devolvés en el momento'
                                     : 'Sumar pax genera un link de pago para el cliente'}
                                 </p>
+                              </div>
+                            )}
+                            {eventsByOrder[o.public_id] && (
+                              <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
+                                <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Histórico de la orden</p>
+                                <OrderHistory events={eventsByOrder[o.public_id]} />
                               </div>
                             )}
                           </td>

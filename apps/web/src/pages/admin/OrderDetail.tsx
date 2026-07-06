@@ -4,6 +4,7 @@ import { adminApi, AdminApiError } from '../../lib/adminApi';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
+import OrderHistory from '../../components/OrderHistory';
 
 interface OrderFull {
   id: number;
@@ -274,15 +275,8 @@ export default function OrderDetail() {
           </Section>
 
           {order.events.length > 0 && (
-            <Section title="Eventos">
-              <div className="space-y-2">
-                {order.events.map((ev) => (
-                  <div key={ev.id} className="text-xs border-l-2 border-gold/20 pl-3 py-1">
-                    <p className="text-cream font-mono">{ev.event_type}</p>
-                    <p className="text-cream/40">{new Date(ev.created_at).toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
+            <Section title="Histórico de la orden">
+              <OrderHistory events={order.events} />
             </Section>
           )}
         </div>

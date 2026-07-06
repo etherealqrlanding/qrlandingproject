@@ -276,6 +276,10 @@ export const sellerApi = {
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/add-mp`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  orderEvents: (publicId: string) =>
+    request<Array<{ id: number; event_type: string; created_at: string }>>(
+      `/api/seller/me/orders/${encodeURIComponent(publicId)}/events`,
+    ),
   notifications: {
     list: () => request<SellerNotification[]>('/api/seller/me/notifications'),
     markAllRead: () => request<{ updated: number }>('/api/seller/me/notifications/read-all', { method: 'PATCH' }),

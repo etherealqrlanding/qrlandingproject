@@ -697,6 +697,25 @@ sellerRouter.post('/me/orders/:publicId/add-mp', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/seller/me/orders/:publicId/events — histórico de pasos de una orden suya
+sellerRouter.get('/me/orders/:publicId/events', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
+    const { rows } = await pool.query(
+      `SELECT pe.id, pe.event_type, pe.created_at
+         FROM payment_events pe
+         JOIN orders o ON o.id = pe.order_id
+         JOIN order_attributions a ON a.order_id = o.id
+        WHERE o.public_id = $1 AND a.seller_id = $2
+        ORDER BY pe.created_at DESC
+        LIMIT 50`,
+      [publicId, req.seller!.sellerId],
+    );
+    res.json({ data: rows });
+  } catch (err) { next(err); }
+});
+
 // ─── Notificaciones del vendedor ─────────────────────────
 // GET /api/seller/me/notifications/stream — SSE push en tiempo real
 // Auth: token en query param (EventSource no admite headers custom)
