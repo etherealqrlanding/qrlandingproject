@@ -6,7 +6,7 @@ import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderMo
 import { logPaymentEvent, applyOrderReduction, applyOrderIncrease } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../../services/orderIncrease.js';
-import { cashIncreaseCommission } from '../../services/orderCommission.js';
+import { cashIncreaseCommission, recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder } from '../../services/orderAddon.js';
 import { syncOrderWithMp } from '../checkout.js';
 
@@ -344,6 +344,115 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
     if (parsed.data.notify_customer !== false) {
       sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason).catch((e) =>
         console.error('[email] modify notification failed for order', row.order_id, e),
+      );
+    }
+
+    res.json({
+      data: {
+        ok: true,
+        refund_usd: calc.refundUsd,
+        refund_ars: calc.refundArs,
+        new_total_usd: calc.newSubtotalUsd,
+        new_adults: parsed.data.adults,
+        new_children: parsed.data.children,
+        new_transfer: newTransfer,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── Reducir reserva en efectivo (devolución en mano) ─────────────────────────
+// El pasajero se baja pax o quita traslado en una reserva EN EFECTIVO ya cobrada:
+// el vendedor le devuelve el delta en efectivo. Se ajusta la reserva, se libera el
+// cupo y se recalcula el neto que el vendedor nos debe rendir. No pasa por MP.
+adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const parsed = modifySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const { rows } = await pool.query<{
+      order_id: number; status: string; payment_method: string;
+      total_ars: number; exchange_rate_used: number;
+      item_id: number; adults: number; children: number;
+      unit_price_adult_usd: number; unit_price_child_usd: number | null;
+      subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      seller_id: number | null; net_total_usd: number | null;
+    }>(
+      `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
+              o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
+              oi.id AS item_id, oi.adults, oi.children,
+              oi.unit_price_adult_usd::float AS unit_price_adult_usd,
+              oi.unit_price_child_usd::float AS unit_price_child_usd,
+              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested, oi.transfer_hotel,
+              a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         LEFT JOIN order_attributions a ON a.order_id = o.id
+        WHERE o.public_id = $1
+        ORDER BY oi.id
+        LIMIT 1`,
+      [publicId],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (row.payment_method !== 'cash') {
+      return res.status(400).json({ error: 'Esta vía es solo para reservas en efectivo. Para Mercado Pago usá el reintegro.' });
+    }
+    if (row.status !== 'paid') {
+      return res.status(400).json({ error: `Solo se pueden reducir reservas en efectivo ya cobradas. Estado actual: ${row.status}` });
+    }
+
+    const snap: OrderReductionSnapshot = {
+      origAdults: row.adults,
+      origChildren: row.children,
+      unitPriceAdultUsd: row.unit_price_adult_usd,
+      unitPriceChildUsd: row.unit_price_child_usd,
+      subtotalUsd: row.subtotal_usd,
+      transferRequested: row.transfer_requested,
+      totalArs: row.total_ars,
+      exchangeRateUsed: row.exchange_rate_used,
+      commissionPercent: null, // efectivo: la comisión no es por % sino total − neto
+    };
+    const calc = computeOrderReduction(snap, {
+      adults: parsed.data.adults,
+      children: parsed.data.children,
+      transferRequested: parsed.data.transfer_requested,
+    });
+    if (!calc.ok) return res.status(400).json({ error: calc.error });
+
+    // Comisión/neto recalculados para efectivo (solo si hay atribución).
+    const hasAttribution = row.seller_id != null;
+    const cash = hasAttribution
+      ? recomputeCashCommission(row.net_total_usd, row.subtotal_usd, calc.newSubtotalUsd)
+      : { newNetTotalUsd: null, newCommissionUsd: 0 };
+    const newCommissionUsd = hasAttribution ? cash.newCommissionUsd : null;
+    const newCommissionArs = newCommissionUsd != null ? Math.round(newCommissionUsd * row.exchange_rate_used * 100) / 100 : null;
+
+    const newTransfer = parsed.data.transfer_requested;
+    const noteLine = `[${new Date().toISOString()}] Reducción efectivo: ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Devolución en efectivo USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
+    await applyOrderReduction({
+      orderId: row.order_id,
+      itemId: row.item_id,
+      newAdults: parsed.data.adults,
+      newChildren: parsed.data.children,
+      newTransferRequested: newTransfer,
+      newTransferHotel: newTransfer ? row.transfer_hotel : null,
+      newSubtotalUsd: calc.newSubtotalUsd,
+      newTotalArs: calc.newTotalArs,
+      refundUsd: calc.refundUsd,
+      refundArs: calc.refundArs,
+      newCommissionUsd,
+      newCommissionArs,
+      newNetTotalUsd: hasAttribution ? cash.newNetTotalUsd : null,
+      noteLine,
+    });
+
+    if (parsed.data.notify_customer !== false) {
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, true).catch((e) =>
+        console.error('[email] cash reduce notification failed for order', row.order_id, e),
       );
     }
 

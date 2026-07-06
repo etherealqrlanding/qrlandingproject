@@ -6,14 +6,15 @@ import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications } from '../../services/email.js';
+import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications } from '../../services/email.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../../services/orderIncrease.js';
-import { cashIncreaseCommission } from '../../services/orderCommission.js';
+import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
+import { cashIncreaseCommission, recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder } from '../../services/orderAddon.js';
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs } from '../../services/settings.js';
-import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderIncrease } from '../../repos/orders.js';
+import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderIncrease, applyOrderReduction } from '../../repos/orders.js';
 import { listNotifications, markAllRead, getUnreadCount } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
@@ -527,6 +528,105 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
     }
 
     res.json({ data: { ok: true, charge_usd: calc.chargeUsd, charge_ars: calc.chargeArs, new_total_usd: calc.newSubtotalUsd } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/reduce-cash — el vendedor reduce una reserva
+// SUYA en efectivo ya cobrada y le devuelve el delta en mano al pasajero.
+const sellerReduceSchema = z.object({
+  adults: z.number().int().min(1).max(20),
+  children: z.number().int().min(0).max(20),
+  transfer_requested: z.boolean(),
+  notify_customer: z.boolean().optional().default(true),
+});
+
+sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
+
+    const parsed = sellerReduceSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const { rows } = await pool.query<{
+      order_id: number; status: string; payment_method: string;
+      total_ars: number; exchange_rate_used: number;
+      item_id: number; adults: number; children: number;
+      unit_price_adult_usd: number; unit_price_child_usd: number | null;
+      subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      net_total_usd: number | null;
+    }>(
+      `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
+              o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
+              oi.id AS item_id, oi.adults, oi.children,
+              oi.unit_price_adult_usd::float AS unit_price_adult_usd,
+              oi.unit_price_child_usd::float AS unit_price_child_usd,
+              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested, oi.transfer_hotel,
+              a.net_total_usd_snapshot::float AS net_total_usd
+         FROM orders o
+         JOIN order_attributions a ON a.order_id = o.id
+         JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.public_id = $1 AND a.seller_id = $2
+        ORDER BY oi.id
+        LIMIT 1`,
+      [publicId, req.seller!.sellerId],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
+    if (row.payment_method !== 'cash') {
+      return res.status(400).json({ error: 'Solo podés reducir reservas en efectivo. Las de Mercado Pago las reintegra el administrador.' });
+    }
+    if (row.status !== 'paid') {
+      return res.status(400).json({ error: 'Solo se pueden reducir reservas ya cobradas.' });
+    }
+
+    const snap: OrderReductionSnapshot = {
+      origAdults: row.adults,
+      origChildren: row.children,
+      unitPriceAdultUsd: row.unit_price_adult_usd,
+      unitPriceChildUsd: row.unit_price_child_usd,
+      subtotalUsd: row.subtotal_usd,
+      transferRequested: row.transfer_requested,
+      totalArs: row.total_ars,
+      exchangeRateUsed: row.exchange_rate_used,
+      commissionPercent: null,
+    };
+    const calc = computeOrderReduction(snap, {
+      adults: parsed.data.adults,
+      children: parsed.data.children,
+      transferRequested: parsed.data.transfer_requested,
+    });
+    if (!calc.ok) return res.status(400).json({ error: calc.error });
+
+    const cash = recomputeCashCommission(row.net_total_usd, row.subtotal_usd, calc.newSubtotalUsd);
+    const newCommissionArs = Math.round(cash.newCommissionUsd * row.exchange_rate_used * 100) / 100;
+
+    const newTransfer = parsed.data.transfer_requested;
+    const noteLine = `[${new Date().toISOString()}] Reducción efectivo (vendedor): ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Devolución en efectivo USD ${calc.refundUsd}`;
+    await applyOrderReduction({
+      orderId: row.order_id,
+      itemId: row.item_id,
+      newAdults: parsed.data.adults,
+      newChildren: parsed.data.children,
+      newTransferRequested: newTransfer,
+      newTransferHotel: newTransfer ? row.transfer_hotel : null,
+      newSubtotalUsd: calc.newSubtotalUsd,
+      newTotalArs: calc.newTotalArs,
+      refundUsd: calc.refundUsd,
+      refundArs: calc.refundArs,
+      newCommissionUsd: cash.newCommissionUsd,
+      newCommissionArs,
+      newNetTotalUsd: cash.newNetTotalUsd,
+      noteLine,
+    });
+
+    if (parsed.data.notify_customer !== false) {
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, null, true).catch((e) =>
+        console.error('[email] seller cash reduce notification failed for order', row.order_id, e),
+      );
+    }
+
+    res.json({ data: { ok: true, refund_usd: calc.refundUsd, refund_ars: calc.refundArs, new_total_usd: calc.newSubtotalUsd } });
   } catch (err) { next(err); }
 });
 

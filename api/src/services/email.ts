@@ -670,6 +670,7 @@ export async function sendOrderModifiedNotifications(
   refundedUsd: number,
   refundedArs: number,
   reason?: string | null,
+  viaCash = false,
 ): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
@@ -679,6 +680,9 @@ export async function sendOrderModifiedNotifications(
 
   const orderData = toOrderData(data);
   const arsStr = refundedArs.toLocaleString('es-AR');
+  const refundLine = viaCash
+    ? `<p><strong style="color:#c8a85a">El vendedor te devuelve ARS ${arsStr}</strong> (USD ${refundedUsd}) en efectivo.</p>`
+    : `<p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> (USD ${refundedUsd}) al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>`;
 
   // 1) Cliente
   const customerHtml = `
@@ -687,7 +691,7 @@ export async function sendOrderModifiedNotifications(
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Actualizamos tu reserva</h1>
   <p>Hola ${escapeHtml(orderData.customer_name)}, modificamos tu reserva según lo acordado${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
-  <p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> (USD ${refundedUsd}) al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>
+  ${refundLine}
   <p style="color:rgba(245,239,230,0.7)">Así queda tu reserva actualizada:</p>
   ${reservationCard(orderData, { showContact: true })}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
