@@ -737,6 +737,79 @@ export async function sendOrderModifiedNotifications(
   }
 }
 
+// ─── Aumento de reserva (pasajeros agregados) ───────────────
+// La orden ya tiene la composición nueva al enviarse. `charged` = lo cobrado de más.
+export async function sendOrderIncreasedNotifications(
+  orderId: number,
+  chargedUsd: number,
+  chargedArs: number,
+  reason?: string | null,
+): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const arsStr = chargedArs.toLocaleString('es-AR');
+
+  // 1) Cliente
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Sumamos pasajeros a tu reserva</h1>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, actualizamos tu reserva con los pasajeros que agregaste${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p>Cargo adicional: <strong style="color:#c8a85a">USD ${chargedUsd}</strong> (ARS ${arsStr}).</p>
+  ${reservationCard(orderData, { showContact: true })}
+  <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Reserva actualizada — ${orderData.option_name}`, customerHtml);
+
+  // 2) Admin
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Reserva ampliada</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
+    <div style="${baseStyles.row}"><span>Cobro adicional</span><strong style="color:#c8a85a">USD ${chargedUsd} (ARS ${arsStr})</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliada] ${orderData.customer_name} — +USD ${chargedUsd}`, adminHtml);
+  }
+
+  // 3) Vendedor (si hay atribución) — comisión ajustada al nuevo total
+  if (data.seller_name && data.seller_email && data.commission_usd != null) {
+    const sellerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <h1 style="${baseStyles.title}">Una venta tuya se amplió</h1>
+  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código sumó pasajeros. Tu comisión se ajustó al nuevo total.</p>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+  </div>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+</div></body></html>`;
+    await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml);
+  }
+}
+
 // ─── Email de liquidación al vendedor ───────────────────────
 export async function sendSellerCommissionPaid(input: {
   sellerName: string;

@@ -264,6 +264,87 @@ export async function applyOrderReduction(input: OrderReductionInput): Promise<v
   }
 }
 
+export interface OrderIncreaseInput {
+  orderId: number;
+  itemId: number;
+  optionId: number;
+  serviceDate: string;
+  defaultCapacityPerDay: number;
+  extraPax: number;               // pax que se suman (para el chequeo de cupo)
+  newAdults: number;
+  newChildren: number;
+  newSubtotalUsd: number;
+  newTotalArs: number;
+  chargeUsd: number;
+  chargeArs: number;
+  newCommissionUsd: number | null;
+  newCommissionArs: number | null;
+  newNetTotalUsd: number | null;
+  eventType: string;              // 'order_increased_cash' | 'order_increased_mp'
+  noteLine: string;
+}
+
+/**
+ * Aplica un AUMENTO de reserva de forma transaccional. Antes de subir los pax, verifica
+ * el cupo con advisory lock (el pax extra debe entrar en la capacidad de la fecha); si no,
+ * lanza AvailabilityError (→ 409). Recalcula comisión/neto. No cobra: el cobro (efectivo en
+ * el momento, o pago del link incremental ya aprobado) se resuelve fuera.
+ */
+export async function applyOrderIncrease(input: OrderIncreaseInput): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Guarda de cupo para el pax extra (serializa contra reservas simultáneas de la fecha).
+    await checkAvailabilityTxLocked(
+      client, input.optionId, input.defaultCapacityPerDay, input.serviceDate, input.extraPax,
+    );
+
+    await client.query(
+      `UPDATE order_items
+          SET adults = $1, children = $2, subtotal_usd = $3
+        WHERE id = $4`,
+      [input.newAdults, input.newChildren, input.newSubtotalUsd, input.itemId],
+    );
+
+    await client.query(
+      `UPDATE orders
+          SET total_usd = $1, total_ars = $2,
+              internal_notes = COALESCE(internal_notes || E'\\n', '') || $3,
+              updated_at = NOW()
+        WHERE id = $4`,
+      [input.newSubtotalUsd, input.newTotalArs, input.noteLine, input.orderId],
+    );
+
+    if (input.newCommissionUsd != null) {
+      await client.query(
+        `UPDATE order_attributions
+            SET commission_amount_usd = $1,
+                commission_amount_ars = $2,
+                net_total_usd_snapshot = COALESCE($3, net_total_usd_snapshot)
+          WHERE order_id = $4`,
+        [input.newCommissionUsd, input.newCommissionArs ?? 0, input.newNetTotalUsd, input.orderId],
+      );
+    }
+
+    await client.query(
+      `INSERT INTO payment_events (order_id, event_type, payload)
+       VALUES ($1, $2, $3::jsonb)`,
+      [input.orderId, input.eventType, JSON.stringify({
+        new_adults: input.newAdults, new_children: input.newChildren,
+        charge_usd: input.chargeUsd, charge_ars: input.chargeArs,
+      })],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function logPaymentEvent(
   orderId: number | null,
   eventType: string,
