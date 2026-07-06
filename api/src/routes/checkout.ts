@@ -20,6 +20,7 @@ import {
 import { sendOrderPaidNotifications, sendCashOrderNotifications } from '../services/email.js';
 import { createOrderPaidNotification, createCashBookingNotification } from '../repos/notifications.js';
 import { checkSingleDateAvailability } from '../repos/availability.js';
+import { checkoutLimiter } from '../middleware/rateLimit.js';
 
 export const checkoutRouter = Router();
 
@@ -47,7 +48,7 @@ const createCheckoutSchema = z.object({
 });
 
 // ─── POST /api/checkout/preferences ───────────────────────
-checkoutRouter.post('/preferences', async (req, res, next) => {
+checkoutRouter.post('/preferences', checkoutLimiter, async (req, res, next) => {
   try {
     const parsed = createCheckoutSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -215,6 +216,7 @@ checkoutRouter.post('/preferences', async (req, res, next) => {
       total_ars: totalArs,
       exchange_rate_used: rate,
       ref_code: input.ref_code ?? null,
+      default_capacity_per_day: option.default_capacity_per_day,
       utm: input.utm,
     });
 
@@ -286,7 +288,7 @@ const cashCheckoutSchema = createCheckoutSchema.extend({
   ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/, 'ref_code is required for cash payment'),
 });
 
-checkoutRouter.post('/cash', async (req, res, next) => {
+checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
   try {
     const parsed = cashCheckoutSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -442,6 +444,7 @@ checkoutRouter.post('/cash', async (req, res, next) => {
       exchange_rate_used: rate,
       ref_code: input.ref_code,
       payment_method: 'cash',
+      default_capacity_per_day: option.default_capacity_per_day,
       utm: input.utm,
     });
 

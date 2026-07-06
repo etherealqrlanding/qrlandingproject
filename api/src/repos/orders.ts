@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
+import { checkAvailabilityTxLocked } from './availability.js';
 
 export interface CreateOrderInput {
   customer: {
@@ -30,6 +31,9 @@ export interface CreateOrderInput {
   ref_code: string | null;
   payment_method?: 'mercadopago' | 'cash';
   utm?: { source?: string | null; medium?: string | null; campaign?: string | null };
+  // Capacidad efectiva de la opción para el día: se usa para el chequeo autoritativo
+  // de cupo (con lock) dentro de la transacción, evitando sobreventa por concurrencia.
+  default_capacity_per_day: number;
 }
 
 export interface CreatedOrder {
@@ -41,6 +45,18 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Guarda autoritativa contra sobreventa: toma un advisory lock por opción+fecha y
+    // re-verifica el cupo dentro de la transacción. Si no hay lugar, lanza AvailabilityError
+    // (→ 409) y el ROLLBACK del catch revierte la orden. Serializa reservas simultáneas
+    // del mismo día sin bloquear el resto del catálogo.
+    await checkAvailabilityTxLocked(
+      client,
+      input.item.option_id,
+      input.default_capacity_per_day,
+      input.item.service_date,
+      input.item.adults + input.item.children,
+    );
 
     const { rows: orderRows } = await client.query<{ id: number; public_id: string }>(
       `INSERT INTO orders (

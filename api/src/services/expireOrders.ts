@@ -1,14 +1,31 @@
 import { pool } from '../db.js';
 import { logPaymentEvent } from '../repos/orders.js';
 import { createOrderExpiredNotification } from '../repos/notifications.js';
+import { syncOrderWithMp } from '../routes/checkout.js';
 
 const EXPIRY_HOURS = 24;
+// MP: abandonos de checkout. Se caducan antes que el efectivo porque el link de pago
+// ya venció y la orden pendiente estaría reteniendo cupos sin un pago real detrás.
+const MP_EXPIRY_HOURS = 3;
 const SWEEP_INTERVAL_MS = 15 * 60_000; // cada 15 minutos
+
+async function expireOrder(id: number, reason: string): Promise<void> {
+  await pool.query(
+    `UPDATE orders SET status = 'expired', updated_at = NOW() WHERE id = $1 AND status = 'pending'`,
+    [id],
+  );
+  await logPaymentEvent(id, 'order_expired_auto', null, { reason }).catch((e) =>
+    console.error('[expire] logPaymentEvent failed for order', id, e),
+  );
+  await createOrderExpiredNotification(id).catch((e) =>
+    console.error('[expire] notification failed for order', id, e),
+  );
+}
 
 /**
  * Caduca las reservas en EFECTIVO que quedaron en 'pending' y no se marcaron como
  * cobradas dentro de las 24 hs de creadas. Pasan a estado 'expired' ("Caducada").
- * Solo aplica a efectivo (vendedores permanentes); las de Mercado Pago no caducan acá.
+ * Solo aplica a efectivo (vendedores permanentes); las de Mercado Pago se manejan aparte.
  * Devuelve la cantidad de órdenes caducadas.
  */
 export async function expireStaleCashOrders(): Promise<number> {
@@ -37,10 +54,56 @@ export async function expireStaleCashOrders(): Promise<number> {
   return rows.length;
 }
 
+/**
+ * Caduca reservas de Mercado Pago abandonadas: 'pending', sin payment_id confirmado y
+ * con más de MP_EXPIRY_HOURS de antigüedad. Antes de caducar, consulta MP por la
+ * referencia: si allí existe algún pago (aunque esté pendiente, ej. cupón Rapipago),
+ * NO la caduca y deja que el pago se resuelva; solo caduca las que MP no conoce.
+ * Así se liberan los cupos retenidos por abandonos sin arriesgar pagos legítimos en curso.
+ */
+export async function expireStaleMpOrders(): Promise<number> {
+  const { rows } = await pool.query<{ id: number; public_id: string }>(
+    `SELECT id, public_id
+       FROM orders
+      WHERE payment_method = 'mercadopago'
+        AND status = 'pending'
+        AND mp_payment_id IS NULL
+        AND created_at < NOW() - make_interval(hours => $1)`,
+    [MP_EXPIRY_HOURS],
+  );
+
+  let expired = 0;
+  for (const { id, public_id } of rows) {
+    try {
+      // syncOrderWithMp consulta MP y, si hay pago, actualiza la orden a su estado real.
+      const result = await syncOrderWithMp(public_id);
+      if (!result.found) {
+        // MP no tiene ningún pago para esta orden → abandono real, se libera el cupo.
+        await expireOrder(id, `Checkout de Mercado Pago abandonado (>${MP_EXPIRY_HOURS} hs sin pago)`);
+        expired += 1;
+      }
+    } catch (e) {
+      // Ante un fallo consultando MP, NO caducamos: preferimos retener el cupo un ciclo más
+      // antes que caducar una orden que quizá sí tenga un pago aprobado.
+      console.error('[expire] sync MP falló para orden', id, e);
+    }
+  }
+
+  if (expired > 0) {
+    console.log(`[expire] ${expired} orden(es) de Mercado Pago caducada(s) por abandono.`);
+  }
+  return expired;
+}
+
+async function runSweep(): Promise<void> {
+  await expireStaleCashOrders().catch((e) => console.error('[expire] sweep efectivo falló:', e));
+  await expireStaleMpOrders().catch((e) => console.error('[expire] sweep MP falló:', e));
+}
+
 /** Arranca el barrido periódico de caducidad (más un barrido inicial al iniciar). */
 export function startExpiryJob(): void {
-  expireStaleCashOrders().catch((e) => console.error('[expire] sweep inicial falló:', e));
+  runSweep().catch((e) => console.error('[expire] sweep inicial falló:', e));
   setInterval(() => {
-    expireStaleCashOrders().catch((e) => console.error('[expire] sweep falló:', e));
+    runSweep().catch((e) => console.error('[expire] sweep falló:', e));
   }, SWEEP_INTERVAL_MS);
 }

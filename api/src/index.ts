@@ -9,8 +9,16 @@ import { checkoutRouter } from './routes/checkout.js';
 import { adminRouter } from './routes/admin/index.js';
 import { sellerRouter } from './routes/seller/index.js';
 import { startExpiryJob } from './services/expireOrders.js';
+import { AvailabilityError } from './repos/availability.js';
 
 const app = express();
+
+// Detrás de un proxy/ingress (ej. OpenShift) el IP real del cliente viene en
+// X-Forwarded-For. Confiamos en el primer hop para que el rate limiter identifique
+// correctamente a cada cliente en vez de agrupar todo bajo la IP del proxy.
+if (config.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 app.use(helmet());
 
@@ -50,6 +58,10 @@ app.use((_req, res) => {
 });
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // Cupo agotado detectado dentro de la transacción (guarda anti-sobreventa) → 409.
+  if (err instanceof AvailabilityError) {
+    return res.status(409).json({ error: err.message, reason: err.reason });
+  }
   console.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });

@@ -13,6 +13,7 @@ import { getExchangeRate, convertUsdToArs } from '../../services/settings.js';
 import { createPendingOrder, setOrderPreferenceId, logPaymentEvent } from '../../repos/orders.js';
 import { listNotifications, markAllRead, getUnreadCount } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
+import { authLimiter } from '../../middleware/rateLimit.js';
 
 export const sellerRouter = Router();
 
@@ -22,7 +23,7 @@ export const sellerRouter = Router();
 // para no revelar si el email existe o no.
 const forgotPasswordSchema = z.object({ email: z.string().email() });
 
-sellerRouter.post('/auth/forgot-password', async (req, res, next) => {
+sellerRouter.post('/auth/forgot-password', authLimiter, async (req, res, next) => {
   try {
     const parsed = forgotPasswordSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Email inválido' });
@@ -263,6 +264,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       exchange_rate_used: rate,
       ref_code: seller.code,
       payment_method: input.payment_method,
+      default_capacity_per_day: option.default_capacity_per_day,
       utm: { source: 'seller_portal', medium: seller.code, campaign: null },
     });
 
