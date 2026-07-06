@@ -661,6 +661,82 @@ export async function sendOrderRefundedNotifications(
   }
 }
 
+// ─── Modificación de reserva con reintegro parcial ──────────
+// Se dispara cuando una reserva se reduce (menos pax o se quita traslado). En el
+// momento del envío la orden YA tiene los nuevos totales, así que reservationCard
+// muestra la reserva vigente; sumamos el monto reintegrado.
+export async function sendOrderModifiedNotifications(
+  orderId: number,
+  refundedUsd: number,
+  refundedArs: number,
+  reason?: string | null,
+): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const arsStr = refundedArs.toLocaleString('es-AR');
+
+  // 1) Cliente
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Actualizamos tu reserva</h1>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, modificamos tu reserva según lo acordado${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> (USD ${refundedUsd}) al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>
+  <p style="color:rgba(245,239,230,0.7)">Así queda tu reserva actualizada:</p>
+  ${reservationCard(orderData, { showContact: true })}
+  <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Reserva actualizada — reintegro ARS ${arsStr}`, customerHtml);
+
+  // 2) Admin
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Reserva modificada</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.transfer_requested ? ' · c/traslado' : ''}</strong></div>
+    <div style="${baseStyles.row}"><span>Reintegrado</span><strong style="color:#c8a85a">ARS ${arsStr} (USD ${refundedUsd})</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Modificada] ${orderData.customer_name} — reintegro ARS ${arsStr}`, adminHtml);
+  }
+
+  // 3) Vendedor (si hay atribución y email) — su comisión se ajustó al nuevo total
+  if (data.seller_name && data.seller_email && data.commission_usd != null) {
+    const sellerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <h1 style="${baseStyles.title}">Una venta tuya se modificó</h1>
+  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código se redujo${reason ? ` — ${escapeHtml(reason)}` : ''}. Tu comisión se ajustó al nuevo total.</p>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+  </div>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+</div></body></html>`;
+    await send(data.seller_email, `Venta modificada — ${orderData.option_name}`, sellerHtml);
+  }
+}
+
 // ─── Email de liquidación al vendedor ───────────────────────
 export async function sendSellerCommissionPaid(input: {
   sellerName: string;

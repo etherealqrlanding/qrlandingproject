@@ -179,6 +179,91 @@ export async function updateOrderFromPayment(
   return rows[0] ?? null;
 }
 
+export interface OrderReductionInput {
+  orderId: number;
+  itemId: number;
+  newAdults: number;
+  newChildren: number;
+  newTransferRequested: boolean;
+  newTransferHotel: string | null;
+  newSubtotalUsd: number;
+  newTotalArs: number;
+  refundUsd: number;
+  refundArs: number;
+  // Comisión recalculada sobre el nuevo total (null = no hay atribución que actualizar).
+  newCommissionUsd: number | null;
+  newCommissionArs: number | null;
+  // Neto recalculado (solo relevante para efectivo; null = no tocar).
+  newNetTotalUsd: number | null;
+  noteLine: string;
+}
+
+/**
+ * Aplica una REDUCCIÓN de reserva de forma transaccional: ajusta el item (pax/traslado/
+ * subtotal), baja los totales de la orden, acumula lo reintegrado y recalcula la comisión
+ * atribuida. Al bajar los pax en order_items, el cupo se libera automáticamente (la
+ * disponibilidad se calcula desde ahí). NO llama a Mercado Pago: el refund real (o la
+ * devolución en efectivo) se resuelve antes en la capa de ruta.
+ */
+export async function applyOrderReduction(input: OrderReductionInput): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE order_items
+          SET adults = $1, children = $2,
+              subtotal_usd = $3,
+              transfer_requested = $4,
+              transfer_hotel = $5
+        WHERE id = $6`,
+      [input.newAdults, input.newChildren, input.newSubtotalUsd,
+       input.newTransferRequested, input.newTransferHotel, input.itemId],
+    );
+
+    await client.query(
+      `UPDATE orders
+          SET total_usd = $1,
+              total_ars = $2,
+              refunded_amount_usd = refunded_amount_usd + $3,
+              refunded_amount_ars = refunded_amount_ars + $4,
+              internal_notes = COALESCE(internal_notes || E'\\n', '') || $5,
+              updated_at = NOW()
+        WHERE id = $6`,
+      [input.newSubtotalUsd, input.newTotalArs, input.refundUsd, input.refundArs,
+       input.noteLine, input.orderId],
+    );
+
+    if (input.newCommissionUsd != null) {
+      await client.query(
+        `UPDATE order_attributions
+            SET commission_amount_usd = $1,
+                commission_amount_ars = $2,
+                net_total_usd_snapshot = COALESCE($3, net_total_usd_snapshot)
+          WHERE order_id = $4`,
+        [input.newCommissionUsd, input.newCommissionArs ?? 0, input.newNetTotalUsd, input.orderId],
+      );
+    }
+
+    await client.query(
+      `INSERT INTO payment_events (order_id, event_type, payload)
+       VALUES ($1, 'order_modified', $2::jsonb)`,
+      [input.orderId, JSON.stringify({
+        new_adults: input.newAdults, new_children: input.newChildren,
+        new_transfer: input.newTransferRequested,
+        refund_usd: input.refundUsd, refund_ars: input.refundArs,
+      })],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 export async function logPaymentEvent(
   orderId: number | null,
   eventType: string,

@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications } from '../../services/email.js';
-import { logPaymentEvent } from '../../repos/orders.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications } from '../../services/email.js';
+import { logPaymentEvent, applyOrderReduction } from '../../repos/orders.js';
+import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { syncOrderWithMp } from '../checkout.js';
 
 export const adminOrdersRouter = Router();
@@ -218,6 +219,140 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
         amount_usd: amountUsdToRefund ?? order.total_usd,
         is_partial: isPartial,
         new_status: newStatus,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+// ─── Modificar reserva reduciendo pax/traslado + reintegro parcial (MP) ───────
+// El cliente se baja pasajeros o quita el traslado: se reintegra el delta por MP,
+// se ajusta la reserva (pax/totales), se libera el cupo y se recalcula la comisión.
+// Para AGREGAR algo o cambiar de servicio: cancelar + crear una reserva nueva.
+const modifySchema = z.object({
+  adults: z.number().int().min(1).max(20),
+  children: z.number().int().min(0).max(20),
+  transfer_requested: z.boolean(),
+  reason: z.string().max(500).optional(),
+  notify_customer: z.boolean().optional().default(true),
+});
+
+adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const parsed = modifySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    // 1) Cargar orden + item + atribución (todo lo congelado que necesita el cálculo)
+    const { rows } = await pool.query<{
+      order_id: number; status: string; payment_method: string; mp_payment_id: string | null;
+      total_usd: number; total_ars: number; exchange_rate_used: number;
+      item_id: number; adults: number; children: number;
+      unit_price_adult_usd: number; unit_price_child_usd: number | null;
+      subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      commission_percent: number | null;
+    }>(
+      `SELECT o.id AS order_id, o.status::text AS status, o.payment_method, o.mp_payment_id,
+              o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
+              o.exchange_rate_used::float AS exchange_rate_used,
+              oi.id AS item_id, oi.adults, oi.children,
+              oi.unit_price_adult_usd::float AS unit_price_adult_usd,
+              oi.unit_price_child_usd::float AS unit_price_child_usd,
+              oi.subtotal_usd::float AS subtotal_usd,
+              oi.transfer_requested, oi.transfer_hotel,
+              a.commission_percent_snapshot::float AS commission_percent
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+         LEFT JOIN order_attributions a ON a.order_id = o.id
+        WHERE o.public_id = $1
+        ORDER BY oi.id
+        LIMIT 1`,
+      [publicId],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Not found' });
+
+    // 2) Validaciones de estado
+    if (row.status !== 'paid') {
+      return res.status(400).json({ error: `Solo se pueden modificar reservas pagadas. Estado actual: ${row.status}` });
+    }
+    if (row.payment_method !== 'mercadopago') {
+      return res.status(400).json({ error: 'Esta reserva es en efectivo. La devolución en efectivo se gestiona desde su vía correspondiente.' });
+    }
+    if (!row.mp_payment_id) {
+      return res.status(400).json({ error: 'La orden no tiene un pago de Mercado Pago confirmado. Sincronizala con MP primero.' });
+    }
+
+    // 3) Calcular la reducción (validación + montos) sobre datos congelados
+    const snap: OrderReductionSnapshot = {
+      origAdults: row.adults,
+      origChildren: row.children,
+      unitPriceAdultUsd: row.unit_price_adult_usd,
+      unitPriceChildUsd: row.unit_price_child_usd,
+      subtotalUsd: row.subtotal_usd,
+      transferRequested: row.transfer_requested,
+      totalArs: row.total_ars,
+      exchangeRateUsed: row.exchange_rate_used,
+      commissionPercent: row.commission_percent,
+    };
+    const calc = computeOrderReduction(snap, {
+      adults: parsed.data.adults,
+      children: parsed.data.children,
+      transferRequested: parsed.data.transfer_requested,
+    });
+    if (!calc.ok) return res.status(400).json({ error: calc.error });
+
+    // 4) Refund en MP ANTES de tocar la DB. Idempotency key atada a la composición DESTINO:
+    //    reintentar el mismo cambio devuelve el mismo refund; reducciones sucesivas (que
+    //    apuntan a composiciones distintas) nunca colisionan.
+    const idempotencyKey = `refund:${row.order_id}:to:${parsed.data.adults}a${parsed.data.children}n${parsed.data.transfer_requested ? 'T' : 'F'}`;
+    try {
+      await refundPayment(row.mp_payment_id, calc.refundArs, idempotencyKey);
+    } catch (err) {
+      const message = (err as Error).message ?? 'Refund failed';
+      await logPaymentEvent(row.order_id, 'modify_refund_failed', row.mp_payment_id, {
+        error: message, target: parsed.data, refund_ars: calc.refundArs,
+      });
+      return res.status(502).json({ error: `Mercado Pago rechazó el reintegro: ${message}` });
+    }
+
+    // 5) Persistir la reducción (item + totales + comisión + registro de reintegro)
+    const newTransfer = parsed.data.transfer_requested;
+    const noteLine = `[${new Date().toISOString()}] Modificación: ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Reintegro USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
+    await applyOrderReduction({
+      orderId: row.order_id,
+      itemId: row.item_id,
+      newAdults: parsed.data.adults,
+      newChildren: parsed.data.children,
+      newTransferRequested: newTransfer,
+      newTransferHotel: newTransfer ? row.transfer_hotel : null,
+      newSubtotalUsd: calc.newSubtotalUsd,
+      newTotalArs: calc.newTotalArs,
+      refundUsd: calc.refundUsd,
+      refundArs: calc.refundArs,
+      newCommissionUsd: calc.newCommissionUsd,
+      newCommissionArs: calc.newCommissionArs,
+      newNetTotalUsd: null,
+      noteLine,
+    });
+
+    // 6) Notificar (fire-and-forget)
+    if (parsed.data.notify_customer !== false) {
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason).catch((e) =>
+        console.error('[email] modify notification failed for order', row.order_id, e),
+      );
+    }
+
+    res.json({
+      data: {
+        ok: true,
+        refund_usd: calc.refundUsd,
+        refund_ars: calc.refundArs,
+        new_total_usd: calc.newSubtotalUsd,
+        new_adults: parsed.data.adults,
+        new_children: parsed.data.children,
+        new_transfer: newTransfer,
       },
     });
   } catch (err) { next(err); }
