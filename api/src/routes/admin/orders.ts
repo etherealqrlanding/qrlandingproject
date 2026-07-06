@@ -3,11 +3,11 @@ import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction, applyOrderIncrease } from '../../repos/orders.js';
+import { logPaymentEvent, applyOrderReduction } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
-import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../../services/orderIncrease.js';
-import { cashIncreaseCommission, recomputeCashCommission } from '../../services/orderCommission.js';
-import { createAddonForOrder } from '../../services/orderAddon.js';
+import { recomputeCashCommission } from '../../services/orderCommission.js';
+import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
+import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon } from '../../repos/addons.js';
 import { syncOrderWithMp } from '../checkout.js';
 
 export const adminOrdersRouter = Router();
@@ -470,122 +470,69 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Aumentar reserva en efectivo (cobro en el momento) ───────────────────────
-// El pasajero suma acompañantes y el vendedor/admin cobra la diferencia en mano.
-// Solo aplica a órdenes EN EFECTIVO ya confirmadas (paid). Verifica cupo con lock.
-// Aumentar en MP se maneja con link incremental (flujo aparte).
+// ─── Ampliar reserva en efectivo → crea ampliación PENDIENTE de cobro ─────────
+// El pasajero suma acompañantes: se registra una ampliación pendiente que reserva el
+// cupo. El cobro se confirma después (flujo pendiente → cobrada, como la reserva
+// original). Aumentar en MP va por link incremental (flujo aparte).
 const increaseSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
-  reason: z.string().max(500).optional(),
-  notify_customer: z.boolean().optional().default(true),
 });
 
 adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
-
     const parsed = increaseSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
-    const { rows } = await pool.query<{
-      order_id: number; status: string; payment_method: string;
-      total_ars: number; exchange_rate_used: number;
-      item_id: number; option_id: number; service_date: string;
-      default_capacity_per_day: number;
-      adults: number; children: number;
-      unit_price_adult_usd: number; unit_price_child_usd: number | null;
-      subtotal_usd: number; transfer_requested: boolean;
-      seller_id: number | null; net_total_usd: number | null;
-    }>(
-      `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
-              o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
-              oi.id AS item_id, oi.option_id,
-              to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-              po.default_capacity_per_day,
-              oi.adults, oi.children,
-              oi.unit_price_adult_usd::float AS unit_price_adult_usd,
-              oi.unit_price_child_usd::float AS unit_price_child_usd,
-              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
-              a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd
-         FROM orders o
-         JOIN order_items oi ON oi.order_id = o.id
-         JOIN product_options po ON po.id = oi.option_id
-         LEFT JOIN order_attributions a ON a.order_id = o.id
-        WHERE o.public_id = $1
-        ORDER BY oi.id
-        LIMIT 1`,
-      [publicId],
-    );
-    const row = rows[0];
-    if (!row) return res.status(404).json({ error: 'Not found' });
-    if (row.payment_method !== 'cash') {
-      return res.status(400).json({ error: 'Esta vía es solo para reservas en efectivo. Para Mercado Pago se usa el link incremental.' });
-    }
-    if (row.status !== 'paid') {
-      return res.status(400).json({ error: `Solo se pueden ampliar reservas en efectivo ya cobradas. Estado actual: ${row.status}` });
-    }
-
-    const snap: OrderIncreaseSnapshot = {
-      origAdults: row.adults,
-      origChildren: row.children,
-      unitPriceAdultUsd: row.unit_price_adult_usd,
-      unitPriceChildUsd: row.unit_price_child_usd,
-      subtotalUsd: row.subtotal_usd,
-      transferRequested: row.transfer_requested,
-      exchangeRateUsed: row.exchange_rate_used,
-    };
-    const calc = computeOrderIncrease(snap, { adults: parsed.data.adults, children: parsed.data.children });
-    if (!calc.ok) return res.status(400).json({ error: calc.error });
-
-    // Comisión/neto recalculados para efectivo (solo si hay atribución).
-    const hasAttribution = row.seller_id != null;
-    const cash = hasAttribution
-      ? cashIncreaseCommission(row.net_total_usd, row.subtotal_usd, calc.newSubtotalUsd)
-      : { newNetTotalUsd: null, newCommissionUsd: 0 };
-    const newCommissionUsd = hasAttribution ? cash.newCommissionUsd : null;
-    const newCommissionArs = newCommissionUsd != null ? Math.round(newCommissionUsd * row.exchange_rate_used * 100) / 100 : null;
-
-    const noteLine = `[${new Date().toISOString()}] Ampliación efectivo: ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men. Cobro adicional USD ${calc.chargeUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
-
-    // applyOrderIncrease valida el cupo con lock (puede lanzar AvailabilityError → 409).
-    await applyOrderIncrease({
-      orderId: row.order_id,
-      itemId: row.item_id,
-      optionId: row.option_id,
-      serviceDate: row.service_date,
-      defaultCapacityPerDay: row.default_capacity_per_day,
-      extraPax: calc.extraAdults + calc.extraChildren,
-      newAdults: parsed.data.adults,
-      newChildren: parsed.data.children,
-      newSubtotalUsd: calc.newSubtotalUsd,
-      newTotalArs: calc.newTotalArs,
-      chargeUsd: calc.chargeUsd,
-      chargeArs: calc.chargeArs,
-      newCommissionUsd,
-      newCommissionArs,
-      newNetTotalUsd: hasAttribution ? cash.newNetTotalUsd : null,
-      eventType: 'order_increased_cash',
-      noteLine,
+    const result = await createCashAddonForOrder({
+      orderPublicId: publicId, adults: parsed.data.adults, children: parsed.data.children,
     });
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: result.data });
+  } catch (err) { next(err); }
+});
 
-    if (parsed.data.notify_customer !== false) {
-      sendOrderIncreasedNotifications(row.order_id, calc.chargeUsd, calc.chargeArs, parsed.data.reason).catch((e) =>
-        console.error('[email] increase notification failed for order', row.order_id, e),
-      );
+// ─── Ampliaciones pendientes de una orden ─────────────────────────────────────
+adminOrdersRouter.get('/:publicId/addons', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const addons = await listPendingAddonsByOrderPublicId(publicId);
+    res.json({ data: addons });
+  } catch (err) { next(err); }
+});
+
+// Confirmar cobro de una ampliación en EFECTIVO → la fusiona en la orden.
+adminOrdersRouter.post('/addons/:addonPublicId/collect', async (req, res, next) => {
+  try {
+    const addonPublicId = req.params.addonPublicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(addonPublicId)) return res.status(400).json({ error: 'Invalid id' });
+    const addon = await getAddonForAction(addonPublicId);
+    if (!addon) return res.status(404).json({ error: 'Ampliación no encontrada' });
+    if (addon.payment_method !== 'cash') return res.status(400).json({ error: 'Esta ampliación no es en efectivo.' });
+    if (addon.status !== 'pending') return res.status(409).json({ error: 'La ampliación ya fue procesada.' });
+
+    const r = await applyAddonPayment(addonPublicId, null);
+    if (!r.applied) return res.status(409).json({ error: 'No se pudo aplicar la ampliación.' });
+    if (!r.alreadyApplied && r.orderId != null) {
+      sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
+        console.error('[email] cash addon collect notification failed', e));
     }
+    res.json({ data: { ok: true, charge_usd: r.chargeUsd, charge_ars: r.chargeArs } });
+  } catch (err) { next(err); }
+});
 
-    res.json({
-      data: {
-        ok: true,
-        charge_usd: calc.chargeUsd,
-        charge_ars: calc.chargeArs,
-        new_total_usd: calc.newSubtotalUsd,
-        new_adults: parsed.data.adults,
-        new_children: parsed.data.children,
-      },
-    });
+// Cancelar una ampliación pendiente (libera el cupo).
+adminOrdersRouter.post('/addons/:addonPublicId/cancel', async (req, res, next) => {
+  try {
+    const addonPublicId = req.params.addonPublicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(addonPublicId)) return res.status(400).json({ error: 'Invalid id' });
+    const orderId = await cancelAddon(addonPublicId);
+    if (orderId == null) return res.status(409).json({ error: 'La ampliación no está pendiente.' });
+    await logPaymentEvent(orderId, 'addon_cancelled', null, { addon_public_id: addonPublicId });
+    res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
 

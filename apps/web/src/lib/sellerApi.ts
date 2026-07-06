@@ -193,6 +193,17 @@ export interface SellerBookingResult {
   total_ars?: number;
 }
 
+export interface SellerPendingAddon {
+  public_id: string;
+  payment_method: 'mercadopago' | 'cash';
+  extra_adults: number;
+  extra_children: number;
+  charge_usd: number;
+  charge_ars: number;
+  mp_init_point: string | null;
+  created_at: string;
+}
+
 export interface SellerCommission {
   paid_date: string;
   orders_count: number;
@@ -280,6 +291,13 @@ export const sellerApi = {
     request<Array<{ id: number; event_type: string; created_at: string }>>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/events`,
     ),
+  orderAddons: (publicId: string) =>
+    request<SellerPendingAddon[]>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/addons`),
+  collectAddon: (addonPublicId: string) =>
+    request<{ ok: true; charge_usd: number; charge_ars: number }>(
+      `/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST' }),
+  cancelAddon: (addonPublicId: string) =>
+    request<{ ok: true }>(`/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/cancel`, { method: 'POST' }),
   notifications: {
     list: () => request<SellerNotification[]>('/api/seller/me/notifications'),
     markAllRead: () => request<{ updated: number }>('/api/seller/me/notifications/read-all', { method: 'PATCH' }),

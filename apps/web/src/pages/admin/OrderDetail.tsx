@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { adminApi, AdminApiError } from '../../lib/adminApi';
+import { adminApi, AdminApiError, type PendingAddon } from '../../lib/adminApi';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
@@ -73,6 +73,8 @@ export default function OrderDetail() {
   const [liquidating, setLiquidating] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [modifyOpen, setModifyOpen] = useState(false);
+  const [addons, setAddons] = useState<PendingAddon[]>([]);
+  const [addonBusy, setAddonBusy] = useState<string | null>(null);
 
   const load = async () => {
     if (!publicId) return;
@@ -80,8 +82,35 @@ export default function OrderDetail() {
       const data = await adminApi.orders.get(publicId);
       setOrder(data as unknown as OrderFull);
       setNewStatus((data as unknown as OrderFull).status);
+      adminApi.orders.addons(publicId).then(setAddons).catch(() => {});
     } catch (err) {
       setError((err as AdminApiError).message);
+    }
+  };
+
+  const handleCollectAddon = async (addonPublicId: string) => {
+    if (!confirm('¿Confirmás que cobraste el dinero de esta ampliación en efectivo?')) return;
+    setAddonBusy(addonPublicId);
+    try {
+      await adminApi.orders.collectAddon(addonPublicId);
+      await load();
+    } catch (err) {
+      alert((err as AdminApiError).message);
+    } finally {
+      setAddonBusy(null);
+    }
+  };
+
+  const handleCancelAddon = async (addonPublicId: string) => {
+    if (!confirm('¿Cancelar esta ampliación pendiente? Se libera el cupo reservado.')) return;
+    setAddonBusy(addonPublicId);
+    try {
+      await adminApi.orders.cancelAddon(addonPublicId);
+      await load();
+    } catch (err) {
+      alert((err as AdminApiError).message);
+    } finally {
+      setAddonBusy(null);
     }
   };
 
@@ -306,6 +335,48 @@ export default function OrderDetail() {
                 className="btn-ghost w-full text-sm mt-4">
                 ✎ Modificar pasajeros / traslado
               </button>
+            </div>
+          )}
+
+          {addons.length > 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-950/10 p-5 space-y-4">
+              <p className="text-xs uppercase tracking-widest text-amber-400">Ampliaciones pendientes</p>
+              {addons.map((ad) => (
+                <div key={ad.public_id} className="rounded-md border border-gold/10 bg-ink/30 p-3">
+                  <p className="text-sm text-cream/90">
+                    +{ad.extra_adults} ad{ad.extra_children > 0 ? ` · +${ad.extra_children} men` : ''} —
+                    <strong className="text-gold"> USD {ad.charge_usd}</strong>
+                    <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</span>
+                  </p>
+                  {ad.payment_method === 'cash' ? (
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" onClick={() => handleCollectAddon(ad.public_id)} disabled={addonBusy === ad.public_id}
+                        className="flex-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-500/20 transition disabled:opacity-40">
+                        {addonBusy === ad.public_id ? '...' : '✓ Confirmar cobro'}
+                      </button>
+                      <button type="button" onClick={() => handleCancelAddon(ad.public_id)} disabled={addonBusy === ad.public_id}
+                        className="rounded-md border border-red-500/30 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition disabled:opacity-40">
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs text-cream/50">Esperando el pago del pasajero.</p>
+                      {ad.mp_init_point && (
+                        <PaymentLinkShare
+                          link={ad.mp_init_point}
+                          phone={order.customer_phone}
+                          waMessage={`Hola ${order.customer_name}, para sumar pasajeros a tu reserva pagá la diferencia (USD ${ad.charge_usd}) acá: ${ad.mp_init_point}`}
+                        />
+                      )}
+                      <button type="button" onClick={() => handleCancelAddon(ad.public_id)} disabled={addonBusy === ad.public_id}
+                        className="w-full rounded-md border border-red-500/30 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition disabled:opacity-40">
+                        Cancelar ampliación
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

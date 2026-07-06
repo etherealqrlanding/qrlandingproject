@@ -87,7 +87,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     if (preview.direction === 'none') return 'Sin cambios';
     if (preview.direction === 'reduce') return `Reintegrar USD ${Math.abs(preview.delta)}`;
     if (isMp) return `Generar link · USD ${preview.delta}`;
-    return `Cobrar USD ${preview.delta} en efectivo`;
+    return `Registrar ampliación · USD ${preview.delta}`;
   })();
 
   const handleConfirm = async () => {
@@ -205,10 +205,10 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
             {preview.direction === 'increase' && (
               <p className="text-sm text-cream/80">
-                {isMp ? 'Se generará un link de MP por ' : 'Se cobra en efectivo '}
+                {isMp ? 'Se generará un link de MP por ' : 'Se registra una ampliación pendiente de cobro por '}
                 <strong className="text-cream">USD {preview.delta}</strong> (≈ ARS {preview.deltaArs.toLocaleString('es-AR')}).
                 Nuevo total: <strong className="text-cream">USD {preview.newSubtotal}</strong>.
-                {isMp && ' El pasajero paga con su cuenta.'}
+                {isMp ? ' El pasajero paga con su cuenta.' : ' Confirmás el cobro después, cuando recibas el dinero.'}
               </p>
             )}
           </div>

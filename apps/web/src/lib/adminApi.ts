@@ -294,6 +294,17 @@ export interface FaqContent {
   updated_at: string | null;
 }
 
+export interface PendingAddon {
+  public_id: string;
+  payment_method: 'mercadopago' | 'cash';
+  extra_adults: number;
+  extra_children: number;
+  charge_usd: number;
+  charge_ars: number;
+  mp_init_point: string | null;
+  created_at: string;
+}
+
 export const adminApi = {
   me: () => request<AdminMe>('/api/admin/me'),
   categories: {
@@ -458,6 +469,18 @@ export const adminApi = {
         `/api/admin/orders/${encodeURIComponent(publicId)}/add-mp`,
         { method: 'POST', body: JSON.stringify(body) },
       ),
+    increaseCashPending: (publicId: string, body: { adults: number; children: number }) =>
+      request<{ addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/increase-cash`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    addons: (publicId: string) =>
+      request<PendingAddon[]>(`/api/admin/orders/${encodeURIComponent(publicId)}/addons`),
+    collectAddon: (addonPublicId: string) =>
+      request<{ ok: true; charge_usd: number; charge_ars: number }>(
+        `/api/admin/orders/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST' }),
+    cancelAddon: (addonPublicId: string) =>
+      request<{ ok: true }>(`/api/admin/orders/addons/${encodeURIComponent(addonPublicId)}/cancel`, { method: 'POST' }),
   },
   settings: {
     list: () => request<AdminSetting[]>('/api/admin/settings'),

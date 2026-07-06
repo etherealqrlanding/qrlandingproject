@@ -3,6 +3,7 @@ import { config } from '../config.js';
 import { createPreference } from './mercadopago.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from './orderIncrease.js';
 import { createOrderAddon, setAddonPreferenceId } from '../repos/addons.js';
+import { logPaymentEvent } from '../repos/orders.js';
 
 export type AddonLinkResult =
   | {
@@ -103,6 +104,7 @@ export async function createAddonForOrder(params: {
     newSubtotalUsd: calc.newSubtotalUsd,
     newTotalArs: calc.newTotalArs,
     exchangeRateUsed: row.exchange_rate_used,
+    paymentMethod: 'mercadopago',
   });
 
   // Link de MP por la DIFERENCIA (charge_ars). external_reference = public_id del addon,
@@ -137,6 +139,103 @@ export async function createAddonForOrder(params: {
       order_public_id: params.orderPublicId,
       init_point: pref.init_point,
       sandbox_init_point: pref.sandbox_init_point,
+      charge_usd: calc.chargeUsd,
+      charge_ars: calc.chargeArs,
+      new_total_usd: calc.newSubtotalUsd,
+    },
+  };
+}
+
+export type CashAddonResult =
+  | { ok: true; data: { addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number } }
+  | { ok: false; httpStatus: number; error: string };
+
+/**
+ * Crea una ampliación en EFECTIVO en estado PENDIENTE de cobro. Reserva el cupo del pax
+ * extra (no cobra todavía): el vendedor/admin confirma el cobro después, igual que la
+ * reserva original. Puede lanzar AvailabilityError (→ 409) si no hay cupo.
+ */
+export async function createCashAddonForOrder(params: {
+  orderPublicId: string;
+  adults: number;
+  children: number;
+  restrictSellerId?: number;
+}): Promise<CashAddonResult> {
+  const { rows } = await pool.query<{
+    order_id: number; status: string; payment_method: string; exchange_rate_used: number;
+    item_id: number; option_id: number; service_date: string; default_capacity_per_day: number;
+    adults: number; children: number;
+    unit_price_adult_usd: number; unit_price_child_usd: number | null;
+    subtotal_usd: number; transfer_requested: boolean;
+    seller_id: number | null;
+  }>(
+    `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
+            o.exchange_rate_used::float AS exchange_rate_used,
+            oi.id AS item_id, oi.option_id,
+            to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+            po.default_capacity_per_day,
+            oi.adults, oi.children,
+            oi.unit_price_adult_usd::float AS unit_price_adult_usd,
+            oi.unit_price_child_usd::float AS unit_price_child_usd,
+            oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
+            a.seller_id
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       JOIN product_options po ON po.id = oi.option_id
+       LEFT JOIN order_attributions a ON a.order_id = o.id
+      WHERE o.public_id = $1
+      ORDER BY oi.id
+      LIMIT 1`,
+    [params.orderPublicId],
+  );
+  const row = rows[0];
+  if (!row) return { ok: false, httpStatus: 404, error: 'Reserva no encontrada' };
+  if (params.restrictSellerId != null && row.seller_id !== params.restrictSellerId) {
+    return { ok: false, httpStatus: 404, error: 'Reserva no encontrada' };
+  }
+  if (row.payment_method !== 'cash') {
+    return { ok: false, httpStatus: 400, error: 'Esta vía es solo para reservas en efectivo.' };
+  }
+  if (row.status !== 'paid') {
+    return { ok: false, httpStatus: 400, error: `Solo se pueden ampliar reservas ya cobradas. Estado actual: ${row.status}` };
+  }
+
+  const snap: OrderIncreaseSnapshot = {
+    origAdults: row.adults,
+    origChildren: row.children,
+    unitPriceAdultUsd: row.unit_price_adult_usd,
+    unitPriceChildUsd: row.unit_price_child_usd,
+    subtotalUsd: row.subtotal_usd,
+    transferRequested: row.transfer_requested,
+    exchangeRateUsed: row.exchange_rate_used,
+  };
+  const calc = computeOrderIncrease(snap, { adults: params.adults, children: params.children });
+  if (!calc.ok) return { ok: false, httpStatus: 400, error: calc.error ?? 'No se puede ampliar' };
+
+  const addon = await createOrderAddon({
+    orderId: row.order_id,
+    optionId: row.option_id,
+    serviceDate: row.service_date,
+    defaultCapacityPerDay: row.default_capacity_per_day,
+    extraAdults: calc.extraAdults,
+    extraChildren: calc.extraChildren,
+    chargeUsd: calc.chargeUsd,
+    chargeArs: calc.chargeArs,
+    newSubtotalUsd: calc.newSubtotalUsd,
+    newTotalArs: calc.newTotalArs,
+    exchangeRateUsed: row.exchange_rate_used,
+    paymentMethod: 'cash',
+  });
+
+  await logPaymentEvent(row.order_id, 'addon_cash_created', null, {
+    addon_id: addon.id, extra_adults: calc.extraAdults, extra_children: calc.extraChildren,
+    charge_usd: calc.chargeUsd,
+  });
+
+  return {
+    ok: true,
+    data: {
+      addon_public_id: addon.public_id,
       charge_usd: calc.chargeUsd,
       charge_ars: calc.chargeArs,
       new_total_usd: calc.newSubtotalUsd,

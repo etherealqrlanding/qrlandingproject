@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { sellerApi, SellerApiError, type SellerOrder } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, type SellerOrder, type SellerPendingAddon } from '../../lib/sellerApi';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
 import OrderHistory from '../../components/OrderHistory';
@@ -94,21 +94,103 @@ export default function SellerOrders() {
   const [collectError, setCollectError] = useState<string | null>(null);
   const [modifyOrder, setModifyOrder] = useState<SellerOrder | null>(null);
   const [eventsByOrder, setEventsByOrder] = useState<Record<string, OrderEvent[]>>({});
+  const [addonsByOrder, setAddonsByOrder] = useState<Record<string, SellerPendingAddon[]>>({});
+  const [addonBusy, setAddonBusy] = useState<string | null>(null);
 
   const reload = async () => {
     const data = await sellerApi.orders();
     setOrders(data);
   };
 
-  // Al expandir una orden, traemos su histórico de pasos (una sola vez por orden).
+  const loadAddons = (publicId: string) =>
+    sellerApi.orderAddons(publicId)
+      .then((ad) => setAddonsByOrder((prev) => ({ ...prev, [publicId]: ad })))
+      .catch(() => {});
+
+  // Al expandir una orden, traemos su histórico y sus ampliaciones pendientes.
   useEffect(() => {
     if (expanded == null) return;
     const o = orders.find((x) => x.order_id === expanded);
-    if (!o || eventsByOrder[o.public_id]) return;
-    sellerApi.orderEvents(o.public_id)
-      .then((ev) => setEventsByOrder((prev) => ({ ...prev, [o.public_id]: ev })))
-      .catch(() => {});
-  }, [expanded, orders, eventsByOrder]);
+    if (!o) return;
+    if (!eventsByOrder[o.public_id]) {
+      sellerApi.orderEvents(o.public_id)
+        .then((ev) => setEventsByOrder((prev) => ({ ...prev, [o.public_id]: ev })))
+        .catch(() => {});
+    }
+    if (!addonsByOrder[o.public_id]) loadAddons(o.public_id);
+  }, [expanded, orders, eventsByOrder, addonsByOrder]);
+
+  const handleCollectAddon = async (orderPublicId: string, addonPublicId: string) => {
+    setAddonBusy(addonPublicId);
+    try {
+      await sellerApi.collectAddon(addonPublicId);
+      await reload();
+      await loadAddons(orderPublicId);
+    } catch (err) {
+      alert((err as SellerApiError).message);
+    } finally {
+      setAddonBusy(null);
+    }
+  };
+
+  const handleCancelAddon = async (orderPublicId: string, addonPublicId: string) => {
+    setAddonBusy(addonPublicId);
+    try {
+      await sellerApi.cancelAddon(addonPublicId);
+      await loadAddons(orderPublicId);
+    } catch (err) {
+      alert((err as SellerApiError).message);
+    } finally {
+      setAddonBusy(null);
+    }
+  };
+
+  // Bloque reutilizable de ampliaciones pendientes (mobile + desktop).
+  const renderAddons = (o: SellerOrder) => {
+    const list = addonsByOrder[o.public_id];
+    if (!list || list.length === 0) return null;
+    return (
+      <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-amber-400 mb-1">Ampliaciones pendientes</p>
+        {list.map((ad) => (
+          <div key={ad.public_id} className="rounded-md border border-amber-500/20 bg-amber-950/10 p-3">
+            <p className="text-sm text-cream/90">
+              +{ad.extra_adults} ad{ad.extra_children > 0 ? ` · +${ad.extra_children} men` : ''} —
+              <strong className="text-gold"> USD {ad.charge_usd}</strong>
+              <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</span>
+            </p>
+            {ad.payment_method === 'cash' ? (
+              <div className="mt-2 flex gap-2">
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleCollectAddon(o.public_id, ad.public_id); }}
+                  disabled={addonBusy === ad.public_id}
+                  className="flex-1 rounded-md bg-gold px-3 py-2 text-sm font-semibold text-ink hover:bg-gold/90 transition disabled:opacity-50">
+                  {addonBusy === ad.public_id ? '...' : '✓ Confirmar cobro'}
+                </button>
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleCancelAddon(o.public_id, ad.public_id); }}
+                  disabled={addonBusy === ad.public_id}
+                  className="rounded-md border border-gold/20 px-3 py-2 text-sm text-cream/60 hover:border-gold/40 transition disabled:opacity-50">
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-2">
+                <p className="text-xs text-cream/45">Esperando el pago del pasajero.</p>
+                {ad.mp_init_point && (
+                  <PaymentLinkShare link={ad.mp_init_point} phone={o.customer_phone}
+                    waMessage={`Hola ${o.customer_name}, para sumar pasajeros pagá la diferencia (USD ${ad.charge_usd}) acá: ${ad.mp_init_point}`} />
+                )}
+                <button type="button" onClick={(e) => { e.stopPropagation(); handleCancelAddon(o.public_id, ad.public_id); }}
+                  disabled={addonBusy === ad.public_id}
+                  className="w-full rounded-md border border-gold/20 px-3 py-2 text-sm text-cream/60 hover:border-gold/40 transition disabled:opacity-50">
+                  Cancelar ampliación
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
   const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
 
   // Auto-expand y scroll a la orden destacada una vez que carguen los datos
@@ -399,6 +481,7 @@ export default function SellerOrders() {
                           </button>
                         </div>
                       )}
+                      {renderAddons(o)}
                       {eventsByOrder[o.public_id] && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Histórico</p>
@@ -566,6 +649,7 @@ export default function SellerOrders() {
                                 </p>
                               </div>
                             )}
+                            <div className="max-w-md">{renderAddons(o)}</div>
                             {eventsByOrder[o.public_id] && (
                               <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Histórico de la orden</p>

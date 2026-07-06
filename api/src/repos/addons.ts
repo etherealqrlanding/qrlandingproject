@@ -1,6 +1,7 @@
 import { pool } from '../db.js';
 import { checkAvailabilityTxLocked } from './availability.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../services/orderIncrease.js';
+import { recomputeCashCommission } from '../services/orderCommission.js';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -16,6 +17,7 @@ export interface CreateAddonInput {
   newSubtotalUsd: number;
   newTotalArs: number;
   exchangeRateUsed: number;
+  paymentMethod: 'mercadopago' | 'cash';
 }
 
 export interface CreatedAddon {
@@ -41,12 +43,14 @@ export async function createOrderAddon(input: CreateAddonInput): Promise<Created
     const { rows } = await client.query<{ id: number; public_id: string }>(
       `INSERT INTO order_addons (
          order_id, option_id, service_date, extra_adults, extra_children,
-         charge_usd, charge_ars, new_subtotal_usd, new_total_ars, exchange_rate_used
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         charge_usd, charge_ars, new_subtotal_usd, new_total_ars, exchange_rate_used,
+         payment_method
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING id, public_id`,
       [
         input.orderId, input.optionId, input.serviceDate, input.extraAdults, input.extraChildren,
         input.chargeUsd, input.chargeArs, input.newSubtotalUsd, input.newTotalArs, input.exchangeRateUsed,
+        input.paymentMethod,
       ],
     );
 
@@ -113,11 +117,11 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
     await client.query('BEGIN');
 
     const { rows: addonRows } = await client.query<{
-      id: number; order_id: number; status: string;
+      id: number; order_id: number; status: string; payment_method: string;
       extra_adults: number; extra_children: number;
       charge_usd: number; charge_ars: number;
     }>(
-      `SELECT id, order_id, status, extra_adults, extra_children,
+      `SELECT id, order_id, status, payment_method, extra_adults, extra_children,
               charge_usd::float AS charge_usd, charge_ars::float AS charge_ars
          FROM order_addons WHERE public_id = $1 FOR UPDATE`,
       [publicId],
@@ -136,18 +140,19 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
 
     // Estado ACTUAL de la orden (por si cambió desde que se generó el link)
     const { rows: orderRows } = await client.query<{
-      order_id: number; exchange_rate_used: number;
+      order_id: number; exchange_rate_used: number; payment_method: string;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean;
-      commission_percent: number | null;
+      commission_percent: number | null; seller_id: number | null; net_total_usd: number | null;
     }>(
-      `SELECT o.id AS order_id, o.exchange_rate_used::float AS exchange_rate_used,
+      `SELECT o.id AS order_id, o.exchange_rate_used::float AS exchange_rate_used, o.payment_method,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
-              a.commission_percent_snapshot::float AS commission_percent
+              a.commission_percent_snapshot::float AS commission_percent,
+              a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id
          LEFT JOIN order_attributions a ON a.order_id = o.id
@@ -195,22 +200,36 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
       `UPDATE orders SET total_usd = $1, total_ars = $2, updated_at = NOW() WHERE id = $3`,
       [calc.newSubtotalUsd, calc.newTotalArs, addon.order_id],
     );
-    if (cur.commission_percent != null) {
-      const newCommissionUsd = round2(calc.newSubtotalUsd * cur.commission_percent / 100);
+    // Recalcular comisión según el medio de pago de la orden.
+    if (cur.seller_id != null) {
+      let newCommissionUsd: number;
+      let newNetTotalUsd: number | null = null;
+      if (cur.payment_method === 'cash') {
+        const cash = recomputeCashCommission(cur.net_total_usd, cur.subtotal_usd, calc.newSubtotalUsd);
+        newCommissionUsd = cash.newCommissionUsd;
+        newNetTotalUsd = cash.newNetTotalUsd;
+      } else {
+        newCommissionUsd = round2(calc.newSubtotalUsd * (cur.commission_percent ?? 0) / 100);
+      }
       const newCommissionArs = round2(newCommissionUsd * cur.exchange_rate_used);
       await client.query(
-        `UPDATE order_attributions SET commission_amount_usd = $1, commission_amount_ars = $2 WHERE order_id = $3`,
-        [newCommissionUsd, newCommissionArs, addon.order_id],
+        `UPDATE order_attributions
+            SET commission_amount_usd = $1, commission_amount_ars = $2,
+                net_total_usd_snapshot = COALESCE($3, net_total_usd_snapshot)
+          WHERE order_id = $4`,
+        [newCommissionUsd, newCommissionArs, newNetTotalUsd, addon.order_id],
       );
     }
+    // Efectivo cobrado (cash_collected_at) o pago MP.
+    const isCash = addon.payment_method === 'cash';
     await client.query(
       `UPDATE order_addons SET status = 'paid', mp_payment_id = $1, paid_at = NOW() WHERE id = $2`,
       [mpPaymentId, addon.id],
     );
     await client.query(
       `INSERT INTO payment_events (order_id, event_type, mp_resource_id, payload)
-       VALUES ($1, 'addon_paid', $2, $3::jsonb)`,
-      [addon.order_id, mpPaymentId, JSON.stringify({
+       VALUES ($1, $2, $3, $4::jsonb)`,
+      [addon.order_id, isCash ? 'addon_cash_collected' : 'addon_paid', mpPaymentId, JSON.stringify({
         addon_id: addon.id, new_adults: newAdults, new_children: newChildren,
         charge_usd: addon.charge_usd, charge_ars: addon.charge_ars,
       })],
@@ -226,12 +245,82 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
   }
 }
 
-/** Addons pendientes con más de `hours` horas (para el barrido de caducidad). */
+export interface PendingAddon {
+  public_id: string;
+  payment_method: string;
+  extra_adults: number;
+  extra_children: number;
+  charge_usd: number;
+  charge_ars: number;
+  mp_init_point: string | null;
+  created_at: string;
+}
+
+/** Addons PENDIENTES de una orden (por public_id de la orden), para surface + cobro/cancelación. */
+export async function listPendingAddonsByOrderPublicId(orderPublicId: string, sellerId?: number): Promise<PendingAddon[]> {
+  const params: unknown[] = [orderPublicId];
+  let sellerJoin = '';
+  if (sellerId != null) {
+    params.push(sellerId);
+    sellerJoin = `JOIN order_attributions a ON a.order_id = o.id AND a.seller_id = $2`;
+  }
+  const { rows } = await pool.query<PendingAddon>(
+    `SELECT ad.public_id, ad.payment_method, ad.extra_adults, ad.extra_children,
+            ad.charge_usd::float AS charge_usd, ad.charge_ars::float AS charge_ars,
+            ad.mp_init_point, ad.created_at
+       FROM order_addons ad
+       JOIN orders o ON o.id = ad.order_id
+       ${sellerJoin}
+      WHERE o.public_id = $1 AND ad.status = 'pending'
+      ORDER BY ad.created_at DESC`,
+    params,
+  );
+  return rows;
+}
+
+/** Datos mínimos de un addon para validar cobro/cancelación (con ownership del vendedor). */
+export async function getAddonForAction(publicId: string): Promise<{
+  order_id: number; seller_id: number | null; payment_method: string; status: string;
+} | null> {
+  const { rows } = await pool.query(
+    `SELECT ad.order_id, ad.payment_method, ad.status, a.seller_id
+       FROM order_addons ad
+       LEFT JOIN order_attributions a ON a.order_id = ad.order_id
+      WHERE ad.public_id = $1 LIMIT 1`,
+    [publicId],
+  );
+  return rows[0] ?? null;
+}
+
+/** Cancela un addon pendiente (libera el cupo). Devuelve order_id si lo canceló. */
+export async function cancelAddon(publicId: string): Promise<number | null> {
+  const { rows } = await pool.query<{ order_id: number }>(
+    `UPDATE order_addons SET status = 'cancelled'
+      WHERE public_id = $1 AND status = 'pending'
+      RETURNING order_id`,
+    [publicId],
+  );
+  return rows[0]?.order_id ?? null;
+}
+
+/** Addons de MERCADO PAGO pendientes con más de `hours` horas (barrido de caducidad). */
 export async function listStalePendingAddons(hours: number): Promise<Array<{ id: number; public_id: string; order_id: number }>> {
   const { rows } = await pool.query<{ id: number; public_id: string; order_id: number }>(
     `SELECT id, public_id, order_id FROM order_addons
-      WHERE status = 'pending' AND mp_payment_id IS NULL
+      WHERE status = 'pending' AND payment_method = 'mercadopago' AND mp_payment_id IS NULL
         AND created_at < NOW() - make_interval(hours => $1)`,
+    [hours],
+  );
+  return rows;
+}
+
+/** Ampliaciones en EFECTIVO no cobradas con más de `hours` horas → caducan y liberan cupo. */
+export async function expireStaleCashAddons(hours: number): Promise<Array<{ id: number; order_id: number }>> {
+  const { rows } = await pool.query<{ id: number; order_id: number }>(
+    `UPDATE order_addons SET status = 'expired'
+      WHERE status = 'pending' AND payment_method = 'cash'
+        AND created_at < NOW() - make_interval(hours => $1)
+      RETURNING id, order_id`,
     [hours],
   );
   return rows;
