@@ -185,12 +185,16 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       });
     }
 
-    // Cargar opción + producto
+    // Cargar opción + producto (incluye netos para calcular la comisión en efectivo)
     const { rows: optionRows } = await pool.query<{
       id: number; product_id: number;
       name_es: string; name_en: string;
       price_adult_usd: string; price_child_usd: string | null;
       transfer_price_usd: string;
+      net_price_adult_usd: string | null; net_price_child_usd: string | null;
+      net_transfer_price_usd: string | null; net_price_currency: string;
+      net_price_adult_ars: string | null; net_price_child_ars: string | null;
+      net_transfer_price_ars: string | null;
       available_days: number[];
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
@@ -201,6 +205,13 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
          o.price_adult_usd::text AS price_adult_usd,
          o.price_child_usd::text  AS price_child_usd,
          o.transfer_price_usd::text AS transfer_price_usd,
+         o.net_price_adult_usd::text    AS net_price_adult_usd,
+         o.net_price_child_usd::text    AS net_price_child_usd,
+         o.net_transfer_price_usd::text AS net_transfer_price_usd,
+         o.net_price_currency,
+         o.net_price_adult_ars::text    AS net_price_adult_ars,
+         o.net_price_child_ars::text    AS net_price_child_ars,
+         o.net_transfer_price_ars::text AS net_transfer_price_ars,
          o.available_days, o.default_capacity_per_day, o.is_active,
          p.name AS product_name, p.slug AS product_slug,
          p.is_active AS product_active
@@ -246,6 +257,36 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
 
+    // Neto: monto mínimo que el operador debe recibir (para la comisión en efectivo).
+    const pax = input.adults + input.children;
+    const transferReq = (input.transfer_requested && transferPriceUsd > 0);
+    const netCurrency = option.net_price_currency ?? 'USD';
+    let netTotalUsd: number | null = null;
+    if (netCurrency === 'USD') {
+      const netAdult = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
+      const netChild = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
+      const netTransfer = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+      if (netAdult != null) {
+        netTotalUsd = Math.round((
+          input.adults * netAdult
+          + input.children * (netChild ?? netAdult)
+          + (transferReq && netTransfer != null ? netTransfer * pax : 0)
+        ) * 100) / 100;
+      }
+    } else {
+      const netAdultArs = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
+      const netChildArs = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
+      const netTransferArs = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+      if (netAdultArs != null && rate > 0) {
+        const netTotalArs = Math.round((
+          input.adults * netAdultArs
+          + input.children * (netChildArs ?? netAdultArs)
+          + (transferReq && netTransferArs != null ? netTransferArs * pax : 0)
+        ) * 100) / 100;
+        netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
+      }
+    }
+
     // Crear orden — ref_code = código del vendedor, utm marca origen
     const order = await createPendingOrder({
       customer: input.customer,
@@ -262,6 +303,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         subtotal_usd: subtotalUsd,
         transfer_requested: input.transfer_requested ?? false,
         transfer_hotel: input.transfer_hotel ?? null,
+        net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
       total_ars: totalArs,
