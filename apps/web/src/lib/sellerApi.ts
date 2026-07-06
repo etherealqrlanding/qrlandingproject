@@ -148,6 +148,10 @@ export interface SellerOrder {
   adults: number;
   children: number;
   total_usd: number;
+  total_ars: number;
+  unit_price_adult_usd: number;
+  unit_price_child_usd: number | null;
+  subtotal_usd: number;
   service_date: string;
   product_name: string;
   option_name: string;
@@ -254,6 +258,23 @@ export const sellerApi = {
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/collect`, {
       method: 'POST',
     }),
+  // Modificar reserva propia. El reintegro por MP NO está disponible para el vendedor
+  // (lo hace el admin); acá solo: reducir/aumentar en efectivo y agregar por link de MP.
+  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean }) =>
+    request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
+      `/api/seller/me/orders/${encodeURIComponent(publicId)}/reduce-cash`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean }) =>
+    request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+      `/api/seller/me/orders/${encodeURIComponent(publicId)}/increase-cash`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  addMp: (publicId: string, body: { adults: number; children: number }) =>
+    request<{ addon_public_id: string; order_public_id: string; init_point: string; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+      `/api/seller/me/orders/${encodeURIComponent(publicId)}/add-mp`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   notifications: {
     list: () => request<SellerNotification[]>('/api/seller/me/notifications'),
     markAllRead: () => request<{ updated: number }>('/api/seller/me/notifications/read-all', { method: 'PATCH' }),

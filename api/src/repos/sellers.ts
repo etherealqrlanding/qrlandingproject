@@ -183,6 +183,10 @@ export interface SellerOrder {
   adults: number;
   children: number;
   total_usd: number;
+  total_ars: number;
+  unit_price_adult_usd: number;
+  unit_price_child_usd: number | null;
+  subtotal_usd: number;
   service_date: string;
   product_name: string;
   option_name: string;
@@ -210,6 +214,10 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        oi.adults, oi.children,
        o.total_usd::float AS total_usd,
+       o.total_ars::float AS total_ars,
+       oi.unit_price_adult_usd::float AS unit_price_adult_usd,
+       oi.unit_price_child_usd::float AS unit_price_child_usd,
+       oi.subtotal_usd::float AS subtotal_usd,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,

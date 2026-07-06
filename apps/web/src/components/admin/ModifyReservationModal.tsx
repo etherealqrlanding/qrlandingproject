@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react';
-import { adminApi, AdminApiError } from '../../lib/adminApi';
+
+type ReduceBody = { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean };
+type IncreaseBody = { adults: number; children: number; reason?: string; notify_customer?: boolean };
+
+// Handlers de API — el admin y el vendedor pasan los suyos. Los que falten deshabilitan
+// esa operación (ej. el vendedor NO puede reintegrar por MP → reduceMp ausente).
+export interface ModifyHandlers {
+  reduceMp?: (body: ReduceBody) => Promise<unknown>;
+  reduceCash?: (body: ReduceBody) => Promise<unknown>;
+  increaseCash?: (body: IncreaseBody) => Promise<unknown>;
+  addMp?: (body: { adults: number; children: number }) => Promise<{ init_point: string }>;
+}
 
 interface Props {
   order: {
@@ -19,13 +30,14 @@ interface Props {
     service_date: string;
     option_name_snapshot: string;
   };
+  handlers: ModifyHandlers;
   onClose: () => void;
   onDone: () => void;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-export default function ModifyReservationModal({ order, item, onClose, onDone }: Props) {
+export default function ModifyReservationModal({ order, item, handlers, onClose, onDone }: Props) {
   const origAdults = item.adults;
   const origChildren = item.children;
   const unitAdult = Number(item.unit_price_adult_usd);
@@ -68,6 +80,9 @@ export default function ModifyReservationModal({ order, item, onClose, onDone }:
   const isMp = order.payment_method === 'mercadopago';
   const phoneDigits = (order.customer_phone ?? '').replace(/\D/g, '');
 
+  // El vendedor no puede reintegrar por MP (lo hace el admin) → reduceMp ausente.
+  const reduceBlocked = preview.direction === 'reduce' && isMp && !handlers.reduceMp;
+
   const confirmLabel = (() => {
     if (preview.direction === 'none') return 'Sin cambios';
     if (preview.direction === 'reduce') return `Reintegrar USD ${Math.abs(preview.delta)}`;
@@ -81,20 +96,23 @@ export default function ModifyReservationModal({ order, item, onClose, onDone }:
     try {
       if (preview.direction === 'reduce') {
         const body = { adults, children, transfer_requested: effectiveTransfer, reason: reason.trim() || undefined, notify_customer: notify };
-        if (isMp) await adminApi.orders.modifyMp(order.public_id, body);
-        else await adminApi.orders.reduceCash(order.public_id, body);
+        const fn = isMp ? handlers.reduceMp : handlers.reduceCash;
+        if (!fn) { setError('Esta operación no está disponible.'); return; }
+        await fn(body);
         onDone();
       } else if (preview.direction === 'increase') {
         if (isMp) {
-          const r = await adminApi.orders.addMp(order.public_id, { adults, children });
+          if (!handlers.addMp) { setError('Esta operación no está disponible.'); return; }
+          const r = await handlers.addMp({ adults, children });
           setMpLink(r.init_point);
         } else {
-          await adminApi.orders.increaseCash(order.public_id, { adults, children, reason: reason.trim() || undefined, notify_customer: notify });
+          if (!handlers.increaseCash) { setError('Esta operación no está disponible.'); return; }
+          await handlers.increaseCash({ adults, children, reason: reason.trim() || undefined, notify_customer: notify });
           onDone();
         }
       }
     } catch (err) {
-      setError(err instanceof AdminApiError ? err.message : (err as Error).message);
+      setError((err as Error).message);
     } finally {
       setProcessing(false);
     }
@@ -173,11 +191,16 @@ export default function ModifyReservationModal({ order, item, onClose, onDone }:
             : 'border-cream/15 bg-ink/30'
           }`}>
             {preview.direction === 'none' && <p className="text-sm text-cream/60">Sin cambios respecto de la reserva actual.</p>}
-            {preview.direction === 'reduce' && (
+            {preview.direction === 'reduce' && !reduceBlocked && (
               <p className="text-sm text-cream/80">
                 {isMp ? 'Se reintegrará al cliente ' : 'El vendedor devuelve en efectivo '}
                 <strong className="text-cream">USD {Math.abs(preview.delta)}</strong> (≈ ARS {preview.deltaArs.toLocaleString('es-AR')}).
                 Nuevo total: <strong className="text-cream">USD {preview.newSubtotal}</strong>.
+              </p>
+            )}
+            {reduceBlocked && (
+              <p className="text-sm text-bordeaux-light">
+                El reintegro de reservas por Mercado Pago lo realiza el administrador. Pedile que lo procese.
               </p>
             )}
             {preview.direction === 'increase' && (
@@ -209,7 +232,7 @@ export default function ModifyReservationModal({ order, item, onClose, onDone }:
 
         <div className="p-6 border-t border-gold/10 flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} disabled={processing} className="btn-ghost text-sm disabled:opacity-40">Cancelar</button>
-          <button type="button" onClick={handleConfirm} disabled={processing || preview.direction === 'none'}
+          <button type="button" onClick={handleConfirm} disabled={processing || preview.direction === 'none' || reduceBlocked}
             className="btn-primary text-sm disabled:opacity-40">
             {processing ? 'Procesando...' : confirmLabel}
           </button>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerOrder } from '../../lib/sellerApi';
+import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 
 // Estado mostrado al vendedor según método de pago + sub-estado real de la orden:
 //  - Pendiente: reservó, todavía no se cobró.
@@ -88,6 +89,12 @@ export default function SellerOrders() {
   const [collecting, setCollecting] = useState<string | null>(null);
   const [confirmPublicId, setConfirmPublicId] = useState<string | null>(null);
   const [collectError, setCollectError] = useState<string | null>(null);
+  const [modifyOrder, setModifyOrder] = useState<SellerOrder | null>(null);
+
+  const reload = async () => {
+    const data = await sellerApi.orders();
+    setOrders(data);
+  };
   const highlightRowRef = useRef<HTMLTableRowElement | null>(null);
 
   // Auto-expand y scroll a la orden destacada una vez que carguen los datos
@@ -141,6 +148,35 @@ export default function SellerOrders() {
 
   return (
     <>
+    {modifyOrder && (
+      <ModifyReservationModal
+        order={{
+          public_id: modifyOrder.public_id,
+          payment_method: modifyOrder.payment_method === 'cash' ? 'cash' : 'mercadopago',
+          customer_name: modifyOrder.customer_name,
+          customer_phone: modifyOrder.customer_phone,
+          total_usd: modifyOrder.total_usd,
+          total_ars: modifyOrder.total_ars,
+        }}
+        item={{
+          adults: modifyOrder.adults,
+          children: modifyOrder.children,
+          unit_price_adult_usd: String(modifyOrder.unit_price_adult_usd),
+          unit_price_child_usd: modifyOrder.unit_price_child_usd != null ? String(modifyOrder.unit_price_child_usd) : null,
+          subtotal_usd: String(modifyOrder.subtotal_usd),
+          service_date: modifyOrder.service_date,
+          option_name_snapshot: modifyOrder.option_name,
+        }}
+        handlers={{
+          // El vendedor NO reintegra por MP (lo hace el admin) → sin reduceMp.
+          reduceCash: (body) => sellerApi.reduceCash(modifyOrder.public_id, body),
+          increaseCash: (body) => sellerApi.increaseCash(modifyOrder.public_id, body),
+          addMp: (body) => sellerApi.addMp(modifyOrder.public_id, body),
+        }}
+        onClose={() => setModifyOrder(null)}
+        onDone={() => { setModifyOrder(null); reload().catch(() => {}); }}
+      />
+    )}
     {confirmPublicId && pendingOrder && (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
         <div className="min-h-full flex items-center justify-center p-4">
@@ -328,6 +364,17 @@ export default function SellerOrders() {
                           </button>
                         </div>
                       )}
+                      {o.status === 'paid' && (
+                        <div className="mt-3 pt-3 border-t border-gold/10">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setModifyOrder(o); }}
+                            className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors"
+                          >
+                            ✎ Modificar pasajeros
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -461,6 +508,22 @@ export default function SellerOrders() {
                                   ✓ Confirmar cobro en efectivo
                                 </button>
                                 <p className="mt-1.5 text-xs text-cream/35 text-center">Confirmar envía el email al pasajero</p>
+                              </div>
+                            )}
+                            {o.status === 'paid' && (
+                              <div className="mt-4 pt-4 border-t border-gold/10">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setModifyOrder(o); }}
+                                  className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors"
+                                >
+                                  ✎ Modificar pasajeros / traslado
+                                </button>
+                                <p className="mt-1.5 text-xs text-cream/35 text-center">
+                                  {o.payment_method === 'cash'
+                                    ? 'Sumás/bajás pax y cobrás o devolvés en el momento'
+                                    : 'Sumar pax genera un link de pago para el cliente'}
+                                </p>
                               </div>
                             )}
                           </td>

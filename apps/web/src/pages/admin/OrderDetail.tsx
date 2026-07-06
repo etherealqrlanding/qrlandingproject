@@ -491,6 +491,12 @@ export default function OrderDetail() {
             total_ars: order.total_ars,
           }}
           item={order.items[0]}
+          handlers={{
+            reduceMp: (body) => adminApi.orders.modifyMp(order.public_id, body),
+            reduceCash: (body) => adminApi.orders.reduceCash(order.public_id, body),
+            increaseCash: (body) => adminApi.orders.increaseCash(order.public_id, body),
+            addMp: (body) => adminApi.orders.addMp(order.public_id, body),
+          }}
           onClose={() => setModifyOpen(false)}
           onDone={() => { setModifyOpen(false); load(); }}
         />
