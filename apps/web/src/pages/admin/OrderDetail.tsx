@@ -148,7 +148,7 @@ export default function OrderDetail() {
   const handleMarkCommissionPaid = async () => {
     if (!order || !order.seller_id) return;
     const confirm1 = confirm(
-      `¿Marcar la comisión de esta orden como liquidada al vendedor?\n\nVendedor: ${order.seller_name}\nComisión: USD ${order.commission_amount_usd}\n\nSe notificará al vendedor automáticamente.`,
+      `¿Marcar la comisión de esta orden como liquidada al vendedor?\n\nVendedor: ${order.seller_name}\nComisión: ${fmtArs(order.commission_amount_ars ?? 0)}\n\nSe notificará al vendedor automáticamente.`,
     );
     if (!confirm1) return;
     try {
@@ -165,7 +165,7 @@ export default function OrderDetail() {
   const handleMarkNetSettled = async () => {
     if (!order || !order.seller_id) return;
     const confirm1 = confirm(
-      `¿Confirmar que ${order.seller_name} ya nos liquidó el neto de esta venta en efectivo?\n\nNeto: USD ${order.net_total_usd ?? 0}\n\nQueda registrado con fecha.`,
+      `¿Confirmar que ${order.seller_name} ya nos liquidó el neto de esta venta en efectivo?\n\nNeto: ${fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))}\n\nQueda registrado con fecha.`,
     );
     if (!confirm1) return;
     try {
@@ -345,7 +345,7 @@ export default function OrderDetail() {
                 <div key={ad.public_id} className="rounded-md border border-gold/10 bg-ink/30 p-3">
                   <p className="text-sm text-cream/90">
                     +{ad.extra_adults} ad{ad.extra_children > 0 ? ` · +${ad.extra_children} men` : ''} —
-                    <strong className="text-gold"> USD {ad.charge_usd}</strong>
+                    <strong className="text-gold"> {fmtArs(ad.charge_ars)}</strong>
                     <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</span>
                   </p>
                   {ad.payment_method === 'cash' ? (
@@ -366,7 +366,7 @@ export default function OrderDetail() {
                         <PaymentLinkShare
                           link={ad.mp_init_point}
                           phone={order.customer_phone}
-                          waMessage={`Hola ${order.customer_name}, para sumar pasajeros a tu reserva pagá la diferencia (USD ${ad.charge_usd}) acá: ${ad.mp_init_point}`}
+                          waMessage={`Hola ${order.customer_name}, para sumar pasajeros a tu reserva pagá la diferencia (${fmtArs(ad.charge_ars)}) acá: ${ad.mp_init_point}`}
                         />
                       )}
                       <button type="button" onClick={() => handleCancelAddon(ad.public_id)} disabled={addonBusy === ad.public_id}
@@ -396,17 +396,17 @@ export default function OrderDetail() {
                 <>
                   {/* Efectivo: el vendedor cobró el total y NOS debe liquidar el neto */}
                   <div className="mt-3 space-y-1.5">
-                    <Row label="Venta total">USD {order.total_usd}</Row>
-                    <Row label="Comisión del vendedor">USD {order.commission_amount_usd ?? 0}</Row>
+                    <Row label="Venta total">{fmtArs(order.total_ars)}</Row>
+                    <Row label="Ganancia del vendedor">{fmtArs(order.commission_amount_ars ?? 0)}</Row>
                     <Row label="% de ganancia">
                       {order.total_usd > 0
                         ? `${(((order.commission_amount_usd ?? 0) / order.total_usd) * 100).toFixed(1)}%`
                         : '—'}
                     </Row>
-                    <Row label="Nos liquida (neto)" highlight>USD {order.net_total_usd ?? 0}</Row>
+                    <Row label="Nos liquida (neto)" highlight>{fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))}</Row>
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ El vendedor cobró los USD {order.total_usd} y <strong>nos tiene que rendir el neto (USD {order.net_total_usd ?? 0})</strong>.
+                    ➜ El vendedor cobró {fmtArs(order.total_ars)} y <strong>nos tiene que rendir el neto ({fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))})</strong>.
                   </p>
                   <div className="mt-2">
                     <Row label="Neto cobrado">
@@ -430,13 +430,12 @@ export default function OrderDetail() {
                 <>
                   {/* Mercado Pago: nosotros cobramos y le liquidamos su comisión */}
                   <div className="mt-3 space-y-1.5">
-                    <Row label="Venta total">USD {order.total_usd}</Row>
+                    <Row label="Venta total">{fmtArs(order.total_ars)}</Row>
                     <Row label="Comisión">{Number(order.commission_percent_snapshot ?? 0).toFixed(1)}%</Row>
-                    <Row label="Le liquidamos (USD)" highlight>USD {order.commission_amount_usd ?? 0}</Row>
-                    <Row label="ARS">ARS {(order.commission_amount_ars ?? 0).toLocaleString('es-AR')}</Row>
+                    <Row label="Le liquidamos" highlight>{fmtArs(order.commission_amount_ars ?? 0)}</Row>
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ Cobramos por Mercado Pago y <strong>le liquidamos su comisión (USD {order.commission_amount_usd ?? 0})</strong> al vendedor.
+                    ➜ Cobramos por Mercado Pago y <strong>le liquidamos su comisión ({fmtArs(order.commission_amount_ars ?? 0)})</strong> al vendedor.
                   </p>
                   <div className="mt-2">
                     <Row label="Pago al vendedor">
@@ -697,6 +696,11 @@ export default function OrderDetail() {
       )}
     </div>
   );
+}
+
+// Comisiones y deducciones se muestran en pesos (el negocio opera en ARS).
+function fmtArs(n: number): string {
+  return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
