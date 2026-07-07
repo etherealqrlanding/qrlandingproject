@@ -16,7 +16,7 @@ function SummaryCard({ label, value, hint, highlight }: Readonly<{ label: string
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
 function SellerCard({ s }: Readonly<{ s: AdminSeller }>) {
-  const pending = s.commission_pending_payment_usd ?? 0;
+  const pending = s.commission_pending_payment_ars ?? 0;
   return (
     <div className="rounded-xl border border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60 transition overflow-hidden">
       <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
@@ -46,13 +46,13 @@ function SellerCard({ s }: Readonly<{ s: AdminSeller }>) {
 
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 text-[10px] text-cream/50 flex-wrap">
-            {(s.revenue_paid_usd ?? 0) > 0 && (
-              <span>Rev. <span className="text-cream/70">USD {(s.revenue_paid_usd ?? 0).toLocaleString()}</span></span>
+            {(s.revenue_paid_ars ?? 0) > 0 && (
+              <span>Rev. <span className="text-cream/70">ARS {(s.revenue_paid_ars ?? 0).toLocaleString()}</span></span>
             )}
             <span>
               Pendiente:{' '}
               <span className={pending > 0 ? 'text-gold font-mono' : 'text-cream/30'}>
-                {pending > 0 ? `USD ${pending.toLocaleString()}` : '—'}
+                {pending > 0 ? `ARS ${pending.toLocaleString()}` : '—'}
               </span>
             </span>
           </div>
@@ -82,10 +82,10 @@ export default function SellersList() {
     return sellers.reduce(
       (acc, s) => {
         if (!s.is_active && !showInactive) return acc;
-        acc.revenue += s.revenue_paid_usd ?? 0;
-        acc.paid += s.commission_paid_usd ?? 0;
-        acc.pending += s.commission_pending_payment_usd ?? 0;
-        acc.netPending += s.net_pending_settlement_usd ?? 0;
+        acc.revenue += s.revenue_paid_ars ?? 0;
+        acc.paid += s.commission_paid_ars ?? 0;
+        acc.pending += s.commission_pending_payment_ars ?? 0;
+        acc.netPending += s.net_pending_settlement_ars ?? 0;
         return acc;
       },
       { revenue: 0, paid: 0, pending: 0, netPending: 0 },
@@ -152,10 +152,10 @@ export default function SellersList() {
                   <td className="py-2.5 px-3 font-mono text-xs text-gold-soft whitespace-nowrap">{s.code}</td>
                   <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs">{Number(s.commission_percent).toFixed(1)}%</td>
                   <td className="py-2.5 px-3 text-right text-cream/70 tabular-nums text-xs">{s.orders_paid ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right text-cream/70 tabular-nums text-xs whitespace-nowrap">USD {(s.revenue_paid_usd ?? 0).toLocaleString()}</td>
+                  <td className="py-2.5 px-3 text-right text-cream/70 tabular-nums text-xs whitespace-nowrap">ARS {(s.revenue_paid_ars ?? 0).toLocaleString()}</td>
                   <td className="py-2.5 px-3 text-right text-gold tabular-nums text-xs whitespace-nowrap">
-                    {(s.commission_pending_payment_usd ?? 0) > 0
-                      ? `USD ${(s.commission_pending_payment_usd ?? 0).toLocaleString()}`
+                    {(s.commission_pending_payment_ars ?? 0) > 0
+                      ? `ARS ${(s.commission_pending_payment_ars ?? 0).toLocaleString()}`
                       : <span className="text-cream/40">—</span>}
                   </td>
                   <td className="py-2.5 px-3 text-center">
@@ -191,10 +191,10 @@ export default function SellersList() {
 
       {totals && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 md:mb-8">
-          <SummaryCard label="Revenue generado" value={`USD ${totals.revenue.toLocaleString()}`} hint="Total ventas pagadas atribuidas" />
-          <SummaryCard label="Comisiones" value={`USD ${totals.paid.toLocaleString()}`} hint="Acumulado de todas las ventas pagadas" />
-          <SummaryCard label="A pagar (MP)" value={`USD ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight />
-          <SummaryCard label="A cobrar (efectivo)" value={`USD ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" />
+          <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Total ventas pagadas atribuidas" />
+          <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Acumulado de todas las ventas pagadas" />
+          <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight />
+          <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" />
         </div>
       )}
 

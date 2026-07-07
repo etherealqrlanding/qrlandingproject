@@ -26,11 +26,15 @@ export interface SellerWithStats {
   orders_total: number;                  // todas las órdenes atribuidas
   orders_paid: number;                   // órdenes en estado 'paid'
   revenue_paid_usd: number;              // suma total_usd de órdenes pagadas atribuidas
+  revenue_paid_ars: number;
   commission_paid_usd: number;           // comisión acumulada de órdenes pagadas (ambos métodos)
+  commission_paid_ars: number;
   // MP: comisión que NOSOTROS le debemos al vendedor y todavía no liquidamos (paid_to_seller_at NULL)
   commission_pending_payment_usd: number;
+  commission_pending_payment_ars: number;
   // Efectivo: neto que el VENDEDOR nos debe liquidar y todavía no rindió (net_settled_at NULL)
   net_pending_settlement_usd: number;
+  net_pending_settlement_ars: number;
 }
 
 export async function listSellersWithStats(): Promise<SellerWithStats[]> {
@@ -42,24 +46,36 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
        COALESCE(stats.orders_total, 0)::int AS orders_total,
        COALESCE(stats.orders_paid, 0)::int AS orders_paid,
        COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
+       COALESCE(stats.revenue_paid_ars, 0)::float AS revenue_paid_ars,
        COALESCE(stats.commission_paid_usd, 0)::float AS commission_paid_usd,
+       COALESCE(stats.commission_paid_ars, 0)::float AS commission_paid_ars,
        COALESCE(stats.commission_pending_payment_usd, 0)::float AS commission_pending_payment_usd,
-       COALESCE(stats.net_pending_settlement_usd, 0)::float AS net_pending_settlement_usd
+       COALESCE(stats.commission_pending_payment_ars, 0)::float AS commission_pending_payment_ars,
+       COALESCE(stats.net_pending_settlement_usd, 0)::float AS net_pending_settlement_usd,
+       COALESCE(stats.net_pending_settlement_ars, 0)::float AS net_pending_settlement_ars
        FROM sellers s
        LEFT JOIN LATERAL (
          SELECT
            COUNT(*) FILTER (WHERE o.id IS NOT NULL) AS orders_total,
            COUNT(*) FILTER (WHERE o.status = 'paid') AS orders_paid,
            SUM(o.total_usd) FILTER (WHERE o.status = 'paid') AS revenue_paid_usd,
+           SUM(o.total_ars) FILTER (WHERE o.status = 'paid') AS revenue_paid_ars,
            SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid') AS commission_paid_usd,
+           SUM(a.commission_amount_ars) FILTER (WHERE o.status = 'paid') AS commission_paid_ars,
            -- MP: lo que le debemos liquidar al vendedor (comisión pendiente)
            SUM(a.commission_amount_usd) FILTER (
              WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL
            ) AS commission_pending_payment_usd,
+           SUM(a.commission_amount_ars) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL
+           ) AS commission_pending_payment_ars,
            -- Efectivo: neto que el vendedor nos debe rendir (pendiente)
            SUM(a.net_total_usd_snapshot) FILTER (
              WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL
-           ) AS net_pending_settlement_usd
+           ) AS net_pending_settlement_usd,
+           SUM(a.net_total_usd_snapshot * o.exchange_rate_used) FILTER (
+             WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL
+           ) AS net_pending_settlement_ars
            FROM order_attributions a
            JOIN orders o ON o.id = a.order_id
           WHERE a.seller_id = s.id

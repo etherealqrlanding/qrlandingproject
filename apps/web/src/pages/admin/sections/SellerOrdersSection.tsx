@@ -52,14 +52,14 @@ export default function SellerOrdersSection({ seller }: Props) {
     if (!orders) return null;
     return orders.reduce((acc, o) => {
       if (o.status === 'paid') {
-        acc.totalCommission += o.commission_amount_usd ?? 0;
+        acc.totalCommission += o.commission_amount_ars ?? 0;
         if (o.payment_method === 'cash') {
-          // Efectivo: nos deben rendir el neto
-          if (!o.net_settled_at) acc.netToCollect += o.net_total_usd ?? 0;
+          // Efectivo: nos deben rendir el neto (en ARS)
+          if (!o.net_settled_at) acc.netToCollect += (o.net_total_usd ?? 0) * o.exchange_rate_used;
         } else if (o.paid_to_seller_at) {
-          acc.paid += o.commission_amount_usd ?? 0;
+          acc.paid += o.commission_amount_ars ?? 0;
         } else {
-          acc.pending += o.commission_amount_usd ?? 0;
+          acc.pending += o.commission_amount_ars ?? 0;
         }
       }
       return acc;
@@ -108,10 +108,10 @@ export default function SellerOrdersSection({ seller }: Props) {
     <div className="space-y-6">
       {summary && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card label="Comisión total" value={`USD ${summary.totalCommission.toFixed(2)}`} />
-          <Card label="Ya pagada (MP)" value={`USD ${summary.paid.toFixed(2)}`} />
-          <Card label="A pagar (MP)" value={`USD ${summary.pending.toFixed(2)}`} highlight />
-          <Card label="A cobrar neto (efectivo)" value={`USD ${summary.netToCollect.toFixed(2)}`} />
+          <Card label="Comisión total" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} />
+          <Card label="Ya pagada (MP)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} />
+          <Card label="A pagar (MP)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} highlight />
+          <Card label="A cobrar neto (efectivo)" value={`ARS ${Math.round(summary.netToCollect).toLocaleString('es-AR')}`} />
         </div>
       )}
 
@@ -196,11 +196,11 @@ export default function SellerOrdersSection({ seller }: Props) {
                     <td className="py-3 px-4 text-center">
                       <StatusBadge status={o.status} />
                     </td>
-                    <td className="py-3 px-4 text-right text-cream/80 tabular-nums">USD {o.total_usd}</td>
+                    <td className="py-3 px-4 text-right text-cream/80 tabular-nums">ARS {Math.round(o.total_ars).toLocaleString('es-AR')}</td>
                     <td className="py-3 px-4 text-right text-gold tabular-nums">
-                      USD {o.commission_amount_usd}
+                      ARS {Math.round(o.commission_amount_ars).toLocaleString('es-AR')}
                       {o.payment_method === 'cash' && (
-                        <span className="block text-[10px] text-cream/40">neto a cobrar: USD {o.net_total_usd ?? 0}</span>
+                        <span className="block text-[10px] text-cream/40">neto a cobrar: ARS {Math.round((o.net_total_usd ?? 0) * o.exchange_rate_used).toLocaleString('es-AR')}</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-center">

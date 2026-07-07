@@ -214,11 +214,15 @@ export interface AdminSeller {
   orders_total?: number;
   orders_paid?: number;
   revenue_paid_usd?: number;
+  revenue_paid_ars?: number;
   commission_paid_usd?: number;
+  commission_paid_ars?: number;
   // MP: comisión que le debemos liquidar al vendedor (pendiente)
   commission_pending_payment_usd?: number;
+  commission_pending_payment_ars?: number;
   // Efectivo: neto que el vendedor nos debe rendir (pendiente)
   net_pending_settlement_usd?: number;
+  net_pending_settlement_ars?: number;
 }
 
 export interface AdminSellerOrder {
@@ -228,10 +232,13 @@ export interface AdminSellerOrder {
   customer_name: string;
   customer_email: string;
   total_usd: number;
+  total_ars: number;
+  exchange_rate_used: number;
   service_date: string;
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
+  commission_amount_ars: number;
   net_total_usd: number | null;
   commission_percent_snapshot: number | null;
   paid_to_seller_at: string | null;
