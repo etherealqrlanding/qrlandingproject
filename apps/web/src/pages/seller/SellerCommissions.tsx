@@ -5,11 +5,8 @@ import { useSellerAuth } from '../../hooks/useSellerAuth';
 const PAGE_SIZE = 10;
 const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c', 'sk-d'];
 
-function fmt(usd: number) {
-  return `USD ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-function fmtArs(ars: number) {
-  return `ARS ${ars.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function fmt(ars: number) {
+  return `ARS ${Math.round(ars).toLocaleString('es-AR')}`;
 }
 function fmtDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
@@ -28,7 +25,7 @@ function OrderCard({ o }: Readonly<{ o: SellerCommissionOrder }>) {
             <p className="text-cream/40 text-[10px] mt-0.5">{o.customer_nationality}</p>
           )}
         </div>
-        <p className="text-cream/80 font-mono text-sm whitespace-nowrap shrink-0">{fmt(o.total_usd)}</p>
+        <p className="text-cream/80 font-mono text-sm whitespace-nowrap shrink-0">{fmt(o.total_ars)}</p>
       </div>
       <div>
         <p className="text-cream/70 text-xs">{o.product_name}</p>
@@ -41,7 +38,7 @@ function OrderCard({ o }: Readonly<{ o: SellerCommissionOrder }>) {
           {' · '}
           {o.payment_method === 'cash' ? 'Efectivo' : 'MercadoPago'}
         </span>
-        <span className="text-gold font-mono font-medium">{fmt(o.commission_amount_usd)}</span>
+        <span className="text-gold font-mono font-medium">{fmt(o.commission_amount_ars)}</span>
       </div>
     </div>
   );
@@ -67,8 +64,7 @@ function CommissionCard({
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-gold font-mono font-medium text-sm">{fmt(c.total_usd)}</p>
-          <p className="text-[10px] font-mono text-cream/40 mt-0.5">{fmtArs(c.total_ars)}</p>
+          <p className="text-gold font-mono font-medium text-sm">{fmt(c.total_ars)}</p>
         </div>
         <span className={`text-gold/50 text-xs transition-transform inline-block shrink-0 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
       </button>
@@ -146,8 +142,8 @@ function DetailTable({ d }: Readonly<{ d: DetailState | undefined }>) {
               <td className="px-3 py-2.5 text-cream/50 whitespace-nowrap">
                 {o.payment_method === 'cash' ? 'Efectivo' : 'MP'}
               </td>
-              <td className="px-3 py-2.5 text-right font-mono text-cream/80 whitespace-nowrap">{fmt(o.total_usd)}</td>
-              <td className="px-3 py-2.5 text-right font-mono text-gold whitespace-nowrap">{fmt(o.commission_amount_usd)}</td>
+              <td className="px-3 py-2.5 text-right font-mono text-cream/80 whitespace-nowrap">{fmt(o.total_ars)}</td>
+              <td className="px-3 py-2.5 text-right font-mono text-gold whitespace-nowrap">{fmt(o.commission_amount_ars)}</td>
             </tr>
           ))}
         </tbody>
@@ -203,7 +199,7 @@ export default function SellerCommissions() {
 
   const handlePageChange = (newPage: number) => { setPage(newPage); setExpanded(null); };
 
-  const totalPaid = commissions.reduce((acc, c) => acc + c.total_usd, 0);
+  const totalPaid = commissions.reduce((acc, c) => acc + c.total_ars, 0);
   const totalPages = Math.ceil(commissions.length / PAGE_SIZE);
   const paginated = commissions.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
@@ -250,8 +246,7 @@ export default function SellerCommissions() {
               <tr className="border-b border-gold/10 text-cream/50 text-xs uppercase tracking-wider">
                 <th className="text-left px-4 py-3">Fecha de pago</th>
                 <th className="text-center px-4 py-3">Ventas</th>
-                <th className="text-right px-4 py-3">USD</th>
-                <th className="text-right px-4 py-3">ARS</th>
+                <th className="text-right px-4 py-3">Comisión</th>
                 <th className="w-8 px-4 py-3" />
               </tr>
             </thead>
@@ -268,15 +263,14 @@ export default function SellerCommissions() {
                       <td className="px-4 py-3 text-center text-cream/70 text-xs">
                         {c.orders_count} {c.orders_count === 1 ? 'venta' : 'ventas'}
                       </td>
-                      <td className="px-4 py-3 text-right text-gold font-mono font-medium whitespace-nowrap">{fmt(c.total_usd)}</td>
-                      <td className="px-4 py-3 text-right text-cream/60 font-mono whitespace-nowrap text-xs">{fmtArs(c.total_ars)}</td>
+                      <td className="px-4 py-3 text-right text-gold font-mono font-medium whitespace-nowrap">{fmt(c.total_ars)}</td>
                       <td className="px-4 py-3 text-right">
                         <span className={`text-gold/60 text-xs transition-transform inline-block ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                       </td>
                     </tr>
                     {isOpen && (
                       <tr className="border-b border-gold/10 bg-ink-soft/20">
-                        <td colSpan={5} className="px-4 py-4">
+                        <td colSpan={4} className="px-4 py-4">
                           <DetailTable d={detail[c.paid_date]} />
                         </td>
                       </tr>
@@ -289,7 +283,7 @@ export default function SellerCommissions() {
               <tr className="border-t border-gold/20 text-xs text-cream/50">
                 <td colSpan={2} className="px-4 py-3 text-right">Total acreditado</td>
                 <td className="px-4 py-3 text-right text-gold font-mono font-semibold">{fmt(totalPaid)}</td>
-                <td colSpan={2} />
+                <td />
               </tr>
             </tfoot>
           </table>
@@ -325,7 +319,7 @@ export default function SellerCommissions() {
         <div className="rounded-xl border border-amber-700/30 bg-amber-900/10 p-3 md:p-4 mb-4 md:mb-6 text-sm">
           <p className="text-amber-400 font-medium mb-1">Comisión en proceso</p>
           <p className="text-cream/70 text-xs md:text-sm">
-            Tenés {fmt(me.commission_pending_usd)} pendientes de liquidar. El equipo de Tangos y Milongas Tickets lo procesa periódicamente.
+            Tenés {fmt(me.commission_pending_ars)} pendientes de liquidar. El equipo de Tangos y Milongas Tickets lo procesa periódicamente.
           </p>
         </div>
       )}

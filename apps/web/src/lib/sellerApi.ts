@@ -128,12 +128,17 @@ export interface SellerMe {
   commission_percent: string;
   orders_paid: number;
   revenue_paid_usd: number;
+  revenue_paid_ars: number;
   commission_earned_usd: number;
+  commission_earned_ars: number;
   commission_paid_usd: number;
+  commission_paid_ars: number;
   // MP: comisión que el operador todavía te debe liquidar
   commission_pending_usd: number;
+  commission_pending_ars: number;
   // Efectivo: neto que vos le tenés que rendir al operador
   net_pending_settlement_usd: number;
+  net_pending_settlement_ars: number;
   unread_notifications: number;
 }
 
@@ -226,7 +231,9 @@ export interface SellerCommissionOrder {
   customer_nationality: string | null;
   payment_method: string;
   total_usd: number;
+  total_ars: number;
   commission_amount_usd: number;
+  commission_amount_ars: number;
   created_at: string;
 }
 

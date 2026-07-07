@@ -12,8 +12,8 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-function fmt(usd: number) {
-  return `USD ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function fmt(ars: number) {
+  return `ARS ${Math.round(ars).toLocaleString('es-AR')}`;
 }
 
 function QrImage({ url, error, code }: { url: string | null; error: boolean; code: string }) {
@@ -87,10 +87,10 @@ export default function SellerDashboard() {
   if (!me) return null;
 
   const commissionRate = `${Number(me.commission_percent).toFixed(1)}%`;
-  const pending = me.commission_pending_usd;
-  const earned = me.commission_earned_usd;
-  const paid = me.commission_paid_usd;
-  const netToSettle = me.net_pending_settlement_usd ?? 0;
+  const pending = me.commission_pending_ars;
+  const earned = me.commission_earned_ars;
+  const paid = me.commission_paid_ars;
+  const netToSettle = me.net_pending_settlement_ars ?? 0;
   const refLink = `${window.location.origin}/?ref=${encodeURIComponent(me.code)}`;
 
   const handleDownloadQr = async () => {
@@ -120,7 +120,7 @@ export default function SellerDashboard() {
       {/* Stats */}
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 md:mb-8">
         <StatCard label="Ventas" value={String(me.orders_paid)} sub="órdenes cobradas" />
-        <StatCard label="Facturación" value={fmt(me.revenue_paid_usd)} sub="suma de tus ventas" />
+        <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="suma de tus ventas" />
         <StatCard label="Comisión ganada" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
         <StatCard label="Pendiente (MP)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
