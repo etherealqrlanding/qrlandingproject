@@ -75,6 +75,7 @@ interface OrderEmailData {
   customer_email: string;
   total_usd: number;
   total_ars: number;
+  exchange_rate_used: number;
   product_name: string;
   option_name: string;
   service_date: string;
@@ -124,6 +125,15 @@ function emailRow(label: string, value: string, accent = false): string {
   return `<div style="${baseStyles.row}"><span>${label}</span><strong${accent ? ' style="color:#c8a85a"' : ''}>${value}</strong></div>`;
 }
 
+// ── Moneda: los emails muestran TODO en pesos (el negocio opera en ARS) ──
+// Los montos internos están en USD; se convierten al tipo de cambio congelado de la orden.
+function fmtArs(n: number): string {
+  return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+function arsOf(usd: number | null | undefined, rate: number): string {
+  return fmtArs((usd ?? 0) * rate);
+}
+
 // Bloque de detalle COMPLETO de la reserva, reutilizado en todos los emails al cliente
 // y al vendedor. Renderiza solo lo que existe (campos opcionales). La idea es que el
 // cliente tenga TODA la info y no tenga que consultar nada.
@@ -135,11 +145,11 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   rows.push(emailRow('Fecha', d.service_date));
 
   let pax = `${d.adults} adulto(s)`;
-  if (d.unit_price_adult_usd != null) pax += ` · USD ${d.unit_price_adult_usd} c/u`;
+  if (d.unit_price_adult_usd != null) pax += ` · ${arsOf(d.unit_price_adult_usd, d.exchange_rate_used)} c/u`;
   rows.push(emailRow('Adultos', pax));
   if (d.children > 0) {
     let ch = `${d.children} menor(es)`;
-    if (d.unit_price_child_usd != null) ch += ` · USD ${d.unit_price_child_usd} c/u`;
+    if (d.unit_price_child_usd != null) ch += ` · ${arsOf(d.unit_price_child_usd, d.exchange_rate_used)} c/u`;
     rows.push(emailRow('Menores', ch));
   }
 
@@ -151,7 +161,7 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   }
 
   if (opts?.showAmounts !== false) {
-    rows.push(emailRow('Total', `USD ${d.total_usd} · ARS ${d.total_ars.toLocaleString('es-AR')}`, true));
+    rows.push(emailRow('Total', fmtArs(d.total_ars), true));
   }
   rows.push(`<div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${d.public_id}</span></div>`);
 
@@ -193,8 +203,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(data.option_name)} — ${escapeHtml(data.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${data.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${data.adults} ad · ${data.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total USD</span><strong style="color:#c8a85a">USD ${data.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Total ARS</span><strong>ARS ${data.total_ars.toLocaleString('es-AR')}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(data.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>MP Payment</span><span style="font-family:monospace;font-size:11px">${data.mp_payment_id ?? '—'}</span></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
@@ -203,7 +212,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <p style="${baseStyles.eyebrow}">Atribución a vendedor</p>
     <div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Comisión a pagar</span><strong style="color:#c8a85a">USD ${data.commission_usd ?? 0}</strong></div>
+    <div style="${baseStyles.row}"><span>Comisión a pagar</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, data.exchange_rate_used)}</strong></div>
   </div>` : ''}
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
@@ -220,13 +229,13 @@ function htmlForSellerRefund(data: OrderEmailData & {
   <p>Hola ${escapeHtml(data.seller_name)}, te avisamos que una venta atribuida a tu código fue ${data.is_partial ? 'reintegrada parcialmente' : 'cancelada y reintegrada al cliente'}${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   ${data.is_partial
     ? `<p>La comisión correspondiente a esta venta se ajustará proporcionalmente.</p>`
-    : `<p><strong>La comisión de USD ${data.commission_usd} que correspondía a esta venta ya no aplica.</strong></p>`}
+    : `<p><strong>La comisión de ${arsOf(data.commission_usd, data.exchange_rate_used)} que correspondía a esta venta ya no aplica.</strong></p>`}
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio cancelado</span><strong>${escapeHtml(data.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(data.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Cliente</span><span>${escapeHtml(data.customer_name)}</span></div>
     <div style="${baseStyles.row}"><span>Fecha solicitada</span><strong>${data.service_date}</strong></div>
-    <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
   </div>
   <p>Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
   ${supportBlock()}
@@ -258,8 +267,8 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   <p>Hola ${escapeHtml(data.seller_name)}, un cliente que escaneó tu QR acaba de comprar una experiencia. Te corresponde una comisión.</p>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Tu comisión</p>
-    <div style="${baseStyles.row}"><span>Valor de la venta</span><strong>USD ${data.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">USD ${data.commission_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Valor de la venta</span><strong>${fmtArs(data.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
   </div>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Datos de la reserva</p>
@@ -286,6 +295,7 @@ function escapeHtml(s: string): string {
 const ORDER_EMAIL_SELECT = `
        o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
+       o.exchange_rate_used::float AS exchange_rate_used,
        o.mp_payment_id,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
@@ -298,6 +308,7 @@ const ORDER_EMAIL_SELECT = `
        p.address_es,
        s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
        a.commission_amount_usd::float AS commission_usd,
+       a.commission_amount_ars::float AS commission_ars,
        a.commission_percent_snapshot::float AS commission_percent
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.id
@@ -315,6 +326,7 @@ function toOrderData(data: Record<string, unknown>): OrderEmailData {
     customer_email: data.customer_email as string,
     total_usd: data.total_usd as number,
     total_ars: data.total_ars as number,
+    exchange_rate_used: (data.exchange_rate_used as number) ?? 0,
     product_name: (data.product_name as string) ?? 'Experiencia',
     option_name: (data.option_name as string) ?? 'Tier',
     service_date: (data.service_date as string) ?? '',
@@ -362,7 +374,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
   if (config.ADMIN_NOTIFICATION_EMAIL) {
     await send(
       config.ADMIN_NOTIFICATION_EMAIL,
-      `Nueva venta — ${orderData.option_name} (USD ${orderData.total_usd})`,
+      `Nueva venta — ${orderData.option_name} (${fmtArs(orderData.total_ars)})`,
       htmlForAdmin({
         ...orderData,
         seller_name: data.seller_name,
@@ -376,7 +388,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
   if (data.seller_name && data.seller_email && data.commission_usd != null) {
     await send(
       data.seller_email,
-      `¡Nueva venta tuya! +USD ${data.commission_usd} de comisión`,
+      `¡Nueva venta tuya! +${arsOf(data.commission_usd, orderData.exchange_rate_used)} de comisión`,
       htmlForSeller({
         ...orderData,
         seller_name: data.seller_name,
@@ -414,7 +426,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(baseData.option_name)} — ${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total USD</span><strong style="color:#c8a85a">USD ${baseData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(baseData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${baseData.public_id}</span></div>
   </div>
   ${data.seller_name ? `
@@ -422,12 +434,12 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <p style="${baseStyles.eyebrow}">Vendedor que cobra</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Comisión estimada</span><strong style="color:#c8a85a">USD ${data.commission_usd ?? 0}</strong></div>
+    <div style="${baseStyles.row}"><span>Ganancia estimada</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, baseData.exchange_rate_used)}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el vendedor confirme el cobro desde su portal.</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (USD ${baseData.total_usd})`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, adminHtml);
   }
 
   // 3) Vendedor
@@ -443,14 +455,14 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total a cobrar</span><strong style="color:#c8a85a;font-size:18px">USD ${baseData.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent ?? 0}%)</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Total a cobrar</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(baseData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, baseData.exchange_rate_used)}</strong></div>
   </div>
   <p>Una vez que recibas el dinero del pasajero, confirmá el cobro desde tu portal para que se envíe el email de confirmación.</p>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (USD ${baseData.total_usd})`, sellerHtml);
+    await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml);
   }
 }
 
@@ -492,7 +504,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(baseData.option_name)} — ${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total USD</span><strong style="color:#c8a85a">USD ${baseData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(baseData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${baseData.public_id}</span></div>
   </div>
   ${data.seller_name ? `
@@ -500,12 +512,12 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <p style="${baseStyles.eyebrow}">Vendedor que cobró</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Comisión</span><strong style="color:#c8a85a">USD ${data.commission_usd ?? 0}</strong></div>
+    <div style="${baseStyles.row}"><span>Ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, baseData.exchange_rate_used)}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">✓ El vendedor confirmó la recepción del dinero. La orden fue marcada como <strong>pagada</strong>.</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (USD ${baseData.total_usd})`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (${fmtArs(baseData.total_ars)})`, adminHtml);
   }
 
   // 3) Vendedor
@@ -521,13 +533,13 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total cobrado</span><strong style="color:#c8a85a;font-size:18px">USD ${baseData.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent ?? 0}%)</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Total cobrado</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(baseData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, baseData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (USD ${baseData.total_usd})`, sellerHtml);
+    await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml);
   }
 }
 
@@ -667,7 +679,7 @@ export async function sendOrderRefundedNotifications(
 // muestra la reserva vigente; sumamos el monto reintegrado.
 export async function sendOrderModifiedNotifications(
   orderId: number,
-  refundedUsd: number,
+  _refundedUsd: number,
   refundedArs: number,
   reason?: string | null,
   viaCash = false,
@@ -681,8 +693,8 @@ export async function sendOrderModifiedNotifications(
   const orderData = toOrderData(data);
   const arsStr = refundedArs.toLocaleString('es-AR');
   const refundLine = viaCash
-    ? `<p><strong style="color:#c8a85a">El vendedor te devuelve ARS ${arsStr}</strong> (USD ${refundedUsd}) en efectivo.</p>`
-    : `<p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> (USD ${refundedUsd}) al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>`;
+    ? `<p><strong style="color:#c8a85a">El vendedor te devuelve ARS ${arsStr}</strong> en efectivo.</p>`
+    : `<p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>`;
 
   // 1) Cliente
   const customerHtml = `
@@ -711,8 +723,8 @@ export async function sendOrderModifiedNotifications(
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.transfer_requested ? ' · c/traslado' : ''}</strong></div>
-    <div style="${baseStyles.row}"><span>Reintegrado</span><strong style="color:#c8a85a">ARS ${arsStr} (USD ${refundedUsd})</strong></div>
-    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Reintegrado</span><strong style="color:#c8a85a">ARS ${arsStr}</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
@@ -731,8 +743,8 @@ export async function sendOrderModifiedNotifications(
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
@@ -745,7 +757,7 @@ export async function sendOrderModifiedNotifications(
 // La orden ya tiene la composición nueva al enviarse. `charged` = lo cobrado de más.
 export async function sendOrderIncreasedNotifications(
   orderId: number,
-  chargedUsd: number,
+  _chargedUsd: number,
   chargedArs: number,
   reason?: string | null,
 ): Promise<void> {
@@ -765,7 +777,7 @@ export async function sendOrderIncreasedNotifications(
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Sumamos pasajeros a tu reserva</h1>
   <p>Hola ${escapeHtml(orderData.customer_name)}, actualizamos tu reserva con los pasajeros que agregaste${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
-  <p>Cargo adicional: <strong style="color:#c8a85a">USD ${chargedUsd}</strong> (ARS ${arsStr}).</p>
+  <p>Cargo adicional: <strong style="color:#c8a85a">ARS ${arsStr}</strong>.</p>
   ${reservationCard(orderData, { showContact: true })}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
@@ -784,13 +796,13 @@ export async function sendOrderIncreasedNotifications(
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Cobro adicional</span><strong style="color:#c8a85a">USD ${chargedUsd} (ARS ${arsStr})</strong></div>
-    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Cobro adicional</span><strong style="color:#c8a85a">ARS ${arsStr}</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliada] ${orderData.customer_name} — +USD ${chargedUsd}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliada] ${orderData.customer_name} — +ARS ${arsStr}`, adminHtml);
   }
 
   // 3) Vendedor (si hay atribución) — comisión ajustada al nuevo total
@@ -804,8 +816,8 @@ export async function sendOrderIncreasedNotifications(
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>USD ${orderData.total_usd}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">USD ${data.commission_usd}</strong></div>
+    <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
