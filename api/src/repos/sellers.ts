@@ -184,6 +184,7 @@ export interface SellerOrder {
   children: number;
   total_usd: number;
   total_ars: number;
+  exchange_rate_used: number;
   unit_price_adult_usd: number;
   unit_price_child_usd: number | null;
   subtotal_usd: number;
@@ -191,6 +192,7 @@ export interface SellerOrder {
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
+  commission_amount_ars: number;
   net_total_usd: number | null;
   commission_percent_snapshot: number | null;
   paid_to_seller_at: string | null;
@@ -216,6 +218,7 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        oi.adults, oi.children,
        o.total_usd::float AS total_usd,
        o.total_ars::float AS total_ars,
+       o.exchange_rate_used::float AS exchange_rate_used,
        oi.unit_price_adult_usd::float AS unit_price_adult_usd,
        oi.unit_price_child_usd::float AS unit_price_child_usd,
        oi.subtotal_usd::float AS subtotal_usd,
@@ -223,6 +226,7 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
        a.commission_amount_usd::float AS commission_amount_usd,
+       a.commission_amount_ars::float AS commission_amount_ars,
        a.net_total_usd_snapshot::float AS net_total_usd,
        a.commission_percent_snapshot::float AS commission_percent_snapshot,
        a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.created_at,

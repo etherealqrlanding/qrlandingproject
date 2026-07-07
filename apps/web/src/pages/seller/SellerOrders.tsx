@@ -57,6 +57,11 @@ function fmt(usd: number) {
   return `USD ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+// El portal muestra la plata en pesos (el negocio opera en ARS).
+function fmtArs(ars: number) {
+  return `ARS ${Math.round(ars).toLocaleString('es-AR')}`;
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
@@ -156,7 +161,7 @@ export default function SellerOrders() {
           <div key={ad.public_id} className="rounded-md border border-amber-500/20 bg-amber-950/10 p-3">
             <p className="text-sm text-cream/90">
               +{ad.extra_adults} ad{ad.extra_children > 0 ? ` · +${ad.extra_children} men` : ''} —
-              <strong className="text-gold"> USD {ad.charge_usd}</strong>
+              <strong className="text-gold"> {fmtArs(ad.charge_ars)}</strong>
               <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</span>
             </p>
             {ad.payment_method === 'cash' ? (
@@ -177,7 +182,7 @@ export default function SellerOrders() {
                 <p className="text-xs text-cream/45">Esperando el pago del pasajero.</p>
                 {ad.mp_init_point && (
                   <PaymentLinkShare link={ad.mp_init_point} phone={o.customer_phone}
-                    waMessage={`Hola ${o.customer_name}, para sumar pasajeros pagá la diferencia (USD ${ad.charge_usd}) acá: ${ad.mp_init_point}`} />
+                    waMessage={`Hola ${o.customer_name}, para sumar pasajeros pagá la diferencia (${fmtArs(ad.charge_ars)}) acá: ${ad.mp_init_point}`} />
                 )}
                 <button type="button" onClick={(e) => { e.stopPropagation(); handleCancelAddon(o.public_id, ad.public_id); }}
                   disabled={addonBusy === ad.public_id}
@@ -404,9 +409,9 @@ export default function SellerOrders() {
                       </div>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-cream font-mono text-sm">{fmt(o.total_usd)}</p>
+                      <p className="text-cream font-mono text-sm">{fmtArs(o.total_ars)}</p>
                       {(o.status === 'paid' || o.status === 'pending') && (
-                        <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmt(o.commission_amount_usd)}</p>
+                        <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmtArs(o.commission_amount_ars)}</p>
                       )}
                       <span className={`text-gold/50 text-xs inline-block mt-1 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                     </div>
@@ -421,16 +426,16 @@ export default function SellerOrders() {
                       {o.customer_nationality && <DetailRow label="Nac.">{o.customer_nationality}</DetailRow>}
                       <DetailRow label="Fecha servicio">{fmtDate(o.service_date)}</DetailRow>
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                      <DetailRow label="Total"><span className="text-cream font-mono">{fmt(o.total_usd)}</span></DetailRow>
+                      <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
                       {(o.status === 'paid' || o.status === 'pending') && (
                         <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
-                          <span className="text-gold font-mono">{fmt(o.commission_amount_usd)}</span>
+                          <span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span>
                         </DetailRow>
                       )}
                       {o.payment_method === 'cash' ? (
                         <>
                           {o.status === 'paid' && (
-                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmt(o.net_total_usd ?? 0)}</span></DetailRow>
+                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs((o.net_total_usd ?? 0) * o.exchange_rate_used)}</span></DetailRow>
                           )}
                           <DetailRow label="Neto rendido">
                             {o.net_settled_at
@@ -455,7 +460,7 @@ export default function SellerOrders() {
                           <PaymentLinkShare
                             link={o.mp_init_point}
                             phone={o.customer_phone}
-                            waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmt(o.total_usd)}. Pagá acá: ${o.mp_init_point}`}
+                            waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmtArs(o.total_ars)}. Pagá acá: ${o.mp_init_point}`}
                           />
                         </div>
                       )}
@@ -541,9 +546,9 @@ export default function SellerOrders() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right text-cream font-mono whitespace-nowrap text-xs">{fmt(o.total_usd)}</td>
+                        <td className="px-4 py-3 text-right text-cream font-mono whitespace-nowrap text-xs">{fmtArs(o.total_ars)}</td>
                         <td className="px-4 py-3 text-right text-gold font-mono whitespace-nowrap text-xs">
-                          {(o.status === 'paid' || o.status === 'pending') ? fmt(o.commission_amount_usd) : '—'}
+                          {(o.status === 'paid' || o.status === 'pending') ? fmtArs(o.commission_amount_ars) : '—'}
                         </td>
                         <td className="px-4 py-3 text-center text-xs">
                           {(o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at)
@@ -580,16 +585,16 @@ export default function SellerOrders() {
                               <div className="space-y-1.5">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y comisión</p>
                                 <DetailRow label="Medio">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                                <DetailRow label="Total"><span className="text-cream font-mono">{fmt(o.total_usd)}</span></DetailRow>
+                                <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
                                 {(o.status === 'paid' || o.status === 'pending') && (
                                   <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
-                                    <span className="text-gold font-mono">{fmt(o.commission_amount_usd)}</span>
+                                    <span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span>
                                   </DetailRow>
                                 )}
                                 {o.payment_method === 'cash' ? (
                                   <>
                                     {o.status === 'paid' && (
-                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmt(o.net_total_usd ?? 0)}</span></DetailRow>
+                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs((o.net_total_usd ?? 0) * o.exchange_rate_used)}</span></DetailRow>
                                     )}
                                     <DetailRow label="Neto rendido">
                                       {o.net_settled_at
@@ -617,7 +622,7 @@ export default function SellerOrders() {
                                   link={o.mp_init_point}
                                   phone={o.customer_phone}
                                   label="Link de pago (re-compartir)"
-                                  waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmt(o.total_usd)}. Pagá acá: ${o.mp_init_point}`}
+                                  waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmtArs(o.total_ars)}. Pagá acá: ${o.mp_init_point}`}
                                 />
                               </div>
                             )}

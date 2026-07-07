@@ -149,6 +149,7 @@ export interface SellerOrder {
   children: number;
   total_usd: number;
   total_ars: number;
+  exchange_rate_used: number;
   unit_price_adult_usd: number;
   unit_price_child_usd: number | null;
   subtotal_usd: number;
@@ -156,6 +157,7 @@ export interface SellerOrder {
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
+  commission_amount_ars: number;
   net_total_usd: number | null;
   commission_percent_snapshot: number | null;
   paid_to_seller_at: string | null;

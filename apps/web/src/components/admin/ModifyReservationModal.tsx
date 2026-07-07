@@ -36,6 +36,7 @@ interface Props {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const fmtArs = (n: number) => `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 
 export default function ModifyReservationModal({ order, item, handlers, onClose, onDone }: Props) {
   const origAdults = item.adults;
@@ -71,10 +72,11 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     const newSubtotal = round2(newTickets + newTransfer);
     const delta = round2(newSubtotal - subtotal);
     const deltaArs = subtotal > 0 ? Math.round((Math.abs(delta) / subtotal) * order.total_ars) : 0;
+    const newSubtotalArs = subtotal > 0 ? Math.round((newSubtotal / subtotal) * order.total_ars) : 0;
     let direction: 'none' | 'reduce' | 'increase' = 'none';
     if (delta < -0.005) direction = 'reduce';
     else if (delta > 0.005) direction = 'increase';
-    return { newSubtotal, delta, deltaArs, direction };
+    return { newSubtotal, newSubtotalArs, delta, deltaArs, direction };
   }, [adults, children, effectiveTransfer, newPax, unitAdult, unitChild, transferPerPax, subtotal, order.total_ars]);
 
   const isMp = order.payment_method === 'mercadopago';
@@ -85,9 +87,9 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
   const confirmLabel = (() => {
     if (preview.direction === 'none') return 'Sin cambios';
-    if (preview.direction === 'reduce') return `Reintegrar USD ${Math.abs(preview.delta)}`;
-    if (isMp) return `Generar link · USD ${preview.delta}`;
-    return `Registrar ampliación · USD ${preview.delta}`;
+    if (preview.direction === 'reduce') return `Reintegrar ${fmtArs(preview.deltaArs)}`;
+    if (isMp) return `Generar link · ${fmtArs(preview.deltaArs)}`;
+    return `Registrar ampliación · ${fmtArs(preview.deltaArs)}`;
   })();
 
   const handleConfirm = async () => {
@@ -136,7 +138,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-7 text-center">
           <h2 className="font-display text-2xl text-cream mb-2">Link de ampliación generado</h2>
           <p className="text-sm text-cream/70 mb-5">
-            Enviale este link al pasajero para que pague la diferencia (<strong className="text-gold">USD {preview.delta}</strong>).
+            Enviale este link al pasajero para que pague la diferencia (<strong className="text-gold">{fmtArs(preview.deltaArs)}</strong>).
             El lugar queda reservado hasta que pague; si no lo hace, caduca.
           </p>
           <div className="flex items-center gap-2 rounded-lg border border-gold/20 bg-ink/40 p-2 mb-3">
@@ -164,7 +166,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Modificar reserva</p>
           <h2 className="mt-2 font-display text-2xl text-cream">{item.option_name_snapshot}</h2>
           <p className="mt-1 text-sm text-cream/50">
-            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origHasTransfer ? ' · c/traslado' : ''} — USD {subtotal}
+            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origHasTransfer ? ' · c/traslado' : ''} — {fmtArs(order.total_ars)}
           </p>
         </header>
 
@@ -194,8 +196,8 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             {preview.direction === 'reduce' && !reduceBlocked && (
               <p className="text-sm text-cream/80">
                 {isMp ? 'Se reintegrará al cliente ' : 'El vendedor devuelve en efectivo '}
-                <strong className="text-cream">USD {Math.abs(preview.delta)}</strong> (≈ ARS {preview.deltaArs.toLocaleString('es-AR')}).
-                Nuevo total: <strong className="text-cream">USD {preview.newSubtotal}</strong>.
+                <strong className="text-cream">{fmtArs(preview.deltaArs)}</strong>.
+                Nuevo total: <strong className="text-cream">{fmtArs(preview.newSubtotalArs)}</strong>.
               </p>
             )}
             {reduceBlocked && (
@@ -206,8 +208,8 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             {preview.direction === 'increase' && (
               <p className="text-sm text-cream/80">
                 {isMp ? 'Se generará un link de MP por ' : 'Se registra una ampliación pendiente de cobro por '}
-                <strong className="text-cream">USD {preview.delta}</strong> (≈ ARS {preview.deltaArs.toLocaleString('es-AR')}).
-                Nuevo total: <strong className="text-cream">USD {preview.newSubtotal}</strong>.
+                <strong className="text-cream">{fmtArs(preview.deltaArs)}</strong>.
+                Nuevo total: <strong className="text-cream">{fmtArs(preview.newSubtotalArs)}</strong>.
                 {isMp ? ' El pasajero paga con su cuenta.' : ' Confirmás el cobro después, cuando recibas el dinero.'}
               </p>
             )}
