@@ -293,6 +293,7 @@ function escapeHtml(s: string): string {
 
 // SELECT compartido con TODOS los datos de la orden para los emails detallados.
 const ORDER_EMAIL_SELECT = `
+       o.id AS order_id,
        o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
        o.exchange_rate_used::float AS exchange_rate_used,
@@ -306,7 +307,7 @@ const ORDER_EMAIL_SELECT = `
        oi.transfer_requested, oi.transfer_hotel,
        opt.pickup_window_es, opt.dinner_time_es, opt.show_time_es, opt.includes_es,
        p.address_es,
-       s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
+       s.id AS seller_id, s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
        a.commission_amount_usd::float AS commission_usd,
        a.commission_amount_ars::float AS commission_ars,
        a.commission_percent_snapshot::float AS commission_percent
@@ -444,6 +445,33 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
 
   // 3) Vendedor
   if (data.seller_name && data.seller_email && data.commission_usd != null) {
+    // Generar tokens de acción de un solo uso (48 h de validez)
+    let collectUrl: string | null = null;
+    let cancelUrl: string | null = null;
+    if (data.order_id && data.seller_id) {
+      try {
+        const { rows: tkRows } = await pool.query<{ token: string; action: string }>(
+          `INSERT INTO order_action_tokens (order_id, seller_id, action, expires_at)
+           VALUES
+             ($1, $2, 'collect', NOW() + INTERVAL '48 hours'),
+             ($1, $2, 'cancel',  NOW() + INTERVAL '48 hours')
+           RETURNING token, action`,
+          [data.order_id, data.seller_id],
+        );
+        const cTok = tkRows.find((r) => r.action === 'collect')?.token;
+        const xTok = tkRows.find((r) => r.action === 'cancel')?.token;
+        if (cTok) collectUrl = `${config.WEB_ORIGIN}/accion/${cTok}`;
+        if (xTok) cancelUrl  = `${config.WEB_ORIGIN}/accion/${xTok}`;
+      } catch (e) {
+        console.error('[email] Failed to create action tokens:', e);
+      }
+    }
+
+    const actionButtons = `
+  <p style="color:rgba(245,239,230,0.7);font-size:14px;margin:24px 0 8px">Una vez que recibas el dinero, podés confirmar el cobro directamente desde este email:</p>
+  ${collectUrl ? `<div style="text-align:center;margin:16px 0 8px"><a href="${collectUrl}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;text-decoration:none;padding:14px 36px;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:0.3px">✓ Confirmar cobro</a></div>` : ''}
+  ${cancelUrl  ? `<div style="text-align:center;margin:8px 0 24px"><a href="${cancelUrl}"  style="display:inline-block;color:#e57373;text-decoration:none;padding:10px 24px;border-radius:8px;font-weight:600;font-size:13px;border:1px solid rgba(229,115,115,0.35)">Cancelar reserva</a></div>` : ''}`;
+
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -458,7 +486,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Total a cobrar</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(baseData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Tu ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, baseData.exchange_rate_used)}</strong></div>
   </div>
-  <p>Una vez que recibas el dinero del pasajero, confirmá el cobro desde tu portal para que se envíe el email de confirmación.</p>
+  ${actionButtons}
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;

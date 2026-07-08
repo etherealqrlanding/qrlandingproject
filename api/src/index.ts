@@ -8,6 +8,7 @@ import { catalogRouter } from './routes/catalog.js';
 import { checkoutRouter } from './routes/checkout.js';
 import { adminRouter } from './routes/admin/index.js';
 import { sellerRouter } from './routes/seller/index.js';
+import { actionRouter } from './routes/action.js';
 import { startExpiryJob } from './services/expireOrders.js';
 import { AvailabilityError } from './repos/availability.js';
 
@@ -52,6 +53,7 @@ app.use('/api', catalogRouter);
 app.use('/api/checkout', checkoutRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/seller', sellerRouter);
+app.use('/api/action', actionRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });

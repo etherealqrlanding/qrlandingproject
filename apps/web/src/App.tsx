@@ -45,15 +45,25 @@ import SellerNotifications from './pages/seller/SellerNotifications';
 import SellerCatalog from './pages/seller/SellerCatalog';
 import SellerHelp from './pages/seller/SellerHelp';
 import SellerTrash from './pages/seller/SellerTrash';
+import ActionPage from './pages/ActionPage';
 
 export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isSellerRoute = location.pathname.startsWith('/seller');
+  const isActionRoute = location.pathname.startsWith('/accion/');
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [location.pathname]);
+
+  if (isActionRoute) {
+    return (
+      <Routes>
+        <Route path="/accion/:token" element={<ActionPage />} />
+      </Routes>
+    );
+  }
 
   if (isAdminRoute) {
     return (
