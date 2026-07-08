@@ -32,7 +32,7 @@ export default function OrdersTrash() {
   const [retentionDays, setRetentionDays] = useState<number>(30);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [action, setAction] = useState<'restore' | 'delete' | null>(null);
+  const [action, setAction] = useState<'restore' | 'delete' | 'purge' | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
