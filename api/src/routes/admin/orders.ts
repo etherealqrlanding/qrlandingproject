@@ -85,7 +85,7 @@ async function getRetentionDays(): Promise<number> {
 }
 
 // GET /api/admin/orders/trash — lista las órdenes en papelera
-adminOrdersRouter.get('/trash', async (req, res, next) => {
+adminOrdersRouter.get('/trash', async (_req, res, next) => {
   try {
     const days = await getRetentionDays();
     const rows = await listTrashedOrders(days);
@@ -120,7 +120,7 @@ adminOrdersRouter.post('/trash/permanent-delete', async (req, res, next) => {
 });
 
 // POST /api/admin/orders/trash/purge — purga todas las órdenes expiradas de la papelera
-adminOrdersRouter.post('/trash/purge', async (req, res, next) => {
+adminOrdersRouter.post('/trash/purge', async (_req, res, next) => {
   try {
     const days = await getRetentionDays();
     const deleted = await purgeExpiredTrash(days);
@@ -129,7 +129,7 @@ adminOrdersRouter.post('/trash/purge', async (req, res, next) => {
 });
 
 // GET /api/admin/orders/trash/download — descarga CSV de la papelera
-adminOrdersRouter.get('/trash/download', async (req, res, next) => {
+adminOrdersRouter.get('/trash/download', async (_req, res, next) => {
   try {
     const days = await getRetentionDays();
     const rows = await listTrashedOrders(days);
