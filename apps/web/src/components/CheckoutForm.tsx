@@ -32,6 +32,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const [remaining, setRemaining] = useState<number | null>(null);
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
   const [transferHotel, setTransferHotel] = useState('');
+  const [transferRoom, setTransferRoom] = useState('');
   // Si viene pre-seleccionado desde la página del producto, no mostramos el selector
   const showMethodSelector = !initialPaymentMethod && Boolean(storedRef);
 
@@ -48,6 +49,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     emailConfirm: '',
     phone: '',
     nationality: '',
+    dni: '',
     service_date: today,
     adults: 2,
     children: 0,
@@ -141,10 +143,12 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim() || null,
       nationality: form.nationality || null,
+      dni: form.dni.trim() || null,
     },
     ref_code: storedRef,
     transfer_requested: option.has_transfer ? wantsTransfer : false,
     transfer_hotel: (option.has_transfer && wantsTransfer) ? (transferHotel || null) : null,
+    transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -220,6 +224,15 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                 className="input"
                 placeholder="+54 9 11 1234 5678"
                 autoComplete="tel"
+              />
+            </Field>
+            <Field label={t('checkout.dni')}>
+              <input
+                type="text" maxLength={40}
+                value={form.dni} onChange={(e) => updateField('dni', e.target.value)}
+                className="input"
+                placeholder="12345678 / AB123456"
+                autoComplete="off"
               />
             </Field>
             <Field label={t('checkout.email')} required>
@@ -341,8 +354,10 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             <TransferSection
               wantsTransfer={wantsTransfer}
               hotel={transferHotel}
+              room={transferRoom}
               onToggle={setWantsTransfer}
               onHotelChange={setTransferHotel}
+              onRoomChange={setTransferRoom}
               pickupWindow={lang === 'en' ? option.pickup_window_en : option.pickup_window_es}
               lang={lang === 'en' ? 'en' : 'es'}
             />

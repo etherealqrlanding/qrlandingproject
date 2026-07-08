@@ -144,6 +144,7 @@ export interface AdminProductSummary {
   starting_price_usd: number | null;
   category_id: number; category_slug: string; category_name_es: string;
   options_count: string; images_count: string;
+  hero_image_url: string | null;
   updated_at: string;
   options: AdminProductOptionPreview[];
 }
@@ -298,6 +299,16 @@ export interface FaqItem {
 
 export interface FaqContent {
   items: FaqItem[];
+  updated_at: string | null;
+}
+
+export interface SellerFaqItem {
+  q_es: string;
+  a_es: string;
+}
+
+export interface SellerFaqContent {
+  items: SellerFaqItem[];
   updated_at: string | null;
 }
 
@@ -481,8 +492,15 @@ export const adminApi = {
         `/api/admin/orders/${encodeURIComponent(publicId)}/increase-cash`,
         { method: 'POST', body: JSON.stringify(body) },
       ),
+    reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean }) =>
+      request<{ ok: true; prev_date: string; new_date: string }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/reschedule`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
     addons: (publicId: string) =>
       request<PendingAddon[]>(`/api/admin/orders/${encodeURIComponent(publicId)}/addons`),
+    collectCash: (publicId: string) =>
+      request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}/collect-cash`, { method: 'POST' }),
     collectAddon: (addonPublicId: string) =>
       request<{ ok: true; charge_usd: number; charge_ars: number }>(
         `/api/admin/orders/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST' }),
@@ -503,6 +521,18 @@ export const adminApi = {
         method: 'PUT',
         body: JSON.stringify({ time }),
       }),
+    getModifyWindow: () =>
+      request<{ hours: number | null }>('/api/admin/settings/modify-window'),
+    updateModifyWindow: (hours: number | null) =>
+      request<{ hours: number | null }>('/api/admin/settings/modify-window', {
+        method: 'PUT', body: JSON.stringify({ hours }),
+      }),
+    getCancelWindow: () =>
+      request<{ hours: number | null }>('/api/admin/settings/cancel-window'),
+    updateCancelWindow: (hours: number | null) =>
+      request<{ hours: number | null }>('/api/admin/settings/cancel-window', {
+        method: 'PUT', body: JSON.stringify({ hours }),
+      }),
     getAbout: () => request<AboutContent>('/api/admin/settings/content/about'),
     updateAbout: (input: Omit<AboutContent, 'updated_at'>) =>
       request<AboutContent>('/api/admin/settings/content/about', {
@@ -514,6 +544,19 @@ export const adminApi = {
       request<FaqContent>('/api/admin/settings/content/faq', {
         method: 'PUT',
         body: JSON.stringify({ items }),
+      }),
+    getSellerFaq: () => request<SellerFaqContent>('/api/admin/settings/content/seller-faq'),
+    updateSellerFaq: (items: SellerFaqItem[]) =>
+      request<SellerFaqContent>('/api/admin/settings/content/seller-faq', {
+        method: 'PUT',
+        body: JSON.stringify({ items }),
+      }),
+    getMaintenanceMode: () =>
+      request<{ enabled: boolean }>('/api/admin/settings/maintenance'),
+    setMaintenanceMode: (enabled: boolean) =>
+      request<{ enabled: boolean }>('/api/admin/settings/maintenance', {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
       }),
   },
 };

@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError, type PendingAddon } from '../../lib/adminApi';
+
+function isWindowBlocked(hours: number | null, serviceDate: string | undefined): boolean {
+  if (!hours || !serviceDate) return false;
+  const [y, m, d] = serviceDate.split('-').map(Number);
+  const serviceMidnightUtcMs = Date.UTC(y, m - 1, d, 3, 0, 0); // medianoche BsAs = 03:00 UTC
+  const hoursUntilService = (serviceMidnightUtcMs - Date.now()) / (60 * 60 * 1000);
+  return hoursUntilService < hours;
+}
+
+function windowBlockMsg(hours: number | null): string {
+  return `Se requieren al menos ${hours} hs de anticipación al servicio para esta operación.`;
+}
 import ConfirmDialog from '../../components/ConfirmDialog';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
@@ -14,6 +26,7 @@ interface OrderFull {
   customer_email: string;
   customer_phone: string | null;
   customer_nationality: string | null;
+  customer_dni: string | null;
   total_usd: number;
   total_ars: number;
   exchange_rate_used: string;
@@ -39,12 +52,16 @@ interface OrderFull {
     id: number;
     product_name_snapshot: string;
     option_name_snapshot: string;
+    option_id: number;
     service_date: string;
     adults: number;
     children: number;
     unit_price_adult_usd: string;
     unit_price_child_usd: string | null;
     subtotal_usd: string;
+    transfer_requested: boolean;
+    transfer_hotel: string | null;
+    transfer_room: string | null;
   }>;
   events: Array<{
     id: number;
@@ -75,16 +92,39 @@ export default function OrderDetail() {
   const [modifyOpen, setModifyOpen] = useState(false);
   const [addons, setAddons] = useState<PendingAddon[]>([]);
   const [addonBusy, setAddonBusy] = useState<string | null>(null);
+  const [collectingCash, setCollectingCash] = useState(false);
+  const [modifyWindow, setModifyWindow] = useState<number | null>(null);
+  const [cancelWindow, setCancelWindow] = useState<number | null>(null);
 
   const load = async () => {
     if (!publicId) return;
     try {
-      const data = await adminApi.orders.get(publicId);
+      const [data, mw, cw] = await Promise.all([
+        adminApi.orders.get(publicId),
+        adminApi.settings.getModifyWindow(),
+        adminApi.settings.getCancelWindow(),
+      ]);
       setOrder(data as unknown as OrderFull);
       setNewStatus((data as unknown as OrderFull).status);
+      setModifyWindow(mw.hours);
+      setCancelWindow(cw.hours);
       adminApi.orders.addons(publicId).then(setAddons).catch(() => {});
     } catch (err) {
       setError((err as AdminApiError).message);
+    }
+  };
+
+  const handleCollectCash = async () => {
+    if (!order || !publicId) return;
+    if (!confirm(`¿Confirmar que se cobró en efectivo la orden de ${order.customer_name}?\n\nTotal: ARS ${order.total_ars.toLocaleString('es-AR')}\n\nQuedará registrado como cobrado por el admin.`)) return;
+    try {
+      setCollectingCash(true);
+      await adminApi.orders.collectCash(publicId);
+      await load();
+    } catch (err) {
+      alert(`Error al confirmar cobro: ${(err as AdminApiError).message}`);
+    } finally {
+      setCollectingCash(false);
     }
   };
 
@@ -249,22 +289,50 @@ export default function OrderDetail() {
       </header>
 
       {/* Acceso destacado al reintegro — acción crítica para cancelaciones sin cupo */}
-      {order.status === 'paid' && order.payment_method === 'mercadopago' && (
-        <div className="mb-8 rounded-xl border-2 border-bordeaux-light/50 bg-bordeaux-deep/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {order.status === 'paid' && order.payment_method === 'mercadopago' && (() => {
+        const serviceDate = order.items[0]?.service_date;
+        const blocked = isWindowBlocked(cancelWindow, serviceDate);
+        return (
+          <div className="mb-8 rounded-xl border-2 border-bordeaux-light/50 bg-bordeaux-deep/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-bordeaux-light">Sin cupo / cancelación</p>
+              <p className="mt-1 font-display text-xl text-cream">Reintegrar el dinero al cliente</p>
+              <p className="mt-1 text-sm text-cream/70">
+                Devolvé el monto al medio de pago original de forma segura (total o parcial).
+                Total pagado: <strong className="text-cream">USD {order.total_usd}</strong>.
+              </p>
+              {blocked && <p className="mt-2 text-xs text-amber-400">{windowBlockMsg(cancelWindow)}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRefundOpen(true)}
+              disabled={blocked}
+              title={blocked ? windowBlockMsg(cancelWindow) : undefined}
+              className="btn-primary shrink-0 bg-bordeaux-light hover:bg-bordeaux-light/90 focus:ring-bordeaux-light/40 px-6 py-3 text-base disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ↩ Reintegrar al cliente
+            </button>
+          </div>
+        );
+      })()}
+
+      {order.status === 'pending' && order.payment_method === 'cash' && (
+        <div className="mb-8 rounded-xl border-2 border-emerald-500/50 bg-emerald-950/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-widest text-bordeaux-light">Sin cupo / cancelación</p>
-            <p className="mt-1 font-display text-xl text-cream">Reintegrar el dinero al cliente</p>
+            <p className="text-xs uppercase tracking-widest text-emerald-400">Cobro en efectivo pendiente</p>
+            <p className="mt-1 font-display text-xl text-cream">Confirmar cobro en nombre del vendedor</p>
             <p className="mt-1 text-sm text-cream/70">
-              Devolvé el monto al medio de pago original de forma segura (total o parcial).
-              Total pagado: <strong className="text-cream">USD {order.total_usd}</strong>.
+              El vendedor no pudo operar el portal. Confirmá que el dinero fue recibido en efectivo.
+              Total: <strong className="text-cream">ARS {order.total_ars.toLocaleString('es-AR')}</strong>.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => setRefundOpen(true)}
-            className="btn-primary shrink-0 bg-bordeaux-light hover:bg-bordeaux-light/90 focus:ring-bordeaux-light/40 px-6 py-3 text-base"
+            onClick={handleCollectCash}
+            disabled={collectingCash}
+            className="btn-primary shrink-0 bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500/40 px-6 py-3 text-base disabled:opacity-50"
           >
-            ↩ Reintegrar al cliente
+            {collectingCash ? 'Guardando...' : '✓ Confirmar cobro (admin)'}
           </button>
         </div>
       )}
@@ -282,6 +350,7 @@ export default function OrderDetail() {
             <Row label="Email">{order.customer_email}</Row>
             <Row label="Teléfono">{order.customer_phone ?? '—'}</Row>
             <Row label="Nacionalidad">{order.customer_nationality ?? '—'}</Row>
+            {order.customer_dni && <Row label="DNI / Pasaporte">{order.customer_dni}</Row>}
           </Section>
 
           {order.items.map((item) => (
@@ -294,6 +363,13 @@ export default function OrderDetail() {
                 <Row label="Menores">{item.children} × USD {item.unit_price_child_usd ?? 0}</Row>
               )}
               <Row label="Subtotal" highlight>USD {item.subtotal_usd}</Row>
+              {item.transfer_requested && (
+                <>
+                  <Row label="Traslado">Sí</Row>
+                  {item.transfer_hotel && <Row label="Hotel">{item.transfer_hotel}</Row>}
+                  {item.transfer_room && <Row label="Habitación">{item.transfer_room}</Row>}
+                </>
+              )}
             </Section>
           ))}
 
@@ -323,20 +399,27 @@ export default function OrderDetail() {
           </div>
 
           {/* Modificar reserva: reducir (reintegro/devolución) o agregar (cobro/link) */}
-          {order.status === 'paid' && order.items.length > 0 && (
-            <div className="rounded-lg border border-gold/20 bg-ink-soft/70 p-5">
-              <p className="text-xs uppercase tracking-widest text-gold-soft">Modificar reserva</p>
-              <p className="mt-2 text-sm text-cream/60">
-                Sumá o bajá pasajeros / traslado. {order.payment_method === 'mercadopago'
-                  ? 'Reducir reintegra por MP; agregar genera un link para el cliente.'
-                  : 'En efectivo: el vendedor devuelve o cobra la diferencia en el momento.'}
-              </p>
-              <button type="button" onClick={() => setModifyOpen(true)}
-                className="btn-ghost w-full text-sm mt-4">
-                ✎ Modificar pasajeros / traslado
-              </button>
-            </div>
-          )}
+          {order.status === 'paid' && order.items.length > 0 && !(order.payment_method === 'cash' && order.net_settled_at) && (() => {
+            const serviceDate = order.items[0]?.service_date;
+            const blocked = isWindowBlocked(modifyWindow, serviceDate);
+            return (
+              <div className="rounded-lg border border-gold/20 bg-ink-soft/70 p-5">
+                <p className="text-xs uppercase tracking-widest text-gold-soft">Modificar reserva</p>
+                <p className="mt-2 text-sm text-cream/60">
+                  Sumá o bajá pasajeros / traslado. {order.payment_method === 'mercadopago'
+                    ? 'Reducir reintegra por MP; agregar genera un link para el cliente.'
+                    : 'En efectivo: el vendedor devuelve o cobra la diferencia en el momento.'}
+                </p>
+                {blocked && <p className="mt-2 text-xs text-amber-400">{windowBlockMsg(modifyWindow)}</p>}
+                <button type="button" onClick={() => setModifyOpen(true)}
+                  disabled={blocked}
+                  title={blocked ? windowBlockMsg(modifyWindow) : undefined}
+                  className="btn-ghost w-full text-sm mt-4 disabled:opacity-40 disabled:cursor-not-allowed">
+                  ✎ Modificar pasajeros / traslado
+                </button>
+              </div>
+            );
+          })()}
 
           {addons.length > 0 && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-950/10 p-5 space-y-4">
@@ -574,6 +657,7 @@ export default function OrderDetail() {
             reduceCash: (body) => adminApi.orders.reduceCash(order.public_id, body),
             increaseCash: (body) => adminApi.orders.increaseCash(order.public_id, body),
             addMp: (body) => adminApi.orders.addMp(order.public_id, body),
+            reschedule: (body) => adminApi.orders.reschedule(order.public_id, body),
           }}
           onClose={() => setModifyOpen(false)}
           onDone={() => { setModifyOpen(false); load(); }}

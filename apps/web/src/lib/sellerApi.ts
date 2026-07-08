@@ -159,6 +159,7 @@ export interface SellerOrder {
   unit_price_child_usd: number | null;
   subtotal_usd: number;
   service_date: string;
+  option_id: number;
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
@@ -172,6 +173,8 @@ export interface SellerOrder {
   utm_source: string | null;
   payment_method: string;
   mp_init_point: string | null;
+  was_reduced: boolean;
+  has_paid_addon: boolean;
 }
 
 export interface SellerBookingInput {
@@ -184,10 +187,12 @@ export interface SellerBookingInput {
     email: string;
     phone?: string | null;
     nationality?: string | null;
+    dni?: string | null;
   };
   payment_method: 'mercadopago' | 'cash';
   transfer_requested?: boolean;
   transfer_hotel?: string | null;
+  transfer_room?: string | null;
 }
 
 export interface SellerBookingResult {
@@ -297,7 +302,7 @@ export const sellerApi = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
   orderEvents: (publicId: string) =>
-    request<Array<{ id: number; event_type: string; created_at: string }>>(
+    request<Array<{ id: number; event_type: string; payload: Record<string, unknown> | null; created_at: string }>>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/events`,
     ),
   orderAddons: (publicId: string) =>
@@ -307,10 +312,24 @@ export const sellerApi = {
       `/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST' }),
   cancelAddon: (addonPublicId: string) =>
     request<{ ok: true }>(`/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/cancel`, { method: 'POST' }),
+  reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean }) =>
+    request<{ ok: true; prev_date: string; new_date: string }>(
+      `/api/seller/me/orders/${encodeURIComponent(publicId)}/reschedule`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  cancelOrder: (publicId: string, reason?: string) =>
+    request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? null }),
+    }),
+  operationWindows: () =>
+    request<{ modify: number | null; cancel: number | null }>('/api/seller/me/operation-windows'),
+  faq: () => request<{ items: { q_es: string; a_es: string }[]; updated_at: string | null }>('/api/seller/me/faq'),
   notifications: {
     list: () => request<SellerNotification[]>('/api/seller/me/notifications'),
     markAllRead: () => request<{ updated: number }>('/api/seller/me/notifications/read-all', { method: 'PATCH' }),
     unreadCount: () => request<{ count: number }>('/api/seller/me/notifications/unread-count'),
+    delete: (id: number) => request<{ ok: true }>(`/api/seller/me/notifications/${id}`, { method: 'DELETE' }),
   },
   forgotPassword: (email: string) =>
     publicRequest<{ ok: true }>('/api/seller/auth/forgot-password', {

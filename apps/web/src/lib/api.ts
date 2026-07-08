@@ -43,11 +43,13 @@ export interface CheckoutInput {
     email: string;
     phone?: string | null;
     nationality?: string | null;
+    dni?: string | null;
   };
   ref_code?: string | null;
   utm?: { source?: string; medium?: string; campaign?: string };
   transfer_requested?: boolean;
   transfer_hotel?: string | null;
+  transfer_room?: string | null;
 }
 
 export interface CheckoutResponse {
@@ -112,6 +114,9 @@ export const api = {
   settings: {
     bookingCutoff: () => request<{ time: string | null }>('/api/settings/booking-cutoff'),
     exchangeRate: () => request<{ rate: number }>('/api/settings/exchange-rate'),
+  },
+  status: {
+    maintenance: () => request<{ maintenance: boolean }>('/health/status'),
   },
   content: {
     about: () => request<AboutContent>('/api/content/about'),

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { adminApi, AdminApiError, type AboutContent, type FaqItem } from '../../lib/adminApi';
+import { adminApi, AdminApiError, type AboutContent, type FaqItem, type SellerFaqItem } from '../../lib/adminApi';
 import Spinner from '../../components/Spinner';
 
-type Tab = 'about' | 'faq';
+type Tab = 'about' | 'faq' | 'seller-faq';
 
 export default function ContentPage() {
   const [tab, setTab] = useState<Tab>('about');
@@ -10,15 +10,18 @@ export default function ContentPage() {
   return (
     <div className="max-w-3xl">
       <h1 className="font-display text-3xl text-cream">Contenido</h1>
-      <p className="mt-1 text-sm text-cream/50">Editá las secciones Nosotros y Preguntas Frecuentes (bilingüe).</p>
+      <p className="mt-1 text-sm text-cream/50">Editá las secciones del sitio y del portal de vendedores.</p>
 
-      <div className="mt-6 flex gap-2">
+      <div className="mt-6 flex gap-2 flex-wrap">
         <TabButton active={tab === 'about'} onClick={() => setTab('about')}>Nosotros</TabButton>
-        <TabButton active={tab === 'faq'} onClick={() => setTab('faq')}>Preguntas Frecuentes</TabButton>
+        <TabButton active={tab === 'faq'} onClick={() => setTab('faq')}>FAQ Clientes</TabButton>
+        <TabButton active={tab === 'seller-faq'} onClick={() => setTab('seller-faq')}>FAQ Vendedores</TabButton>
       </div>
 
       <div className="mt-6">
-        {tab === 'about' ? <AboutEditor /> : <FaqEditor />}
+        {tab === 'about' && <AboutEditor />}
+        {tab === 'faq' && <FaqEditor />}
+        {tab === 'seller-faq' && <SellerFaqEditor />}
       </div>
     </div>
   );
@@ -196,6 +199,96 @@ function FaqEditor() {
               <textarea className="input min-h-[90px]" value={it.a_en} onChange={(e) => update(i, { a_en: e.target.value })} />
             </Field>
           </div>
+        </div>
+      ))}
+
+      <button type="button" onClick={add} className="btn-ghost text-sm">+ Agregar pregunta</button>
+
+      <ErrorMsg msg={error} />
+      <div className="flex items-center gap-3 pt-2">
+        <button type="button" onClick={save} disabled={saving} className="btn-primary disabled:opacity-50">
+          {saving ? <Spinner size="sm" /> : 'Guardar'}
+        </button>
+        <Saved msg={saved} />
+      </div>
+    </div>
+  );
+}
+
+// ─── FAQ Vendedores ──────────────────────────────────────────
+// Solo español. Se muestran en /seller/ayuda del portal del vendedor.
+const EMPTY_SELLER_ITEM: SellerFaqItem = { q_es: '', a_es: '' };
+
+function SellerFaqEditor() {
+  const [items, setItems] = useState<SellerFaqItem[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi.settings.getSellerFaq()
+      .then((d) => setItems(d.items))
+      .catch((err) => setError((err as AdminApiError).message));
+  }, []);
+
+  const update = (i: number, patch: Partial<SellerFaqItem>) =>
+    setItems((prev) => prev!.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const add = () => setItems((prev) => [...(prev ?? []), { ...EMPTY_SELLER_ITEM }]);
+  const remove = (i: number) => setItems((prev) => prev!.filter((_, idx) => idx !== i));
+  const move = (i: number, dir: -1 | 1) => {
+    setItems((prev) => {
+      const arr = [...prev!];
+      const j = i + dir;
+      if (j < 0 || j >= arr.length) return arr;
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      return arr;
+    });
+  };
+
+  const save = async () => {
+    if (!items) return;
+    setSaving(true); setError(null); setSaved(null);
+    try {
+      const clean = items.filter((it) => it.q_es.trim() || it.a_es.trim());
+      const result = await adminApi.settings.updateSellerFaq(clean);
+      setItems(result.items);
+      setSaved('✓ Guardado.');
+      setTimeout(() => setSaved(null), 3000);
+    } catch (err) {
+      setError((err as AdminApiError).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!items) return error ? <ErrorMsg msg={error} /> : <Spinner />;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-cream/50">
+        Estas preguntas aparecen en <strong className="text-cream/70">/seller/ayuda</strong> del portal de vendedores. Solo español.
+      </p>
+
+      {items.length === 0 && (
+        <p className="text-sm text-cream/50">Todavía no hay preguntas. Agregá la primera.</p>
+      )}
+
+      {items.map((it, i) => (
+        <div key={i} className="rounded-xl border border-gold/15 bg-ink-soft/40 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-widest text-cream/40">Pregunta {i + 1}</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="px-2 py-1 text-cream/60 hover:text-gold disabled:opacity-30" aria-label="Subir">↑</button>
+              <button type="button" onClick={() => move(i, 1)} disabled={i === items.length - 1} className="px-2 py-1 text-cream/60 hover:text-gold disabled:opacity-30" aria-label="Bajar">↓</button>
+              <button type="button" onClick={() => remove(i)} className="px-2 py-1 text-bordeaux-light hover:text-bordeaux" aria-label="Eliminar">✕</button>
+            </div>
+          </div>
+          <Field label="Pregunta">
+            <input className="input" value={it.q_es} onChange={(e) => update(i, { q_es: e.target.value })} />
+          </Field>
+          <Field label="Respuesta">
+            <textarea className="input min-h-[90px]" value={it.a_es} onChange={(e) => update(i, { a_es: e.target.value })} />
+          </Field>
         </div>
       ))}
 

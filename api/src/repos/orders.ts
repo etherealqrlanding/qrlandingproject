@@ -8,6 +8,7 @@ export interface CreateOrderInput {
     email: string;
     phone?: string | null;
     nationality?: string | null;
+    dni?: string | null;
   };
   item: {
     product_id: number;
@@ -22,6 +23,7 @@ export interface CreateOrderInput {
     subtotal_usd: number;
     transfer_requested?: boolean;
     transfer_hotel?: string | null;
+    transfer_room?: string | null;
     // Net prices snapshot (optional: only set when option has them configured)
     net_total_usd?: number | null;
   };
@@ -60,15 +62,16 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
 
     const { rows: orderRows } = await client.query<{ id: number; public_id: string }>(
       `INSERT INTO orders (
-         status, customer_name, customer_email, customer_phone, customer_nationality,
+         status, customer_name, customer_email, customer_phone, customer_nationality, customer_dni,
          total_usd, total_ars, exchange_rate_used, currency,
          ref_code, payment_method, utm_source, utm_medium, utm_campaign
        ) VALUES (
-         'pending', $1, $2, $3, $4, $5, $6, $7, 'ARS', $8, $9, $10, $11, $12
+         'pending', $1, $2, $3, $4, $5, $6, $7, $8, 'ARS', $9, $10, $11, $12, $13
        )
        RETURNING id, public_id`,
       [
-        input.customer.name, input.customer.email, input.customer.phone ?? null, input.customer.nationality ?? null,
+        input.customer.name, input.customer.email, input.customer.phone ?? null,
+        input.customer.nationality ?? null, input.customer.dni ?? null,
         input.total_usd, input.total_ars, input.exchange_rate_used,
         input.ref_code, input.payment_method ?? 'mercadopago',
         input.utm?.source ?? null, input.utm?.medium ?? null, input.utm?.campaign ?? null,
@@ -81,8 +84,8 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
          order_id, product_id, option_id,
          product_name_snapshot, option_name_snapshot, service_date,
          adults, children, unit_price_adult_usd, unit_price_child_usd, subtotal_usd,
-         transfer_requested, transfer_hotel
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+         transfer_requested, transfer_hotel, transfer_room
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [
         order.id, input.item.product_id, input.item.option_id,
         input.item.product_name_snapshot, input.item.option_name_snapshot, input.item.service_date,
@@ -90,6 +93,7 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
         input.item.unit_price_adult_usd, input.item.unit_price_child_usd, input.item.subtotal_usd,
         input.item.transfer_requested ?? false,
         input.item.transfer_hotel ?? null,
+        input.item.transfer_room ?? null,
       ],
     );
 
@@ -101,7 +105,7 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
       );
       const seller = sellerRows[0];
       if (seller) {
-        const netTotalUsd = input.item.net_total_usd ?? null;
+        let netTotalUsd = input.item.net_total_usd ?? null;
         const commissionPercent = Number.parseFloat(seller.commission_percent);
         let commissionUsd = 0;
 
@@ -110,6 +114,11 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
           // Nos debe liquidar el neto. Su "comisión" (ganancia) = total − neto.
           if (netTotalUsd != null) {
             commissionUsd = Math.max(0, Math.round((input.total_usd - netTotalUsd) * 100) / 100);
+          } else if (commissionPercent > 0) {
+            // Sin precio neto: derivamos comisión desde el % y guardamos el neto implícito.
+            // Así las modificaciones futuras pueden recalcular via recomputeCashCommission.
+            commissionUsd = Math.max(0, Math.round((input.total_usd * commissionPercent / 100) * 100) / 100);
+            netTotalUsd = Math.max(0, Math.round((input.total_usd - commissionUsd) * 100) / 100);
           }
         } else {
           // Mercado Pago: nosotros cobramos y le liquidamos su comisión = % × total.
@@ -182,6 +191,8 @@ export async function updateOrderFromPayment(
 export interface OrderReductionInput {
   orderId: number;
   itemId: number;
+  origAdults: number;
+  origChildren: number;
   newAdults: number;
   newChildren: number;
   newTransferRequested: boolean;
@@ -196,6 +207,7 @@ export interface OrderReductionInput {
   // Neto recalculado (solo relevante para efectivo; null = no tocar).
   newNetTotalUsd: number | null;
   noteLine: string;
+  actor?: 'admin' | 'seller';
 }
 
 /**
@@ -249,9 +261,11 @@ export async function applyOrderReduction(input: OrderReductionInput): Promise<v
       `INSERT INTO payment_events (order_id, event_type, payload)
        VALUES ($1, 'order_modified', $2::jsonb)`,
       [input.orderId, JSON.stringify({
+        orig_adults: input.origAdults, orig_children: input.origChildren,
         new_adults: input.newAdults, new_children: input.newChildren,
         new_transfer: input.newTransferRequested,
         refund_usd: input.refundUsd, refund_ars: input.refundArs,
+        actor: input.actor ?? null,
       })],
     );
 

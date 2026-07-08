@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerOrder, type SellerPendingAddon } from '../../lib/sellerApi';
+
+function isWindowBlocked(hours: number | null, serviceDate: string): boolean {
+  if (!hours) return false;
+  const [y, m, d] = serviceDate.split('-').map(Number);
+  const serviceMidnightUtcMs = Date.UTC(y, m - 1, d, 3, 0, 0); // medianoche BsAs = 03:00 UTC
+  const hoursUntilService = (serviceMidnightUtcMs - Date.now()) / (60 * 60 * 1000);
+  return hoursUntilService < hours;
+}
+
+function windowBlockMsg(hours: number | null): string {
+  return `Se requieren al menos ${hours} hs de anticipación al servicio.`;
+}
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
 import OrderHistory from '../../components/OrderHistory';
@@ -62,6 +74,25 @@ function fmtArs(ars: number) {
   return `ARS ${Math.round(ars).toLocaleString('es-AR')}`;
 }
 
+// Comisión efectiva en ARS: usa el valor guardado si existe; si no (órdenes sin precio neto
+// configurado), recalcula desde commission_percent_snapshot × total_ars.
+function effectiveCommissionArs(o: SellerOrder): number {
+  if (o.commission_amount_ars > 0 || o.net_total_usd != null) return o.commission_amount_ars;
+  if (o.commission_percent_snapshot != null && o.commission_percent_snapshot > 0) {
+    return Math.round(o.total_ars * o.commission_percent_snapshot / 100);
+  }
+  return 0;
+}
+
+// Neto efectivo en ARS: usa net_total_usd × tasa si existe; si no, total − comisión estimada.
+function effectiveNetArs(o: SellerOrder): number {
+  if (o.net_total_usd != null) return Math.round(o.net_total_usd * o.exchange_rate_used);
+  if (o.commission_percent_snapshot != null && o.commission_percent_snapshot > 0) {
+    return Math.round(o.total_ars * (1 - o.commission_percent_snapshot / 100));
+  }
+  return 0;
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
@@ -74,6 +105,26 @@ function paxLabel(adults: number, children: number) {
   const parts = [`${adults} adulto${adults !== 1 ? 's' : ''}`];
   if (children > 0) parts.push(`${children} menor${children !== 1 ? 'es' : ''}`);
   return parts.join(' · ');
+}
+
+// Deriva original/actual/sumados a partir de los eventos cargados. Devuelve null
+// en original/added cuando no hay eventos o la orden no fue modificada.
+function paxDetail(o: SellerOrder, events?: OrderEvent[]) {
+  const current = paxLabel(o.adults ?? 0, o.children ?? 0);
+  if (!events || (!o.was_reduced && !o.has_paid_addon)) return { current, original: null, added: null };
+  const modEvent = [...events].reverse().find(
+    (e) => e.event_type === 'order_modified' && e.payload?.orig_adults != null,
+  );
+  const extraAdults = events.reduce((sum, e) => sum + Number(e.payload?.extra_adults ?? 0), 0);
+  const extraChildren = events.reduce((sum, e) => sum + Number(e.payload?.extra_children ?? 0), 0);
+  const original = modEvent
+    ? paxLabel(Number(modEvent.payload!.orig_adults), Number(modEvent.payload!.orig_children))
+    : null;
+  const addedParts = [
+    extraAdults > 0 ? `+${extraAdults} ad` : '',
+    extraChildren > 0 ? `+${extraChildren} men` : '',
+  ].filter(Boolean);
+  return { current, original, added: addedParts.length > 0 ? addedParts.join(' · ') : null };
 }
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -101,9 +152,15 @@ export default function SellerOrders() {
   const [eventsByOrder, setEventsByOrder] = useState<Record<string, OrderEvent[]>>({});
   const [addonsByOrder, setAddonsByOrder] = useState<Record<string, SellerPendingAddon[]>>({});
   const [addonBusy, setAddonBusy] = useState<string | null>(null);
+  const [modifyWindow, setModifyWindow] = useState<number | null>(null);
+  const [cancelWindow, setCancelWindow] = useState<number | null>(null);
+  const [cancelingOrder, setCancelingOrder] = useState<string | null>(null);
+  const [cancelConfirmOrder, setCancelConfirmOrder] = useState<SellerOrder | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const reload = async () => {
-    const data = await sellerApi.orders();
+    const data = await sellerApi.orders(filter || undefined);
     setOrders(data);
   };
 
@@ -147,6 +204,28 @@ export default function SellerOrders() {
       alert((err as SellerApiError).message);
     } finally {
       setAddonBusy(null);
+    }
+  };
+
+  const handleCancelOrder = (o: SellerOrder) => {
+    setCancelConfirmOrder(o);
+    setCancelReason('');
+    setCancelError(null);
+  };
+
+  const handleCancelConfirm = async () => {
+    if (!cancelConfirmOrder) return;
+    setCancelingOrder(cancelConfirmOrder.public_id);
+    setCancelError(null);
+    try {
+      await sellerApi.cancelOrder(cancelConfirmOrder.public_id, cancelReason.trim() || undefined);
+      setCancelConfirmOrder(null);
+      await reload();
+      setExpanded(null);
+    } catch (err) {
+      setCancelError((err as SellerApiError).message);
+    } finally {
+      setCancelingOrder(null);
     }
   };
 
@@ -232,8 +311,13 @@ export default function SellerOrders() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    sellerApi.orders()
-      .then((data) => { setOrders(data); setExpanded(null); })
+    Promise.all([sellerApi.orders(), sellerApi.operationWindows()])
+      .then(([data, windows]) => {
+        setOrders(data);
+        setExpanded(null);
+        setModifyWindow(windows.modify);
+        setCancelWindow(windows.cancel);
+      })
       .catch((err) => setError((err as SellerApiError).message))
       .finally(() => setLoading(false));
   }, []);
@@ -266,6 +350,7 @@ export default function SellerOrders() {
           unit_price_child_usd: modifyOrder.unit_price_child_usd != null ? String(modifyOrder.unit_price_child_usd) : null,
           subtotal_usd: String(modifyOrder.subtotal_usd),
           service_date: modifyOrder.service_date,
+          option_id: modifyOrder.option_id,
           option_name_snapshot: modifyOrder.option_name,
         }}
         handlers={{
@@ -273,9 +358,17 @@ export default function SellerOrders() {
           reduceCash: (body) => sellerApi.reduceCash(modifyOrder.public_id, body),
           increaseCash: (body) => sellerApi.increaseCash(modifyOrder.public_id, body),
           addMp: (body) => sellerApi.addMp(modifyOrder.public_id, body),
+          reschedule: (body) => sellerApi.reschedule(modifyOrder.public_id, body),
         }}
         onClose={() => setModifyOrder(null)}
-        onDone={() => { setModifyOrder(null); reload().catch(() => {}); }}
+        onDone={() => {
+          const pid = modifyOrder.public_id;
+          setModifyOrder(null);
+          // Invalida caches de esta orden para que se recarguen con datos frescos
+          setAddonsByOrder((prev) => { const next = { ...prev }; delete next[pid]; return next; });
+          setEventsByOrder((prev) => { const next = { ...prev }; delete next[pid]; return next; });
+          reload().catch(() => {});
+        }}
       />
     )}
     {confirmPublicId && pendingOrder && (
@@ -326,6 +419,70 @@ export default function SellerOrders() {
                 className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors disabled:opacity-60"
               >
                 {collecting === confirmPublicId ? 'Procesando...' : 'Sí, cobré el dinero'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {cancelConfirmOrder && (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+        <div className="min-h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-red-500/20 p-6 md:p-8">
+            <h2 className="font-display text-2xl text-cream mb-1">Cancelar reserva</h2>
+            <p className="text-sm text-cream/50 mb-5">
+              Esta acción no se puede deshacer. Se notificará al pasajero y al administrador.
+            </p>
+            <div className="rounded-lg border border-gold/15 bg-ink/40 p-4 space-y-1.5 mb-5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-cream/50">Pasajero</span>
+                <span className="text-cream font-medium">{cancelConfirmOrder.customer_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-cream/50">Servicio</span>
+                <span className="text-cream/80">{cancelConfirmOrder.option_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-cream/50">Fecha</span>
+                <span className="text-cream/80">{fmtDate(cancelConfirmOrder.service_date)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-cream/50">Total</span>
+                <span className="text-gold font-mono font-semibold">{fmtArs(cancelConfirmOrder.total_ars)}</span>
+              </div>
+            </div>
+            <label className="block mb-4">
+              <span className="text-xs text-cream/50 uppercase tracking-wider mb-1.5 block">
+                Motivo (opcional — se incluye en el email al pasajero)
+              </span>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                maxLength={500}
+                rows={3}
+                placeholder="Ej: El pasajero no se presentó, cambio de planes, etc."
+                className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2.5 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40 resize-none"
+              />
+            </label>
+            {cancelError && (
+              <p className="text-xs text-red-400 mb-4">⚠ {cancelError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setCancelConfirmOrder(null); setCancelError(null); }}
+                className="flex-1 rounded-lg border border-gold/20 px-4 py-2.5 text-sm text-cream/70 hover:border-gold/40 transition-colors"
+                disabled={cancelingOrder === cancelConfirmOrder.public_id}
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelConfirm}
+                disabled={cancelingOrder === cancelConfirmOrder.public_id}
+                className="flex-1 rounded-lg bg-red-600/80 border border-red-500/50 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-60"
+              >
+                {cancelingOrder === cancelConfirmOrder.public_id ? 'Cancelando...' : 'Sí, cancelar reserva'}
               </button>
             </div>
           </div>
@@ -399,6 +556,12 @@ export default function SellerOrders() {
                         <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs ${derivedStatus(o).cls}`}>
                           {derivedStatus(o).label}
                         </span>
+                        {o.was_reduced && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-sky-500/30 bg-sky-950/20 text-sky-300">↓ Reducida</span>
+                        )}
+                        {o.has_paid_addon && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">↑ Ampliada</span>
+                        )}
                       </div>
                       <p className="text-xs text-cream/50 truncate">{o.option_name}</p>
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-cream/40">
@@ -411,7 +574,7 @@ export default function SellerOrders() {
                     <div className="shrink-0 text-right">
                       <p className="text-cream font-mono text-sm">{fmtArs(o.total_ars)}</p>
                       {(o.status === 'paid' || o.status === 'pending') && (
-                        <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmtArs(o.commission_amount_ars)}</p>
+                        <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmtArs(effectiveCommissionArs(o))}</p>
                       )}
                       <span className={`text-gold/50 text-xs inline-block mt-1 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                     </div>
@@ -425,17 +588,27 @@ export default function SellerOrders() {
                       {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
                       {o.customer_nationality && <DetailRow label="Nac.">{o.customer_nationality}</DetailRow>}
                       <DetailRow label="Fecha servicio">{fmtDate(o.service_date)}</DetailRow>
+                      {(() => {
+                        const pd = paxDetail(o, eventsByOrder[o.public_id]);
+                        return (
+                          <>
+                            <DetailRow label="Pasajeros">{pd.current}</DetailRow>
+                            {pd.original && <DetailRow label="Antes"><span className="text-cream/50">{pd.original}</span></DetailRow>}
+                            {pd.added && <DetailRow label="Sumados"><span className="text-gold text-xs">{pd.added}</span></DetailRow>}
+                          </>
+                        );
+                      })()}
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
                       <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
                       {(o.status === 'paid' || o.status === 'pending') && (
                         <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
-                          <span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span>
+                          <span className="text-gold font-mono">{fmtArs(effectiveCommissionArs(o))}</span>
                         </DetailRow>
                       )}
                       {o.payment_method === 'cash' ? (
                         <>
                           {o.status === 'paid' && (
-                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs((o.net_total_usd ?? 0) * o.exchange_rate_used)}</span></DetailRow>
+                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs(effectiveNetArs(o))}</span></DetailRow>
                           )}
                           <DetailRow label="Neto rendido">
                             {o.net_settled_at
@@ -475,17 +648,38 @@ export default function SellerOrders() {
                           </button>
                         </div>
                       )}
-                      {o.status === 'paid' && (
-                        <div className="mt-3 pt-3 border-t border-gold/10">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setModifyOrder(o); }}
-                            className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors"
-                          >
-                            ✎ Modificar pasajeros
-                          </button>
-                        </div>
-                      )}
+                      {(o.status === 'pending' || o.status === 'paid') && (() => {
+                        const modBlocked = isWindowBlocked(modifyWindow, o.service_date);
+                        return (
+                          <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+                            {modBlocked && <p className="text-[10px] text-amber-400">{windowBlockMsg(modifyWindow)}</p>}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setModifyOrder(o); }}
+                              disabled={modBlocked}
+                              className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              ✎ Modificar pasajeros
+                            </button>
+                          </div>
+                        );
+                      })()}
+                      {(o.status === 'pending' || o.status === 'paid') && (() => {
+                        const cancelBlocked = isWindowBlocked(cancelWindow, o.service_date);
+                        return (
+                          <div className="mt-2">
+                            {cancelBlocked && <p className="text-[10px] text-amber-400 mb-1">{windowBlockMsg(cancelWindow)}</p>}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleCancelOrder(o); }}
+                              disabled={cancelBlocked || cancelingOrder === o.public_id}
+                              className="w-full rounded-lg border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {cancelingOrder === o.public_id ? 'Cancelando...' : '✕ Cancelar reserva'}
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {renderAddons(o)}
                       {eventsByOrder[o.public_id] && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
@@ -544,11 +738,17 @@ export default function SellerOrders() {
                             {o.payment_method === 'cash' && (
                               <span className="px-2 py-0.5 rounded-full text-xs border border-cream/15 bg-cream/5 text-cream/40">Efectivo</span>
                             )}
+                            {o.was_reduced && (
+                              <span className="px-2 py-0.5 rounded-full text-xs border border-sky-500/30 bg-sky-950/20 text-sky-300">↓ Reducida</span>
+                            )}
+                            {o.has_paid_addon && (
+                              <span className="px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">↑ Ampliada</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right text-cream font-mono whitespace-nowrap text-xs">{fmtArs(o.total_ars)}</td>
                         <td className="px-4 py-3 text-right text-gold font-mono whitespace-nowrap text-xs">
-                          {(o.status === 'paid' || o.status === 'pending') ? fmtArs(o.commission_amount_ars) : '—'}
+                          {(o.status === 'paid' || o.status === 'pending') ? fmtArs(effectiveCommissionArs(o)) : '—'}
                         </td>
                         <td className="px-4 py-3 text-center text-xs">
                           {(o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at)
@@ -578,8 +778,16 @@ export default function SellerOrders() {
                                 <DetailRow label="Show">{o.product_name}</DetailRow>
                                 <DetailRow label="Opción">{o.option_name}</DetailRow>
                                 <DetailRow label="Fecha">{fmtDate(o.service_date)}</DetailRow>
-                                <DetailRow label="Adultos">{o.adults}</DetailRow>
-                                {o.children > 0 && <DetailRow label="Menores">{o.children}</DetailRow>}
+                                {(() => {
+                                  const pd = paxDetail(o, eventsByOrder[o.public_id]);
+                                  return (
+                                    <>
+                                      <DetailRow label="Pasajeros">{pd.current}</DetailRow>
+                                      {pd.original && <DetailRow label="Antes"><span className="text-cream/50">{pd.original}</span></DetailRow>}
+                                      {pd.added && <DetailRow label="Sumados"><span className="text-gold text-xs">{pd.added}</span></DetailRow>}
+                                    </>
+                                  );
+                                })()}
                                 <DetailRow label="Compra">{fmtDateTime(o.created_at)}</DetailRow>
                               </div>
                               <div className="space-y-1.5">
@@ -588,13 +796,13 @@ export default function SellerOrders() {
                                 <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
                                 {(o.status === 'paid' || o.status === 'pending') && (
                                   <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
-                                    <span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span>
+                                    <span className="text-gold font-mono">{fmtArs(effectiveCommissionArs(o))}</span>
                                   </DetailRow>
                                 )}
                                 {o.payment_method === 'cash' ? (
                                   <>
                                     {o.status === 'paid' && (
-                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs((o.net_total_usd ?? 0) * o.exchange_rate_used)}</span></DetailRow>
+                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs(effectiveNetArs(o))}</span></DetailRow>
                                     )}
                                     <DetailRow label="Neto rendido">
                                       {o.net_settled_at
@@ -638,22 +846,43 @@ export default function SellerOrders() {
                                 <p className="mt-1.5 text-xs text-cream/35 text-center">Confirmar envía el email al pasajero</p>
                               </div>
                             )}
-                            {o.status === 'paid' && (
-                              <div className="mt-4 pt-4 border-t border-gold/10">
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); setModifyOrder(o); }}
-                                  className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors"
-                                >
-                                  ✎ Modificar pasajeros / traslado
-                                </button>
-                                <p className="mt-1.5 text-xs text-cream/35 text-center">
-                                  {o.payment_method === 'cash'
-                                    ? 'Sumás/bajás pax y cobrás o devolvés en el momento'
-                                    : 'Sumar pax genera un link de pago para el cliente'}
-                                </p>
-                              </div>
-                            )}
+                            {(o.status === 'pending' || o.status === 'paid') && (() => {
+                              const modBlocked = isWindowBlocked(modifyWindow, o.service_date);
+                              return (
+                                <div className="mt-4 pt-4 border-t border-gold/10">
+                                  {modBlocked && <p className="text-xs text-amber-400 mb-2">{windowBlockMsg(modifyWindow)}</p>}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setModifyOrder(o); }}
+                                    disabled={modBlocked}
+                                    className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    ✎ Modificar pasajeros / traslado
+                                  </button>
+                                  <p className="mt-1.5 text-xs text-cream/35 text-center">
+                                    {o.payment_method === 'cash'
+                                      ? 'Sumás/bajás pax y cobrás o devolvés en el momento'
+                                      : 'Sumar pax genera un link de pago para el cliente'}
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                            {(o.status === 'pending' || o.status === 'paid') && (() => {
+                              const cancelBlocked = isWindowBlocked(cancelWindow, o.service_date);
+                              return (
+                                <div className="mt-3 pt-3 border-t border-gold/10">
+                                  {cancelBlocked && <p className="text-xs text-amber-400 mb-2">{windowBlockMsg(cancelWindow)}</p>}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleCancelOrder(o); }}
+                                    disabled={cancelBlocked || cancelingOrder === o.public_id}
+                                    className="w-full rounded-lg border border-red-500/30 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                  >
+                                    {cancelingOrder === o.public_id ? 'Cancelando...' : '✕ Cancelar reserva'}
+                                  </button>
+                                </div>
+                              );
+                            })()}
                             <div className="max-w-md">{renderAddons(o)}</div>
                             {eventsByOrder[o.public_id] && (
                               <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">

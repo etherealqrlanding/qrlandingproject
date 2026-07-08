@@ -130,16 +130,24 @@ function ProductCard({ p, toggling, onToggle, expanded, onToggleExpand, rate }: 
 }>) {
   return (
     <div className="rounded-xl border border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60 transition overflow-hidden">
-      <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link to={`/admin/products/${p.id}`} className="text-cream hover:text-gold font-medium text-sm leading-tight">
-            {p.name}
-          </Link>
-          <p className="text-xs text-cream/40 truncate mt-0.5">{p.venue_name}</p>
+      <div className="px-4 pt-3 pb-2 flex items-start gap-3">
+        {/* Thumbnail hero */}
+        <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-ink-soft/60 border border-gold/10">
+          {p.hero_image_url
+            ? <img src={p.hero_image_url} alt="" className="w-full h-full object-cover" />
+            : <span className="w-full h-full flex items-center justify-center text-cream/20 text-lg">◈</span>}
         </div>
-        <p className="text-gold-soft font-mono text-xs whitespace-nowrap shrink-0 mt-0.5">
-          {p.starting_price_usd != null ? `USD ${p.starting_price_usd}` : '—'}
-        </p>
+        <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <Link to={`/admin/products/${p.id}`} className="text-cream hover:text-gold font-medium text-sm leading-tight">
+              {p.name}
+            </Link>
+            <p className="text-xs text-cream/40 truncate mt-0.5">{p.venue_name}</p>
+          </div>
+          <p className="text-gold-soft font-mono text-xs whitespace-nowrap shrink-0 mt-0.5">
+            {p.starting_price_usd != null ? `USD ${p.starting_price_usd}` : '—'}
+          </p>
+        </div>
       </div>
 
       <div className="px-4 pb-3 flex items-center justify-between gap-3">
@@ -266,6 +274,7 @@ export default function ProductsList() {
           <table className="w-full text-sm">
             <thead className="bg-ink-soft/60 text-cream/60 text-xs uppercase tracking-wider">
               <tr>
+                <th className="py-2.5 px-3 w-10" />
                 <th className="text-left py-2.5 px-3">Producto</th>
                 <th className="text-left py-2.5 px-3">Categoría</th>
                 <th className="text-center py-2.5 px-3">Tiers</th>
@@ -279,6 +288,13 @@ export default function ProductsList() {
               {filtered.map((p) => (
                 <Fragment key={p.id}>
                   <tr className="border-t border-gold/5 hover:bg-gold/5 transition">
+                    <td className="py-2 px-3">
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-ink-soft/60 border border-gold/10 shrink-0">
+                        {p.hero_image_url
+                          ? <img src={p.hero_image_url} alt="" className="w-full h-full object-cover" />
+                          : <span className="w-full h-full flex items-center justify-center text-cream/20 text-sm">◈</span>}
+                      </div>
+                    </td>
                     <td className="py-2.5 px-3">
                       <Link to={`/admin/products/${p.id}`} className="text-cream hover:text-gold text-xs font-medium leading-tight">
                         {p.name}
@@ -311,7 +327,7 @@ export default function ProductsList() {
                   </tr>
                   {expanded.has(p.id) && p.options.length > 0 && (
                     <tr className="bg-ink/30">
-                      <td colSpan={7} className="px-3 pb-3 pt-1">
+                      <td colSpan={8} className="px-3 pb-3 pt-1">
                         <TierBreakdown options={p.options} rate={rate} />
                       </td>
                     </tr>

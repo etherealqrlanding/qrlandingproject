@@ -29,6 +29,7 @@ export async function adminListProducts() {
        p.updated_at,
        (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id) AS options_count,
        (SELECT COUNT(*) FROM product_images i WHERE i.product_id = p.id) AS images_count,
+       (SELECT i.url FROM product_images i WHERE i.product_id = p.id AND i.is_hero = TRUE ORDER BY i.display_order LIMIT 1) AS hero_image_url,
        (SELECT COALESCE(json_agg(to_jsonb(opt) ORDER BY opt.display_order), '[]'::json)
           FROM (
             SELECT o.id, o.code, o.name_es,

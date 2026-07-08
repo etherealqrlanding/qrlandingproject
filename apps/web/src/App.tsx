@@ -42,6 +42,7 @@ import SellerCommissions from './pages/seller/SellerCommissions';
 import SellerBooking from './pages/seller/SellerBooking';
 import SellerNotifications from './pages/seller/SellerNotifications';
 import SellerCatalog from './pages/seller/SellerCatalog';
+import SellerHelp from './pages/seller/SellerHelp';
 
 export default function App() {
   const location = useLocation();
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="liquidaciones" element={<SellerCommissions />} />
             <Route path="nueva-reserva" element={<SellerBooking />} />
             <Route path="notificaciones" element={<SellerNotifications />} />
+            <Route path="ayuda" element={<SellerHelp />} />
           </Route>
         </Routes>
       </SellerAuthProvider>
@@ -103,6 +105,19 @@ export default function App() {
   return <PublicApp />;
 }
 
+function MaintenanceScreen() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-ink px-6 text-center">
+      <p className="text-5xl mb-6">🔧</p>
+      <h1 className="font-display text-3xl md:text-4xl text-cream mb-3">Sitio en mantenimiento</h1>
+      <p className="text-cream/60 max-w-sm text-sm leading-relaxed">
+        Estamos realizando tareas de mantenimiento. Volvemos en breve.
+      </p>
+      <p className="mt-6 text-xs text-cream/30 uppercase tracking-widest">Tangos y Milongas Tickets</p>
+    </div>
+  );
+}
+
 type GateState = 'checking' | 'ok' | 'missing' | 'invalid';
 
 function PublicApp() {
@@ -110,10 +125,18 @@ function PublicApp() {
   const location = useLocation();
   const [welcomeCode, setWelcomeCode] = useState<string | null>(null);
   const [gate, setGate] = useState<GateState>('checking');
+  const [maintenance, setMaintenance] = useState<boolean>(false);
 
   useEffect(() => {
     if (freshCode) setWelcomeCode(freshCode);
   }, [freshCode, freshTick]);
+
+  // Chequeo de modo mantenimiento (fail open: si falla la llamada, el sitio sigue visible).
+  useEffect(() => {
+    api.status.maintenance()
+      .then((s) => setMaintenance(s.maintenance))
+      .catch(() => {});
+  }, []);
 
   // Exclusividad de venta: solo se accede con el código de un vendedor activo.
   useEffect(() => {
@@ -140,6 +163,7 @@ function PublicApp() {
   // Los retornos de pago (/checkout/*) siempre pasan, para no atrapar al que vuelve de MP.
   const isCheckoutReturn = location.pathname.startsWith('/checkout');
   if (!isCheckoutReturn) {
+    if (maintenance) return <MaintenanceScreen />;
     if (gate === 'checking') return <LoadingScreen />;
     if (gate === 'missing' || gate === 'invalid') {
       return (

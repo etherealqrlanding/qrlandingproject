@@ -34,6 +34,15 @@ export default function SellerNotifications() {
       .finally(() => setLoading(false));
   }, [refresh]);
 
+  function handleDelete(id: number) {
+    // Remoción optimista: saca la notificación antes de esperar la respuesta
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    sellerApi.notifications.delete(id).catch(() => {
+      // Si falla, volvemos a cargar la lista
+      sellerApi.notifications.list().then(setNotifications).catch(() => {});
+    });
+  }
+
   const unread = notifications.filter((n) => !n.read_at).length;
 
   return (
@@ -98,6 +107,15 @@ export default function SellerNotifications() {
                       )}
                     </div>
                   </div>
+                  <button
+                    onClick={() => handleDelete(n.id)}
+                    aria-label="Eliminar notificación"
+                    className="ml-1 shrink-0 rounded-md p-1 text-cream/30 hover:text-cream/70 hover:bg-white/5 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             );

@@ -2,13 +2,15 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications } from '../../services/email.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications } from '../../services/email.js';
 import { logPaymentEvent, applyOrderReduction } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
 import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon } from '../../repos/addons.js';
 import { syncOrderWithMp } from '../checkout.js';
+import { getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
+import { checkSingleDateAvailability } from '../../repos/availability.js';
 
 export const adminOrdersRouter = Router();
 
@@ -139,14 +141,21 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
       id: number; status: string; mp_payment_id: string | null;
       total_usd: number; total_ars: number; exchange_rate_used: number;
     }>(
-      `SELECT id, status::text AS status, mp_payment_id,
-              total_usd::float AS total_usd, total_ars::float AS total_ars,
-              exchange_rate_used::float AS exchange_rate_used
-         FROM orders WHERE public_id = $1 LIMIT 1`,
+      `SELECT o.id, o.status::text AS status, o.mp_payment_id,
+              o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
+              o.exchange_rate_used::float AS exchange_rate_used,
+              oi.service_date
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.public_id = $1
+        ORDER BY oi.id LIMIT 1`,
       [publicId],
     );
     const order = orderRows[0];
     if (!order) return res.status(404).json({ error: 'Not found' });
+
+    const cancelCheck = checkOperationWindow(await getCancelWindow(), order.service_date);
+    if (cancelCheck.blocked) return res.status(409).json({ error: cancelCheck.message });
 
     if (order.status === 'refunded') {
       return res.status(409).json({ error: 'Esta orden ya fue reintegrada' });
@@ -264,6 +273,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd,
               oi.transfer_requested, oi.transfer_hotel,
+              oi.service_date,
               a.commission_percent_snapshot::float AS commission_percent
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id
@@ -275,6 +285,9 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
     );
     const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Not found' });
+
+    const modifyCheck = checkOperationWindow(await getModifyWindow(), row.service_date);
+    if (modifyCheck.blocked) return res.status(409).json({ error: modifyCheck.message });
 
     // 2) Validaciones de estado
     if (row.status !== 'paid') {
@@ -326,6 +339,8 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
     await applyOrderReduction({
       orderId: row.order_id,
       itemId: row.item_id,
+      origAdults: row.adults,
+      origChildren: row.children,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
       newTransferRequested: newTransfer,
@@ -338,6 +353,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       newCommissionArs: calc.newCommissionArs,
       newNetTotalUsd: null,
       noteLine,
+      actor: 'admin',
     });
 
     // 6) Notificar (fire-and-forget)
@@ -361,6 +377,46 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ─── Confirmar cobro en efectivo (admin en nombre del vendedor) ────────────────
+// El admin marca como cobrada una orden pendiente en efectivo atribuida a un vendedor,
+// cuando el vendedor no puede operar el portal por su cuenta.
+adminOrdersRouter.post('/:publicId/collect-cash', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const { rows } = await pool.query<{ id: number; status: string; payment_method: string }>(
+      `SELECT id, status::text AS status, payment_method
+         FROM orders WHERE public_id = $1 LIMIT 1`,
+      [publicId],
+    );
+    const order = rows[0];
+    if (!order) return res.status(404).json({ error: 'Not found' });
+    if (order.payment_method !== 'cash') {
+      return res.status(400).json({ error: 'Esta orden no es en efectivo.' });
+    }
+    if (order.status !== 'pending') {
+      return res.status(409).json({ error: 'La orden ya fue procesada anteriormente.' });
+    }
+
+    await pool.query(
+      `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW() WHERE id = $1`,
+      [order.id],
+    );
+    await pool.query(
+      `INSERT INTO payment_events (order_id, event_type, payload)
+       VALUES ($1, 'cash_collected_by_admin', $2::jsonb)`,
+      [order.id, JSON.stringify({ actor: 'admin' })],
+    );
+
+    sendCashCollectedNotifications(order.id, 'admin').catch((e) =>
+      console.error('[collect-cash admin] email send failed:', e),
+    );
+
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
 // ─── Reducir reserva en efectivo (devolución en mano) ─────────────────────────
 // El pasajero se baja pax o quita traslado en una reserva EN EFECTIVO ya cobrada:
 // el vendedor le devuelve el delta en efectivo. Se ajusta la reserva, se libera el
@@ -379,7 +435,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
-      seller_id: number | null; net_total_usd: number | null;
+      seller_id: number | null; net_total_usd: number | null; net_settled_at: string | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
               o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
@@ -387,7 +443,9 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested, oi.transfer_hotel,
-              a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd
+              oi.service_date,
+              a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd,
+              a.net_settled_at
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id
          LEFT JOIN order_attributions a ON a.order_id = o.id
@@ -404,6 +462,11 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
     if (row.status !== 'paid') {
       return res.status(400).json({ error: `Solo se pueden reducir reservas en efectivo ya cobradas. Estado actual: ${row.status}` });
     }
+    if (row.net_settled_at) {
+      return res.status(409).json({ error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' });
+    }
+    const adminReduceCheck = checkOperationWindow(await getModifyWindow(), row.service_date);
+    if (adminReduceCheck.blocked) return res.status(409).json({ error: adminReduceCheck.message });
 
     const snap: OrderReductionSnapshot = {
       origAdults: row.adults,
@@ -436,6 +499,8 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
     await applyOrderReduction({
       orderId: row.order_id,
       itemId: row.item_id,
+      origAdults: row.adults,
+      origChildren: row.children,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
       newTransferRequested: newTransfer,
@@ -448,6 +513,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       newCommissionArs,
       newNetTotalUsd: hasAttribution ? cash.newNetTotalUsd : null,
       noteLine,
+      actor: 'admin',
     });
 
     if (parsed.data.notify_customer !== false) {
@@ -576,6 +642,72 @@ adminOrdersRouter.post('/:publicId/sync-mp', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/admin/orders/:publicId/reschedule — reprograma la fecha de servicio.
+const rescheduleSchema = z.object({
+  new_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.string().max(500).optional(),
+  notify_customer: z.boolean().optional(),
+});
+
+adminOrdersRouter.post('/:publicId/reschedule', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = rescheduleSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const { new_date, reason } = parsed.data;
+    const newDateObj = new Date(`${new_date}T00:00:00`);
+    if (Number.isNaN(newDateObj.getTime())) return res.status(400).json({ error: 'Fecha inválida' });
+    if (newDateObj.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'La fecha no puede ser pasada' });
+
+    const { rows } = await pool.query<{
+      order_id: number; status: string; item_id: number; option_id: number;
+      adults: number; children: number; service_date: string;
+    }>(
+      `SELECT o.id AS order_id, o.status::text AS status,
+              oi.id AS item_id, oi.option_id, oi.adults, oi.children,
+              to_char(oi.service_date, 'YYYY-MM-DD') AS service_date
+         FROM orders o
+         JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.public_id = $1
+        ORDER BY oi.id LIMIT 1`,
+      [publicId],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (!['pending', 'paid'].includes(row.status)) {
+      return res.status(400).json({ error: `No se puede reprogramar una reserva en estado "${row.status}".` });
+    }
+    if (row.service_date === new_date) {
+      return res.status(400).json({ error: 'La nueva fecha es igual a la fecha actual.' });
+    }
+
+    const { rows: optionRows } = await pool.query<{ default_capacity_per_day: number; available_days: number[] }>(
+      `SELECT default_capacity_per_day, available_days FROM product_options WHERE id = $1 LIMIT 1`,
+      [row.option_id],
+    );
+    const option = optionRows[0];
+    if (!option) return res.status(404).json({ error: 'Opción no encontrada' });
+
+    const isoDow = newDateObj.getDay() === 0 ? 7 : newDateObj.getDay();
+    if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
+      return res.status(400).json({ error: 'El servicio no opera ese día de la semana.' });
+    }
+    const availCheck = await checkSingleDateAvailability(
+      row.option_id, option.default_capacity_per_day, new_date, row.adults + row.children,
+    );
+    if (!availCheck.ok) return res.status(409).json({ error: availCheck.message ?? 'Fecha no disponible' });
+
+    await pool.query(`UPDATE order_items SET service_date = $1 WHERE id = $2`, [new_date, row.item_id]);
+    await logPaymentEvent(row.order_id, 'order_rescheduled', null, {
+      prev_date: row.service_date, new_date, actor: 'admin', reason: reason ?? null,
+    });
+
+    res.json({ data: { ok: true, prev_date: row.service_date, new_date } });
+  } catch (err) { next(err); }
+});
+
 adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
@@ -595,6 +727,8 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
           SET status = $1::order_status,
               internal_notes = COALESCE($2, internal_notes),
               paid_at = CASE WHEN $1 = 'paid' AND paid_at IS NULL THEN NOW() ELSE paid_at END,
+              cancelled_by   = CASE WHEN $1 = 'cancelled' THEN 'admin' ELSE cancelled_by END,
+              cancelled_at   = CASE WHEN $1 = 'cancelled' AND cancelled_at IS NULL THEN NOW() ELSE cancelled_at END,
               updated_at = NOW()
         WHERE public_id = $3
         RETURNING id, status::text AS status`,

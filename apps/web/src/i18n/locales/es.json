@@ -83,6 +83,7 @@
     "email_mismatch": "Los emails no coinciden. Por favor verificalos.",
     "contact_info_notice": "Tu teléfono y email son esenciales para enviarte la confirmación de tu reserva y contactarte ante cualquier novedad. Asegurate de ingresarlos correctamente.",
     "phone": "Teléfono / WhatsApp",
+    "dni": "DNI / Pasaporte",
     "nationality": "Nacionalidad",
     "service_date": "Fecha del servicio",
     "adults": "Adultos",

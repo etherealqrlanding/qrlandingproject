@@ -64,3 +64,89 @@ export function convertUsdToArs(amountUsd: number, rate: number): number {
   return Math.round(amountUsd * rate * 100) / 100;
 }
 
+const MODIFY_CUTOFF_KEY = 'modify_window';
+const CANCEL_CUTOFF_KEY = 'cancel_window';
+
+export async function getModifyWindow(): Promise<number | null> {
+  const { rows } = await pool.query<{ value: { hours: number } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [MODIFY_CUTOFF_KEY],
+  );
+  return rows[0]?.value?.hours ?? null;
+}
+
+export async function setModifyWindow(hours: number | null): Promise<void> {
+  if (hours === null) {
+    await pool.query(`DELETE FROM settings WHERE key = $1`, [MODIFY_CUTOFF_KEY]);
+    return;
+  }
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [MODIFY_CUTOFF_KEY, JSON.stringify({ hours }), 'Horas de anticipación mínima para modificar una reserva antes del servicio.'],
+  );
+}
+
+export async function getCancelWindow(): Promise<number | null> {
+  const { rows } = await pool.query<{ value: { hours: number } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [CANCEL_CUTOFF_KEY],
+  );
+  return rows[0]?.value?.hours ?? null;
+}
+
+export async function setCancelWindow(hours: number | null): Promise<void> {
+  if (hours === null) {
+    await pool.query(`DELETE FROM settings WHERE key = $1`, [CANCEL_CUTOFF_KEY]);
+    return;
+  }
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [CANCEL_CUTOFF_KEY, JSON.stringify({ hours }), 'Horas de anticipación mínima para cancelar una reserva antes del servicio.'],
+  );
+}
+
+const MAINTENANCE_KEY = 'maintenance_mode';
+
+export async function getMaintenanceMode(): Promise<boolean> {
+  const { rows } = await pool.query<{ value: { enabled: boolean } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [MAINTENANCE_KEY],
+  );
+  return rows[0]?.value?.enabled === true;
+}
+
+export async function setMaintenanceMode(enabled: boolean): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [
+      MAINTENANCE_KEY,
+      JSON.stringify({ enabled }),
+      'Modo mantenimiento: bloquea el acceso al sitio público cuando está activo.',
+    ],
+  );
+}
+
+// serviceDate: "YYYY-MM-DD" string or Date object (pg driver returns Date for date columns).
+// Medianoche BsAs de esa fecha = 03:00 UTC del mismo día.
+export function checkOperationWindow(
+  hours: number | null,
+  serviceDate: string | Date,
+): { blocked: boolean; message?: string } {
+  if (!hours) return { blocked: false };
+  const dateStr = serviceDate instanceof Date ? serviceDate.toISOString().slice(0, 10) : serviceDate;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const serviceMidnightUtcMs = Date.UTC(y, m - 1, d, 3, 0, 0);
+  const hoursUntilService = (serviceMidnightUtcMs - Date.now()) / (60 * 60 * 1000);
+  if (hoursUntilService >= hours) return { blocked: false };
+  const message = hoursUntilService < 0
+    ? 'No se puede operar sobre una reserva cuyo servicio ya inició.'
+    : `Esta operación requiere al menos ${hours} hs de anticipación al servicio (faltan ${hoursUntilService.toFixed(1)} hs).`;
+  return { blocked: true, message };
+}
+

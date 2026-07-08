@@ -62,24 +62,35 @@ export async function getUnreadCount(sellerId: number): Promise<number> {
   return parseInt(rows[0]?.cnt ?? '0', 10);
 }
 
+export async function deleteNotification(id: number, sellerId: number): Promise<boolean> {
+  const result = await pool.query(
+    `DELETE FROM seller_notifications WHERE id = $1 AND seller_id = $2`,
+    [id, sellerId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+function fmtArs(n: number): string {
+  return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+
 // Crea notificación para el vendedor atribuido cuando una orden pasa a 'paid'.
-// Llama a la DB internamente para resolver la atribución.
 export async function createOrderPaidNotification(orderId: number): Promise<void> {
   const { rows } = await pool.query<{
     seller_id: number;
-    commission_amount_usd: number;
+    commission_amount_ars: number;
     product_name: string;
     option_name: string;
     service_date: string;
-    total_usd: number;
+    total_ars: number;
   }>(
     `SELECT
        a.seller_id,
-       a.commission_amount_usd::float AS commission_amount_usd,
+       a.commission_amount_ars::float AS commission_amount_ars,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot  AS option_name,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       o.total_usd::float AS total_usd
+       o.total_ars::float AS total_ars
      FROM order_attributions a
      JOIN orders o  ON o.id  = a.order_id
      JOIN order_items oi ON oi.order_id = o.id
@@ -88,14 +99,14 @@ export async function createOrderPaidNotification(orderId: number): Promise<void
     [orderId],
   );
   const row = rows[0];
-  if (!row) return; // orden sin atribución → no hay vendedor que notificar
+  if (!row) return;
 
   await createNotification({
     seller_id: row.seller_id,
     type: 'order_paid',
     title: '¡Nueva venta confirmada!',
-    body: `Tu código generó una venta de USD ${row.total_usd.toFixed(2)} para "${row.option_name}" — ${row.service_date}. Te corresponde una comisión de USD ${row.commission_amount_usd.toFixed(2)}.`,
-    metadata: { order_id: orderId, product_name: row.product_name, total_usd: row.total_usd },
+    body: `Tu código generó una venta de ${fmtArs(row.total_ars)} para "${row.option_name}" — ${row.service_date}. Te corresponde una comisión de ${fmtArs(row.commission_amount_ars)}.`,
+    metadata: { order_id: orderId, product_name: row.product_name, total_ars: row.total_ars },
   });
 }
 
@@ -108,7 +119,7 @@ export async function createCashBookingNotification(orderId: number): Promise<vo
     product_name: string;
     option_name: string;
     service_date: string;
-    total_usd: number;
+    total_ars: number;
     adults: number;
     children: number;
   }>(
@@ -119,7 +130,7 @@ export async function createCashBookingNotification(orderId: number): Promise<vo
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot  AS option_name,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       o.total_usd::float AS total_usd,
+       o.total_ars::float AS total_ars,
        oi.adults, oi.children
      FROM order_attributions a
      JOIN orders o  ON o.id  = a.order_id
@@ -136,8 +147,8 @@ export async function createCashBookingNotification(orderId: number): Promise<vo
     seller_id: row.seller_id,
     type: 'cash_booking_pending',
     title: '💵 Nueva reserva para cobrar',
-    body: `${row.customer_name} reservó "${row.option_name}" para el ${row.service_date} (${pax} pax · USD ${row.total_usd.toFixed(2)}). Coordiná el cobro y marcá la reserva como Cobrada.`,
-    metadata: { order_id: orderId, order_public_id: row.public_id, product_name: row.product_name, total_usd: row.total_usd, service_date: row.service_date },
+    body: `${row.customer_name} reservó "${row.option_name}" para el ${row.service_date} (${pax} pax · ${fmtArs(row.total_ars)}). Coordiná el cobro y marcá la reserva como Cobrada.`,
+    metadata: { order_id: orderId, order_public_id: row.public_id, product_name: row.product_name, total_ars: row.total_ars, service_date: row.service_date },
   });
 }
 
@@ -149,7 +160,7 @@ export async function createOrderExpiredNotification(orderId: number): Promise<v
     customer_name: string;
     option_name: string;
     service_date: string;
-    total_usd: number;
+    total_ars: number;
   }>(
     `SELECT
        a.seller_id,
@@ -157,7 +168,7 @@ export async function createOrderExpiredNotification(orderId: number): Promise<v
        o.customer_name,
        oi.option_name_snapshot AS option_name,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       o.total_usd::float AS total_usd
+       o.total_ars::float AS total_ars
      FROM order_attributions a
      JOIN orders o  ON o.id  = a.order_id
      JOIN order_items oi ON oi.order_id = o.id
@@ -173,7 +184,7 @@ export async function createOrderExpiredNotification(orderId: number): Promise<v
     type: 'order_expired',
     title: '⏰ Reserva caducada',
     body: `La reserva de ${row.customer_name} para "${row.option_name}" (${row.service_date}) caducó porque no se marcó el cobro dentro de las 24 hs. Si la cobraste igual, contactá al equipo.`,
-    metadata: { order_id: orderId, order_public_id: row.public_id, total_usd: row.total_usd, service_date: row.service_date },
+    metadata: { order_id: orderId, order_public_id: row.public_id, total_ars: row.total_ars, service_date: row.service_date },
   });
 }
 
@@ -181,15 +192,15 @@ export async function createOrderExpiredNotification(orderId: number): Promise<v
 export async function createNetSettledNotification(
   sellerId: number,
   orderIds: number[],
-  totalNetUsd: number,
+  totalNetArs: number,
 ): Promise<void> {
   const count = orderIds.length;
   await createNotification({
     seller_id: sellerId,
     type: 'net_settled',
     title: 'Rendición registrada',
-    body: `Registramos la rendición del neto de ${count} venta${count !== 1 ? 's' : ''} en efectivo por un total de USD ${totalNetUsd.toFixed(2)}. Esas operaciones quedan como "Rendidas".`,
-    metadata: { order_ids: orderIds, total_net_usd: totalNetUsd, orders_count: count },
+    body: `Registramos la rendición del neto de ${count} venta${count !== 1 ? 's' : ''} en efectivo por un total de ${fmtArs(totalNetArs)}. Esas operaciones quedan como "Rendidas".`,
+    metadata: { order_ids: orderIds, total_net_ars: totalNetArs, orders_count: count },
   });
 }
 
@@ -197,14 +208,14 @@ export async function createNetSettledNotification(
 export async function createCommissionPaidNotification(
   sellerId: number,
   orderIds: number[],
-  totalCommissionUsd: number,
+  totalCommissionArs: number,
 ): Promise<void> {
   const count = orderIds.length;
   await createNotification({
     seller_id: sellerId,
     type: 'commission_paid',
     title: 'Liquidación procesada',
-    body: `El equipo de Tangos y Milongas Tickets liquidó ${count} venta${count !== 1 ? 's' : ''} por un total de USD ${totalCommissionUsd.toFixed(2)}. El monto ya está disponible en tu historial de liquidaciones. Ante cualquier duda, contactanos por WhatsApp.`,
-    metadata: { order_ids: orderIds, total_usd: totalCommissionUsd, orders_count: count },
+    body: `El equipo de Tangos y Milongas Tickets liquidó ${count} venta${count !== 1 ? 's' : ''} por un total de ${fmtArs(totalCommissionArs)}. El monto ya está disponible en tu historial de liquidaciones. Ante cualquier duda, contactanos por WhatsApp.`,
+    metadata: { order_ids: orderIds, total_ars: totalCommissionArs, orders_count: count },
   });
 }

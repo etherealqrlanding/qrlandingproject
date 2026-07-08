@@ -134,19 +134,19 @@ adminSellersRouter.post('/:id/commissions/mark-paid', async (req, res, next) => 
     const updated = await markCommissionsPaid(id, parsed.data.order_ids);
 
     if (updated > 0) {
-      // Sumar comisiones recién marcadas para la notificación in-app
+      // Sumar comisiones en ARS recién marcadas para la notificación in-app
       const { rows: sumRows } = await pool.query<{ total: string }>(
-        `SELECT SUM(a.commission_amount_usd)::text AS total
+        `SELECT SUM(a.commission_amount_ars)::text AS total
            FROM order_attributions a
           WHERE a.seller_id = $1
             AND a.order_id = ANY($2::int[])
             AND a.paid_to_seller_at IS NOT NULL`,
         [id, parsed.data.order_ids],
       );
-      const totalUsd = parseFloat(sumRows[0]?.total ?? '0');
+      const totalArs = parseFloat(sumRows[0]?.total ?? '0');
 
       // Notificación in-app (fire-and-forget)
-      createCommissionPaidNotification(id, parsed.data.order_ids, totalUsd)
+      createCommissionPaidNotification(id, parsed.data.order_ids, totalArs)
         .catch((e) => console.error('[notif] createCommissionPaidNotification failed:', e));
     }
 
@@ -164,16 +164,21 @@ adminSellersRouter.post('/:id/net-settlements/mark-settled', async (req, res, ne
     const updated = await markNetSettled(id, parsed.data.order_ids);
 
     if (updated > 0) {
+      // Neto en ARS: usa net_total_usd_snapshot * exchange_rate si está seteado,
+      // si no cae a total_ars - commission_amount_ars (fix del bug 0.00 cuando no hay precio neto configurado)
       const { rows: sumRows } = await pool.query<{ total: string }>(
-        `SELECT SUM(a.net_total_usd_snapshot)::text AS total
+        `SELECT SUM(
+           COALESCE(a.net_total_usd_snapshot * o.exchange_rate_used, o.total_ars - a.commission_amount_ars)
+         )::text AS total
            FROM order_attributions a
+           JOIN orders o ON o.id = a.order_id
           WHERE a.seller_id = $1
             AND a.order_id = ANY($2::int[])
             AND a.net_settled_at IS NOT NULL`,
         [id, parsed.data.order_ids],
       );
-      const totalNetUsd = parseFloat(sumRows[0]?.total ?? '0');
-      createNetSettledNotification(id, parsed.data.order_ids, totalNetUsd)
+      const totalNetArs = parseFloat(sumRows[0]?.total ?? '0');
+      createNetSettledNotification(id, parsed.data.order_ids, totalNetArs)
         .catch((e) => console.error('[notif] createNetSettledNotification failed:', e));
     }
 

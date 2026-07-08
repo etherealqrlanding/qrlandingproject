@@ -30,6 +30,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   const [remaining, setRemaining] = useState<number | null>(null);
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
   const [transferHotel, setTransferHotel] = useState('');
+  const [transferRoom, setTransferRoom] = useState('');
 
   const today = new Date().toISOString().slice(0, 10);
   const horizonDate = useMemo(() => {
@@ -43,6 +44,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
     email: '',
     phone: '',
     nationality: '',
+    dni: '',
     service_date: today,
     adults: 2,
     children: 0,
@@ -151,10 +153,12 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
           email: form.email.trim().toLowerCase(),
           phone: form.phone.trim() || null,
           nationality: form.nationality || null,
+          dni: form.dni.trim() || null,
         },
         payment_method: paymentMethod,
         transfer_requested: option.has_transfer ? wantsTransfer : false,
         transfer_hotel: (option.has_transfer && wantsTransfer) ? (transferHotel || null) : null,
+        transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
       });
 
       // MP: NO redirigimos al vendedor. El pago es del pasajero (su cuenta/tarjeta),
@@ -334,6 +338,14 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                 className="input" placeholder="+54 9 11 1234 5678"
               />
             </Field>
+            <Field label="DNI / Pasaporte">
+              <input
+                type="text" maxLength={40}
+                value={form.dni} onChange={(e) => updateField('dni', e.target.value)}
+                className="input" placeholder="12345678 / AB123456"
+                autoComplete="off"
+              />
+            </Field>
             <Field label="Nacionalidad">
               <select
                 value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
@@ -419,8 +431,10 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             <TransferSection
               wantsTransfer={wantsTransfer}
               hotel={transferHotel}
+              room={transferRoom}
               onToggle={setWantsTransfer}
               onHotelChange={setTransferHotel}
+              onRoomChange={setTransferRoom}
               pickupWindow={option.pickup_window_es}
               lang="es"
             />

@@ -230,7 +230,9 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
       `INSERT INTO payment_events (order_id, event_type, mp_resource_id, payload)
        VALUES ($1, $2, $3, $4::jsonb)`,
       [addon.order_id, isCash ? 'addon_cash_collected' : 'addon_paid', mpPaymentId, JSON.stringify({
-        addon_id: addon.id, new_adults: newAdults, new_children: newChildren,
+        addon_id: addon.id,
+        extra_adults: addon.extra_adults, extra_children: addon.extra_children,
+        new_adults: newAdults, new_children: newChildren,
         charge_usd: addon.charge_usd, charge_ars: addon.charge_ars,
       })],
     );

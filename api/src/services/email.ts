@@ -466,8 +466,10 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   }
 }
 
-// ─── Cobro en efectivo confirmado por el vendedor ───────
-export async function sendCashCollectedNotifications(orderId: number): Promise<void> {
+// ─── Cobro en efectivo confirmado ───────────────────────────
+// actor: 'seller' = el vendedor lo hizo desde su portal
+//        'admin'  = el admin lo hizo en nombre del vendedor
+export async function sendCashCollectedNotifications(orderId: number, actor: 'seller' | 'admin' = 'seller'): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
   const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
@@ -476,7 +478,7 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
 
   const baseData: OrderEmailData = toOrderData(data);
 
-  // 1) Cliente — primera y única notificación que recibe
+  // 1) Cliente — primera y única notificación que recibe (igual en ambos casos)
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -490,8 +492,11 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
 </div></body></html>`;
   await send(data.customer_email, `¡Reserva confirmada! — ${baseData.option_name}`, customerHtml);
 
-  // 2) Admin
+  // 2) Admin — indica quién confirmó el cobro
   if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const actorNote = actor === 'admin'
+      ? '✓ El admin confirmó el cobro en nombre del vendedor. La orden fue marcada como <strong>pagada</strong>.'
+      : '✓ El vendedor confirmó la recepción del dinero. La orden fue marcada como <strong>pagada</strong>.';
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -509,25 +514,28 @@ export async function sendCashCollectedNotifications(orderId: number): Promise<v
   </div>
   ${data.seller_name ? `
   <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Vendedor que cobró</p>
+    <p style="${baseStyles.eyebrow}">Vendedor</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     <div style="${baseStyles.row}"><span>Ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, baseData.exchange_rate_used)}</strong></div>
   </div>` : ''}
-  <p style="color:rgba(245,239,230,0.7);">✓ El vendedor confirmó la recepción del dinero. La orden fue marcada como <strong>pagada</strong>.</p>
+  <p style="color:rgba(245,239,230,0.7);">${actorNote}</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (${fmtArs(baseData.total_ars)})`, adminHtml);
   }
 
-  // 3) Vendedor
+  // 3) Vendedor — texto diferente según quién confirmó
   if (data.seller_name && data.seller_email && data.commission_usd != null) {
+    const sellerIntro = actor === 'admin'
+      ? `Hola ${escapeHtml(data.seller_name)}, el equipo de Tangos y Milongas Tickets confirmó el cobro de esta reserva en tu nombre. La reserva quedó confirmada y el email fue enviado al pasajero.`
+      : `Hola ${escapeHtml(data.seller_name)}, confirmaste la recepción del dinero. La reserva quedó confirmada y el email fue enviado al pasajero.`;
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
   <h1 style="${baseStyles.title}">¡Cobro registrado!</h1>
-  <p>Hola ${escapeHtml(data.seller_name)}, confirmaste la recepción del dinero. La reserva quedó confirmada y el email fue enviado al pasajero.</p>
+  <p>${sellerIntro}</p>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(baseData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
@@ -823,6 +831,108 @@ export async function sendOrderIncreasedNotifications(
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml);
+  }
+}
+
+// ─── Cancelación iniciada por el vendedor ────────────────────
+// El cliente tiene que coordinar la devolución del dinero directamente con el vendedor
+// (sobre todo en efectivo). Este email avisa al cliente y al admin; el vendedor no recibe
+// porque él mismo inició la acción.
+export async function sendSellerCancelledNotifications(
+  orderId: number,
+  reason?: string | null,
+): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const sellerLabel = data.seller_name ? escapeHtml(data.seller_name) : 'el vendedor';
+  const reasonLine = reason ? `<p style="color:rgba(245,239,230,0.7)">Motivo indicado: ${escapeHtml(reason)}</p>` : '';
+
+  // 1) Cliente — le decimos explícitamente que coordine la devolución con el vendedor
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, ${sellerLabel} canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p><strong style="color:#c8a85a">Para gestionar la devolución del dinero, contactá directamente a ${sellerLabel}.</strong> Si necesitás ayuda o no lográs comunicarte, escribinos por WhatsApp y te asistimos.</p>
+  ${reservationCard(orderData, { showAmounts: true, showContact: true })}
+  ${reasonLine}
+  <p>Si querés reservar otra fecha u otra experiencia, respondé este email o escribinos por WhatsApp y te ayudamos a coordinar.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(
+    data.customer_email,
+    `Tu reserva fue cancelada — ${orderData.option_name}`,
+    customerHtml,
+  );
+
+  // 2) Vendedor — confirmación de que la cancelación se procesó y el cliente fue notificado
+  if (data.seller_name && data.seller_email) {
+    const sellerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <h1 style="${baseStyles.title}">Cancelación registrada</h1>
+  <p>Hola ${escapeHtml(data.seller_name)}, confirmamos que cancelaste la siguiente reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p>El pasajero recibió un email indicándole que coordine la devolución del dinero directamente con vos.</p>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Pasajero</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Email pasajero</span><span>${escapeHtml(orderData.customer_email)}</span></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${orderData.service_date}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(orderData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  <p style="color:rgba(245,239,230,0.6);font-size:13px;">Si necesitás asistencia para coordinar la devolución, escribinos por WhatsApp.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+</div></body></html>`;
+    await send(
+      data.seller_email,
+      `Cancelación registrada — ${orderData.option_name} (${escapeHtml(orderData.customer_name)})`,
+      sellerHtml,
+    );
+  }
+
+  // 3) Admin — aviso con todos los datos para seguimiento
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Reserva cancelada por vendedor</h1>
+  <div style="${baseStyles.card}">
+    <p style="${baseStyles.eyebrow}">Orden cancelada</p>
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Email cliente</span><span>${escapeHtml(orderData.customer_email)}</span></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha servicio</span><strong>${orderData.service_date}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(orderData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  ${data.seller_name ? `
+  <div style="${baseStyles.card}">
+    <p style="${baseStyles.eyebrow}">Vendedor que canceló</p>
+    <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
+    ${data.seller_email ? `<div style="${baseStyles.row}"><span>Email</span><span>${escapeHtml(data.seller_email)}</span></div>` : ''}
+    <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong>${arsOf(data.commission_usd ?? 0, orderData.exchange_rate_used)}</strong></div>
+  </div>` : ''}
+  ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
+  <p style="color:rgba(245,239,230,0.55);font-size:13px;">⚠ El cliente fue notificado para coordinar la devolución del dinero directamente con el vendedor.</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(
+      config.ADMIN_NOTIFICATION_EMAIL,
+      `[Cancelada por vendedor] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`,
+      adminHtml,
+    );
   }
 }
 

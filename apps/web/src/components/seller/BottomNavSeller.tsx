@@ -11,6 +11,7 @@ const NAV = [
   { to: '/seller/ventas', label: 'Ventas', icon: '✦' },
   { to: '/seller/liquidaciones', label: 'Cobros', icon: '⬡' },
   { to: '/seller/notificaciones', label: 'Alertas', icon: '🔔', notif: true },
+  { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
 export default function BottomNavSeller({ unread }: Props) {

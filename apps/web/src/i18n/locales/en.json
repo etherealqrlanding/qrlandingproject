@@ -83,6 +83,7 @@
     "email_mismatch": "Emails do not match. Please double-check.",
     "contact_info_notice": "Your phone number and email are essential for sending your booking confirmation and reaching you if needed. Please make sure they are correct.",
     "phone": "Phone / WhatsApp",
+    "dni": "ID / Passport",
     "nationality": "Nationality",
     "service_date": "Service date",
     "adults": "Adults",

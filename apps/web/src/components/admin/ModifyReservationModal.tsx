@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import AvailabilityCalendar from '../AvailabilityCalendar';
 
 type ReduceBody = { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean };
 type IncreaseBody = { adults: number; children: number; reason?: string; notify_customer?: boolean };
+type RescheduleBody = { new_date: string; reason?: string; notify_customer?: boolean };
 
 // Handlers de API — el admin y el vendedor pasan los suyos. Los que falten deshabilitan
 // esa operación (ej. el vendedor NO puede reintegrar por MP → reduceMp ausente).
@@ -10,6 +12,7 @@ export interface ModifyHandlers {
   reduceCash?: (body: ReduceBody) => Promise<unknown>;
   increaseCash?: (body: IncreaseBody) => Promise<unknown>;
   addMp?: (body: { adults: number; children: number }) => Promise<{ init_point: string }>;
+  reschedule?: (body: RescheduleBody) => Promise<unknown>;
 }
 
 interface Props {
@@ -28,6 +31,7 @@ interface Props {
     unit_price_child_usd: string | null;
     subtotal_usd: string;
     service_date: string;
+    option_id: number;
     option_name_snapshot: string;
   };
   handlers: ModifyHandlers;
@@ -54,6 +58,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const [adults, setAdults] = useState(origAdults);
   const [children, setChildren] = useState(origChildren);
   const [keepTransfer, setKeepTransfer] = useState(origHasTransfer);
+  const [newDate, setNewDate] = useState(item.service_date);
   const [reason, setReason] = useState('');
   const [notify, setNotify] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -63,6 +68,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
   const newPax = adults + children;
   const isIncreasing = newPax > origAdults + origChildren;
+  const hasDateChange = newDate !== item.service_date;
   // Al AGREGAR pax, el traslado queda como estaba (no se puede togglear en la misma operación).
   const effectiveTransfer = isIncreasing ? origHasTransfer : keepTransfer;
 
@@ -86,16 +92,22 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const reduceBlocked = preview.direction === 'reduce' && isMp && !handlers.reduceMp;
 
   const confirmLabel = (() => {
-    if (preview.direction === 'none') return 'Sin cambios';
-    if (preview.direction === 'reduce') return `Reintegrar ${fmtArs(preview.deltaArs)}`;
-    if (isMp) return `Generar link · ${fmtArs(preview.deltaArs)}`;
-    return `Registrar ampliación · ${fmtArs(preview.deltaArs)}`;
+    const hasPax = preview.direction !== 'none';
+    if (!hasPax && !hasDateChange) return 'Sin cambios';
+    if (!hasPax && hasDateChange) return 'Reprogramar fecha';
+    if (preview.direction === 'reduce') return hasDateChange ? 'Guardar cambios' : `Reintegrar ${fmtArs(preview.deltaArs)}`;
+    if (isMp) return hasDateChange ? 'Guardar cambios' : `Generar link · ${fmtArs(preview.deltaArs)}`;
+    return hasDateChange ? 'Guardar cambios' : `Registrar ampliación · ${fmtArs(preview.deltaArs)}`;
   })();
 
   const handleConfirm = async () => {
     setError(null);
     setProcessing(true);
     try {
+      if (hasDateChange) {
+        if (!handlers.reschedule) { setError('Reprogramación no disponible.'); setProcessing(false); return; }
+        await handlers.reschedule({ new_date: newDate, reason: reason.trim() || undefined, notify_customer: notify });
+      }
       if (preview.direction === 'reduce') {
         const body = { adults, children, transfer_requested: effectiveTransfer, reason: reason.trim() || undefined, notify_customer: notify };
         const fn = isMp ? handlers.reduceMp : handlers.reduceCash;
@@ -112,6 +124,8 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           await handlers.increaseCash({ adults, children, reason: reason.trim() || undefined, notify_customer: notify });
           onDone();
         }
+      } else if (hasDateChange) {
+        onDone();
       }
     } catch (err) {
       setError((err as Error).message);
@@ -171,6 +185,22 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         </header>
 
         <div className="p-6 space-y-5">
+          {/* Reprogramar fecha */}
+          <div>
+            <span className="block text-sm text-cream/80 mb-1.5">Fecha del servicio</span>
+            <AvailabilityCalendar
+              optionId={item.option_id}
+              value={newDate}
+              currentDate={item.service_date}
+              onChange={setNewDate}
+            />
+            {hasDateChange && (
+              <p className="mt-1.5 text-xs text-gold-soft">
+                Reprogramando de <strong>{item.service_date}</strong> a <strong>{newDate}</strong>
+              </p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Stepper label="Adultos" value={adults} min={1} max={20} onChange={setAdults} />
             {(origChildren > 0 || unitChild != null) && (
@@ -187,12 +217,17 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           )}
 
           {/* Preview del delta */}
-          <div className={`rounded-lg border p-4 ${
+          <div className={`rounded-lg border p-4 space-y-1 ${
             preview.direction === 'reduce' ? 'border-bordeaux-light/40 bg-bordeaux-deep/15'
-            : preview.direction === 'increase' ? 'border-gold/30 bg-gold/5'
+            : (preview.direction === 'increase' || hasDateChange) ? 'border-gold/30 bg-gold/5'
             : 'border-cream/15 bg-ink/30'
           }`}>
-            {preview.direction === 'none' && <p className="text-sm text-cream/60">Sin cambios respecto de la reserva actual.</p>}
+            {preview.direction === 'none' && !hasDateChange && <p className="text-sm text-cream/60">Sin cambios respecto de la reserva actual.</p>}
+            {hasDateChange && (
+              <p className="text-sm text-cream/80">
+                Nueva fecha: <strong className="text-cream">{newDate}</strong>
+              </p>
+            )}
             {preview.direction === 'reduce' && !reduceBlocked && (
               <p className="text-sm text-cream/80">
                 {isMp ? 'Se reintegrará al cliente ' : 'El vendedor devuelve en efectivo '}
@@ -222,11 +257,14 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             </label>
           )}
 
-          {preview.direction !== 'none' && (preview.direction === 'reduce' || !isMp) && (
+          {preview.direction === 'reduce' && (
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-gold" />
               <span className="text-sm text-cream/80">Notificar por email al cliente</span>
             </label>
+          )}
+          {preview.direction === 'increase' && !isMp && (
+            <p className="text-xs text-cream/40">El cliente recibe el email de confirmación cuando confirmás el cobro.</p>
           )}
 
           {error && <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90">{error}</div>}
@@ -234,7 +272,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
         <div className="p-6 border-t border-gold/10 flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} disabled={processing} className="btn-ghost text-sm disabled:opacity-40">Cancelar</button>
-          <button type="button" onClick={handleConfirm} disabled={processing || preview.direction === 'none' || reduceBlocked}
+          <button type="button" onClick={handleConfirm} disabled={processing || (preview.direction === 'none' && !hasDateChange) || reduceBlocked}
             className="btn-primary text-sm disabled:opacity-40">
             {processing ? 'Procesando...' : confirmLabel}
           </button>

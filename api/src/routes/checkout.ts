@@ -36,6 +36,7 @@ const createCheckoutSchema = z.object({
     email: z.string().email().max(160),
     phone: z.string().max(40).optional().nullable(),
     nationality: z.string().max(80).optional().nullable(),
+    dni: z.string().max(40).optional().nullable(),
   }),
   // Exclusividad de venta: toda reserva debe venir de un vendedor autorizado.
   ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/, 'Se requiere el código de un vendedor autorizado'),
@@ -46,6 +47,7 @@ const createCheckoutSchema = z.object({
   }).optional(),
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
+  transfer_room: z.string().max(80).optional().nullable(),
 });
 
 // ─── POST /api/checkout/preferences ───────────────────────
@@ -211,6 +213,7 @@ checkoutRouter.post('/preferences', checkoutLimiter, async (req, res, next) => {
         subtotal_usd: subtotalUsd,
         transfer_requested: transferRequested,
         transfer_hotel: input.transfer_hotel ?? null,
+        transfer_room: (transferRequested && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -438,6 +441,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         subtotal_usd: subtotalUsd,
         transfer_requested: transferRequestedCash,
         transfer_hotel: input.transfer_hotel ?? null,
+        transfer_room: (transferRequestedCash && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsdCash,
       },
       total_usd: subtotalUsd,

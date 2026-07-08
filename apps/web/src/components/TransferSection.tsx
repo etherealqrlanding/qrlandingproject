@@ -4,14 +4,16 @@ import { HOTELS_BY_NEIGHBORHOOD, ALL_HOTELS } from '../lib/hotels';
 interface Props {
   wantsTransfer: boolean;
   hotel: string;
+  room: string;
   onToggle: (v: boolean) => void;
   onHotelChange: (v: string) => void;
+  onRoomChange: (v: string) => void;
   pickupWindow?: string | null;
   lang?: 'es' | 'en';
 }
 
 export default function TransferSection({
-  wantsTransfer, hotel, onToggle, onHotelChange, pickupWindow, lang = 'es',
+  wantsTransfer, hotel, room, onToggle, onHotelChange, onRoomChange, pickupWindow, lang = 'es',
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -175,6 +177,26 @@ export default function TransferSection({
                 : "If your hotel isn't listed, choose the nearest one as a meeting point and let us know when confirming."}
             </p>
           )}
+
+          <label className="block">
+            <span className="block text-xs text-cream/60 mb-1">
+              {isEs ? 'Número de habitación' : 'Room number'}
+            </span>
+            <input
+              type="text"
+              value={room}
+              onChange={(e) => onRoomChange(e.target.value)}
+              maxLength={80}
+              placeholder={isEs ? 'Ej: 305, Suite 12...' : 'e.g. 305, Suite 12...'}
+              className="input w-full text-sm"
+              autoComplete="off"
+            />
+            <p className="mt-1 text-xs text-cream/40">
+              {isEs
+                ? 'Lo usamos para que el transporte te avise cuando esté llegando.'
+                : 'We use this to let the driver notify you on arrival.'}
+            </p>
+          </label>
         </div>
       )}
     </div>

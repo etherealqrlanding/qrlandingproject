@@ -6,16 +6,17 @@ import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications } from '../../services/email.js';
+import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications } from '../../services/email.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
 import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon } from '../../repos/addons.js';
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
-import { getExchangeRate, convertUsdToArs } from '../../services/settings.js';
+import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
 import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction } from '../../repos/orders.js';
-import { listNotifications, markAllRead, getUnreadCount } from '../../repos/notifications.js';
+import { getSellerFaq } from '../../services/content.js';
+import { listNotifications, markAllRead, getUnreadCount, deleteNotification } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 
@@ -172,10 +173,12 @@ const sellerCheckoutSchema = z.object({
     email: z.string().email().max(160),
     phone: z.string().max(40).optional().nullable(),
     nationality: z.string().max(80).optional().nullable(),
+    dni: z.string().max(40).optional().nullable(),
   }),
   payment_method: z.enum(['mercadopago', 'cash']),
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
+  transfer_room: z.string().max(80).optional().nullable(),
 });
 
 sellerRouter.post('/me/checkout', async (req, res, next) => {
@@ -319,6 +322,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         subtotal_usd: subtotalUsd,
         transfer_requested: input.transfer_requested ?? false,
         transfer_hotel: input.transfer_hotel ?? null,
+        transfer_room: (input.transfer_requested && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -564,6 +568,7 @@ const sellerReduceSchema = z.object({
   children: z.number().int().min(0).max(20),
   transfer_requested: z.boolean(),
   notify_customer: z.boolean().optional().default(true),
+  reason: z.string().max(500).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => {
@@ -580,7 +585,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
-      net_total_usd: number | null;
+      net_total_usd: number | null; net_settled_at: string | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
               o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
@@ -588,7 +593,8 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested, oi.transfer_hotel,
-              a.net_total_usd_snapshot::float AS net_total_usd
+              oi.service_date,
+              a.net_total_usd_snapshot::float AS net_total_usd, a.net_settled_at
          FROM orders o
          JOIN order_attributions a ON a.order_id = o.id
          JOIN order_items oi ON oi.order_id = o.id
@@ -602,9 +608,11 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     if (row.payment_method !== 'cash') {
       return res.status(400).json({ error: 'Solo podés reducir reservas en efectivo. Las de Mercado Pago las reintegra el administrador.' });
     }
-    if (row.status !== 'paid') {
-      return res.status(400).json({ error: 'Solo se pueden reducir reservas ya cobradas.' });
+    if (row.net_settled_at) {
+      return res.status(409).json({ error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' });
     }
+    const sellerReduceCheck = checkOperationWindow(await getModifyWindow(), row.service_date);
+    if (sellerReduceCheck.blocked) return res.status(409).json({ error: sellerReduceCheck.message });
 
     const snap: OrderReductionSnapshot = {
       origAdults: row.adults,
@@ -628,10 +636,12 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     const newCommissionArs = Math.round(cash.newCommissionUsd * row.exchange_rate_used * 100) / 100;
 
     const newTransfer = parsed.data.transfer_requested;
-    const noteLine = `[${new Date().toISOString()}] Reducción efectivo (vendedor): ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Devolución en efectivo USD ${calc.refundUsd}`;
+    const noteLine = `[${new Date().toISOString()}] Reducción efectivo (vendedor): ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Devolución en efectivo USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
     await applyOrderReduction({
       orderId: row.order_id,
       itemId: row.item_id,
+      origAdults: row.adults,
+      origChildren: row.children,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
       newTransferRequested: newTransfer,
@@ -644,10 +654,11 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       newCommissionArs,
       newNetTotalUsd: cash.newNetTotalUsd,
       noteLine,
+      actor: 'seller',
     });
 
     if (parsed.data.notify_customer !== false) {
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, null, true).catch((e) =>
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason ?? null, true).catch((e) =>
         console.error('[email] seller cash reduce notification failed for order', row.order_id, e),
       );
     }
@@ -687,7 +698,7 @@ sellerRouter.get('/me/orders/:publicId/events', async (req, res, next) => {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
     const { rows } = await pool.query(
-      `SELECT pe.id, pe.event_type, pe.created_at
+      `SELECT pe.id, pe.event_type, pe.payload, pe.created_at
          FROM payment_events pe
          JOIN orders o ON o.id = pe.order_id
          JOIN order_attributions a ON a.order_id = o.id
@@ -697,6 +708,158 @@ sellerRouter.get('/me/orders/:publicId/events', async (req, res, next) => {
       [publicId, req.seller!.sellerId],
     );
     res.json({ data: rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/cancel — el vendedor cancela una reserva
+// SUYA (cualquier método de pago), siempre que no esté liquidada ni dentro de la ventana de cancelación.
+const sellerCancelSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
+
+    const parsed = sellerCancelSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    const reason = parsed.data.reason ?? null;
+
+    const { rows } = await pool.query<{
+      order_id: number; status: string; payment_method: string;
+      net_settled_at: string | null; service_date: string;
+    }>(
+      `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
+              a.net_settled_at, oi.service_date
+         FROM orders o
+         JOIN order_attributions a ON a.order_id = o.id
+         JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.public_id = $1 AND a.seller_id = $2
+        ORDER BY oi.id LIMIT 1`,
+      [publicId, req.seller!.sellerId],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
+    if (!['pending', 'paid'].includes(row.status)) {
+      return res.status(400).json({ error: `No se puede cancelar una reserva en estado "${row.status}".` });
+    }
+    if (row.net_settled_at) {
+      return res.status(409).json({ error: 'Esta orden ya fue rendida al operador. No se puede cancelar una vez liquidada.' });
+    }
+    const cancelCheck = checkOperationWindow(await getCancelWindow(), row.service_date);
+    if (cancelCheck.blocked) return res.status(409).json({ error: cancelCheck.message });
+
+    await pool.query(
+      `UPDATE orders
+          SET status = 'cancelled',
+              cancelled_by = 'seller',
+              cancel_reason = $2,
+              cancelled_at = NOW(),
+              updated_at = NOW()
+        WHERE id = $1`,
+      [row.order_id, reason],
+    );
+    await logPaymentEvent(row.order_id, 'order_cancelled', null, {
+      actor: 'seller', seller_id: req.seller!.sellerId, reason,
+    });
+
+    // Notificar al cliente y al admin — el cliente debe coordinar devolución con el vendedor
+    sendSellerCancelledNotifications(row.order_id, reason).catch((err) =>
+      console.error('[email] seller cancel notifications failed:', err),
+    );
+
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/reschedule — reprograma la fecha de servicio.
+const sellerRescheduleSchema = z.object({
+  new_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  reason: z.string().max(500).optional(),
+  notify_customer: z.boolean().optional(),
+});
+
+sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
+    const parsed = sellerRescheduleSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const { new_date, reason, notify_customer } = parsed.data;
+    const newDateObj = new Date(`${new_date}T00:00:00`);
+    if (Number.isNaN(newDateObj.getTime())) return res.status(400).json({ error: 'Fecha inválida' });
+    if (newDateObj.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'La fecha no puede ser pasada' });
+
+    const { rows } = await pool.query<{
+      order_id: number; status: string; item_id: number; option_id: number;
+      adults: number; children: number; service_date: string; net_settled_at: string | null;
+    }>(
+      `SELECT o.id AS order_id, o.status::text AS status,
+              oi.id AS item_id, oi.option_id, oi.adults, oi.children,
+              to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+              a.net_settled_at
+         FROM orders o
+         JOIN order_attributions a ON a.order_id = o.id
+         JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.public_id = $1 AND a.seller_id = $2
+        ORDER BY oi.id LIMIT 1`,
+      [publicId, req.seller!.sellerId],
+    );
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
+    if (!['pending', 'paid'].includes(row.status)) {
+      return res.status(400).json({ error: `No se puede reprogramar una reserva en estado "${row.status}".` });
+    }
+    if (row.net_settled_at) {
+      return res.status(409).json({ error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' });
+    }
+    if (row.service_date === new_date) {
+      return res.status(400).json({ error: 'La nueva fecha es igual a la fecha actual.' });
+    }
+
+    const windowCheck = checkOperationWindow(await getModifyWindow(), row.service_date);
+    if (windowCheck.blocked) return res.status(409).json({ error: windowCheck.message });
+
+    const { rows: optionRows } = await pool.query<{ default_capacity_per_day: number; available_days: number[] }>(
+      `SELECT default_capacity_per_day, available_days FROM product_options WHERE id = $1 LIMIT 1`,
+      [row.option_id],
+    );
+    const option = optionRows[0];
+    if (!option) return res.status(404).json({ error: 'Opción no encontrada' });
+
+    const isoDow = newDateObj.getDay() === 0 ? 7 : newDateObj.getDay();
+    if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
+      return res.status(400).json({ error: 'El servicio no opera ese día de la semana.' });
+    }
+    const availCheck = await checkSingleDateAvailability(
+      row.option_id, option.default_capacity_per_day, new_date, row.adults + row.children,
+    );
+    if (!availCheck.ok) return res.status(409).json({ error: availCheck.message ?? 'Fecha no disponible' });
+
+    await pool.query(`UPDATE order_items SET service_date = $1 WHERE id = $2`, [new_date, row.item_id]);
+    await logPaymentEvent(row.order_id, 'order_rescheduled', null, {
+      prev_date: row.service_date, new_date, actor: 'seller',
+      reason: reason ?? null, notify: notify_customer ?? true,
+    });
+
+    res.json({ data: { ok: true, prev_date: row.service_date, new_date } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/seller/me/faq — preguntas frecuentes para el portal del vendedor
+sellerRouter.get('/me/faq', async (_req, res, next) => {
+  try {
+    res.json({ data: await getSellerFaq() });
+  } catch (err) { next(err); }
+});
+
+// GET /api/seller/me/operation-windows — ventanas horarias de modificación y cancelación
+sellerRouter.get('/me/operation-windows', async (_req, res, next) => {
+  try {
+    const [modify, cancel] = await Promise.all([getModifyWindow(), getCancelWindow()]);
+    res.json({ data: { modify, cancel } });
   } catch (err) { next(err); }
 });
 
@@ -759,5 +922,16 @@ sellerRouter.get('/me/notifications/unread-count', async (req, res, next) => {
   try {
     const count = await getUnreadCount(req.seller!.sellerId);
     res.json({ data: { count } });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/seller/me/notifications/:id — elimina una notificación propia
+sellerRouter.delete('/me/notifications/:id', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
+    const deleted = await deleteNotification(id, req.seller!.sellerId);
+    if (!deleted) return res.status(404).json({ error: 'Notificación no encontrada' });
+    res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });

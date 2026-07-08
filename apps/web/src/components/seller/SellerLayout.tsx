@@ -12,6 +12,7 @@ const NAV = [
   { to: '/seller/ventas', label: 'Mis ventas', icon: '✦' },
   { to: '/seller/liquidaciones', label: 'Liquidaciones', icon: '⬡' },
   { to: '/seller/notificaciones', label: 'Notificaciones', icon: '🔔' },
+  { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
 const FALLBACK_POLL_MS = 10_000;

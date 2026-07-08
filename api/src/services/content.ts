@@ -70,3 +70,32 @@ export async function setFaq(items: FaqItem[]): Promise<FaqContent> {
   await writeSetting(FAQ_KEY, payload, 'Contenido de la página Preguntas Frecuentes (bilingüe).');
   return payload;
 }
+
+// ─── FAQs para vendedores ─────────────────────────────────
+// Solo en español (los vendedores son locales). Se editan desde el admin
+// y se consumen desde el portal del vendedor.
+
+const FAQ_SELLER_KEY = 'faq_seller_page';
+
+export interface SellerFaqItem {
+  q_es: string;
+  a_es: string;
+}
+
+export interface SellerFaqContent {
+  items: SellerFaqItem[];
+  updated_at: string | null;
+}
+
+const EMPTY_SELLER_FAQ: SellerFaqContent = { items: [], updated_at: null };
+
+export async function getSellerFaq(): Promise<SellerFaqContent> {
+  const value = await readSetting<SellerFaqContent>(FAQ_SELLER_KEY);
+  return value ? { items: value.items ?? [], updated_at: value.updated_at ?? null } : EMPTY_SELLER_FAQ;
+}
+
+export async function setSellerFaq(items: SellerFaqItem[]): Promise<SellerFaqContent> {
+  const payload = { items, updated_at: new Date().toISOString() };
+  await writeSetting(FAQ_SELLER_KEY, payload, 'Preguntas frecuentes para el portal de vendedores.');
+  return payload;
+}

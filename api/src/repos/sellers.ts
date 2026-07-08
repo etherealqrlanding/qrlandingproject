@@ -205,6 +205,7 @@ export interface SellerOrder {
   unit_price_child_usd: number | null;
   subtotal_usd: number;
   service_date: string;
+  option_id: number;
   product_name: string;
   option_name: string;
   commission_amount_usd: number;
@@ -218,6 +219,9 @@ export interface SellerOrder {
   utm_source: string | null;
   payment_method: string;
   mp_init_point: string | null;
+  // Trazabilidad de modificaciones
+  was_reduced: boolean;
+  has_paid_addon: boolean;
 }
 
 export async function listSellerOrders(sellerId: number, opts?: { status?: string }): Promise<SellerOrder[]> {
@@ -239,6 +243,7 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        oi.unit_price_child_usd::float AS unit_price_child_usd,
        oi.subtotal_usd::float AS subtotal_usd,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+       oi.option_id,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
        a.commission_amount_usd::float AS commission_amount_usd,
@@ -246,7 +251,11 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        a.net_total_usd_snapshot::float AS net_total_usd,
        a.commission_percent_snapshot::float AS commission_percent_snapshot,
        a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.created_at,
-       o.utm_source, o.payment_method, o.mp_init_point
+       o.utm_source, o.payment_method, o.mp_init_point,
+       COALESCE(o.refunded_amount_ars, 0) > 0 AS was_reduced,
+       EXISTS (
+         SELECT 1 FROM order_addons ad WHERE ad.order_id = o.id AND ad.status = 'paid'
+       ) AS has_paid_addon
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id

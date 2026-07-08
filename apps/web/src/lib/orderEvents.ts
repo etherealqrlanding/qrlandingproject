@@ -14,6 +14,7 @@ const LABELS: Record<string, { label: string; tone: EventTone }> = {
   order_cancelled: { label: 'Cancelada', tone: 'bad' },
   order_refunded: { label: 'Reintegrada', tone: 'bad' },
   cash_collected_by_seller: { label: 'Cobro en efectivo confirmado', tone: 'good' },
+  cash_collected_by_admin: { label: 'Cobro en efectivo confirmado (admin)', tone: 'good' },
   order_modified: { label: 'Reserva modificada', tone: 'neutral' },
   order_increased_cash: { label: 'Ampliación cobrada (efectivo)', tone: 'good' },
   addon_paid: { label: 'Ampliación pagada (Mercado Pago)', tone: 'good' },
@@ -31,6 +32,7 @@ const LABELS: Record<string, { label: string; tone: EventTone }> = {
 export interface OrderEvent {
   id: number;
   event_type: string;
+  payload?: Record<string, unknown> | null;
   created_at: string;
 }
 
