@@ -585,6 +585,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      service_date: string | Date;
       net_total_usd: number | null; net_settled_at: string | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,

@@ -140,6 +140,7 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
     const { rows: orderRows } = await pool.query<{
       id: number; status: string; mp_payment_id: string | null;
       total_usd: number; total_ars: number; exchange_rate_used: number;
+      service_date: string | Date;
     }>(
       `SELECT o.id, o.status::text AS status, o.mp_payment_id,
               o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
@@ -263,6 +264,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      service_date: string | Date;
       commission_percent: number | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method, o.mp_payment_id,
@@ -435,6 +437,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      service_date: string | Date;
       seller_id: number | null; net_total_usd: number | null; net_settled_at: string | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
