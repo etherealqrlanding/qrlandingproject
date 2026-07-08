@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications } from '../../services/email.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications } from '../../services/email.js';
 import { logPaymentEvent, applyOrderReduction } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
@@ -745,10 +745,15 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
       [rows[0].id, JSON.stringify({ status: parsed.data.status, note: parsed.data.note ?? null, previous: previousStatus })],
     );
 
-    // Disparar notificaciones por email si la transición es a 'paid' (simulación manual del webhook)
+    // Disparar notificaciones por email según la transición de estado
     if (parsed.data.status === 'paid' && previousStatus !== 'paid') {
       sendOrderPaidNotifications(rows[0].id).catch((err) =>
         console.error('[email] manual paid notification failed for order', rows[0].id, err),
+      );
+    }
+    if (parsed.data.status === 'cancelled' && previousStatus !== 'cancelled') {
+      sendAdminCancelledNotifications(rows[0].id, parsed.data.note ?? null).catch((err) =>
+        console.error('[email] admin cancel notification failed for order', rows[0].id, err),
       );
     }
 

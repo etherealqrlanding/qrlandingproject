@@ -354,7 +354,6 @@ export default function SellerOrders() {
           option_name_snapshot: modifyOrder.option_name,
         }}
         handlers={{
-          // El vendedor NO reintegra por MP (lo hace el admin) → sin reduceMp.
           reduceCash: (body) => sellerApi.reduceCash(modifyOrder.public_id, body),
           increaseCash: (body) => sellerApi.increaseCash(modifyOrder.public_id, body),
           addMp: (body) => sellerApi.addMp(modifyOrder.public_id, body),

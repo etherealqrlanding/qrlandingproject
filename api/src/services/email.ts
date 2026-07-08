@@ -936,6 +936,82 @@ export async function sendSellerCancelledNotifications(
   }
 }
 
+// ─── Cancelación por el administrador ───────────────────────
+export async function sendAdminCancelledNotifications(
+  orderId: number,
+  reason?: string | null,
+): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const reasonLine = reason ? `<p style="color:rgba(245,239,230,0.7)">Motivo: ${escapeHtml(reason)}</p>` : '';
+
+  // 1) Cliente
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, el equipo de Tangos y Milongas Tickets canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p><strong style="color:#c8a85a">Si pagaste por Mercado Pago, el reintegro se procesará automáticamente. Si pagaste en efectivo, el vendedor se pondrá en contacto para coordinar la devolución.</strong></p>
+  ${reservationCard(orderData, { showAmounts: true, showContact: true })}
+  ${reasonLine}
+  <p>Si querés reservar otra fecha u otra experiencia, respondé este email o escribinos por WhatsApp.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Tu reserva fue cancelada — ${orderData.option_name}`, customerHtml);
+
+  // 2) Vendedor (si la orden tenía atribución)
+  if (data.seller_name && data.seller_email) {
+    const sellerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <h1 style="${baseStyles.title}">Una reserva tuya fue cancelada</h1>
+  <p>Hola ${escapeHtml(data.seller_name)}, el administrador canceló la siguiente reserva atribuida a tu código${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Pasajero</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${orderData.service_date}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(orderData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  ${reasonLine}
+  <p style="color:rgba(245,239,230,0.6);font-size:13px;">El pasajero fue notificado. Si tenés dudas escribinos por WhatsApp.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+</div></body></html>`;
+    await send(data.seller_email, `[Cancelada por admin] ${escapeHtml(orderData.customer_name)} — ${escapeHtml(orderData.option_name)}`, sellerHtml);
+  }
+
+  // 3) Admin
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Reserva cancelada por admin</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Email cliente</span><span>${escapeHtml(orderData.customer_email)}</span></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha servicio</span><strong>${orderData.service_date}</strong></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(orderData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+    ${data.seller_name ? `<div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(data.seller_name)}</strong></div>` : ''}
+  </div>
+  ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cancelada admin] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`, adminHtml);
+  }
+}
+
 // ─── Email de liquidación al vendedor ───────────────────────
 export async function sendSellerCommissionPaid(input: {
   sellerName: string;
