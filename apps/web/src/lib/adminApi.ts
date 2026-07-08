@@ -451,6 +451,10 @@ export const adminApi = {
     // Borrado total e irreversible de la orden (incluso si está pagada).
     delete: (publicId: string) =>
       request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}`, { method: 'DELETE' }),
+    bulkDelete: (publicIds: string[]) =>
+      request<{ deleted: number }>('/api/admin/orders/bulk-delete', {
+        method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
+      }),
     refund: (publicId: string, options?: { reason?: string; notify_customer?: boolean; amount_usd?: number }) =>
       request<{
         ok: true; refund_id: number | null;

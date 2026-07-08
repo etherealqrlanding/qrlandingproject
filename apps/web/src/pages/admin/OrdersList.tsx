@@ -47,11 +47,18 @@ function SummaryCard({ label, value, highlight }: Readonly<{ label: string; valu
 }
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
-function OrderCard({ o }: Readonly<{ o: AdminOrderListItem }>) {
+function OrderCard({ o, selected, onToggle }: Readonly<{ o: AdminOrderListItem; selected: boolean; onToggle: () => void }>) {
   return (
-    <div className="rounded-xl border border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60 transition overflow-hidden">
+    <div className={`rounded-xl border transition overflow-hidden ${selected ? 'border-gold/50 bg-gold/5' : 'border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60'}`}>
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggle}
+            className="w-4 h-4 rounded border-gold/40 bg-ink accent-gold cursor-pointer shrink-0"
+            aria-label={`Seleccionar orden de ${o.customer_name}`}
+          />
           <span className="text-[10px] text-cream/40 tabular-nums">{fmtShortDate(o.created_at)}</span>
           <StatusBadge status={o.status} />
           {o.payment_method === 'cash' && (
@@ -120,6 +127,57 @@ function Pagination({ page, totalPages, onChange }: Readonly<{ page: number; tot
   );
 }
 
+// ── Barra flotante de selección ───────────────────────────────────────────────
+function SelectionBar({
+  count, onClear, onDelete, confirming, onConfirm, onCancelConfirm, deleting,
+}: Readonly<{
+  count: number;
+  onClear: () => void;
+  onDelete: () => void;
+  confirming: boolean;
+  onConfirm: () => void;
+  onCancelConfirm: () => void;
+  deleting: boolean;
+}>) {
+  if (count === 0) return null;
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between gap-3 px-4 py-3 bg-ink border-t border-gold/20 shadow-2xl md:px-8">
+      {!confirming ? (
+        <>
+          <p className="text-sm text-cream">
+            <span className="font-semibold text-gold">{count}</span> {count === 1 ? 'orden seleccionada' : 'órdenes seleccionadas'}
+          </p>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onClear} className="text-xs text-cream/50 hover:text-cream transition">
+              Deseleccionar todo
+            </button>
+            <button type="button" onClick={onDelete}
+              className="px-4 py-1.5 rounded-md bg-bordeaux-deep border border-bordeaux-light/40 text-bordeaux-light text-xs font-medium hover:bg-bordeaux-deep/80 transition">
+              Eliminar {count === 1 ? 'orden' : 'órdenes'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-cream/80">
+            ¿Eliminar <span className="font-semibold text-bordeaux-light">{count} {count === 1 ? 'orden' : 'órdenes'}</span>? Esta acción es <strong>irreversible</strong>.
+          </p>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onCancelConfirm} disabled={deleting}
+              className="text-xs text-cream/50 hover:text-cream transition disabled:opacity-40">
+              Cancelar
+            </button>
+            <button type="button" onClick={onConfirm} disabled={deleting}
+              className="px-4 py-1.5 rounded-md bg-bordeaux-light text-ink text-xs font-bold hover:bg-bordeaux-light/80 transition disabled:opacity-60">
+              {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Componente principal ───────────────────────────────────────────────────────
 export default function OrdersList() {
   const [orders, setOrders] = useState<AdminOrderListItem[] | null>(null);
@@ -127,14 +185,26 @@ export default function OrdersList() {
   const [filters, setFilters] = useState({ status: '', ref: '', from: '', to: '', search: '' });
   const [page, setPage] = useState(0);
 
-  useEffect(() => {
+  // Selección
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const reload = (currentFilters = filters) => {
     setOrders(null);
     setError(null);
-    setPage(0);
-    const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v));
+    const params = Object.fromEntries(Object.entries(currentFilters).filter(([, v]) => v));
     adminApi.orders.list(params)
       .then(setOrders)
       .catch((err) => setError((err as Error).message));
+  };
+
+  useEffect(() => {
+    setPage(0);
+    setSelected(new Set());
+    setConfirming(false);
+    reload();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const summary = useMemo(() => {
@@ -152,6 +222,44 @@ export default function OrdersList() {
 
   const totalPages = Math.ceil((orders?.length ?? 0) / PAGE_SIZE);
   const paginated = orders?.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) ?? [];
+  const pageIds = paginated.map((o) => o.public_id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id));
+  const somePageSelected = pageIds.some((id) => selected.has(id));
+
+  function toggleSelectAll() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageIds.forEach((id) => next.delete(id));
+      } else {
+        pageIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }
+
+  function toggleSelect(publicId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(publicId)) next.delete(publicId); else next.add(publicId);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    setDeleting(true);
+    try {
+      await adminApi.orders.bulkDelete(Array.from(selected));
+      setSelected(new Set());
+      setConfirming(false);
+      reload();
+    } catch (err) {
+      setError((err as Error).message);
+      setConfirming(false);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   let mainContent: React.ReactNode;
   if (!orders && !error) {
@@ -172,7 +280,14 @@ export default function OrdersList() {
       <>
         {/* ── Mobile: cards ── */}
         <div className="md:hidden space-y-3 mb-4">
-          {paginated.map((o) => <OrderCard key={o.id} o={o} />)}
+          {paginated.map((o) => (
+            <OrderCard
+              key={o.id}
+              o={o}
+              selected={selected.has(o.public_id)}
+              onToggle={() => toggleSelect(o.public_id)}
+            />
+          ))}
         </div>
 
         {/* ── Desktop: tabla ── */}
@@ -180,6 +295,16 @@ export default function OrdersList() {
           <table className="w-full text-sm">
             <thead className="bg-ink-soft/60 text-cream/60 text-xs uppercase tracking-wider">
               <tr>
+                <th className="py-3 px-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gold/40 bg-ink accent-gold cursor-pointer"
+                    aria-label="Seleccionar todas las órdenes de esta página"
+                  />
+                </th>
                 <th className="text-left py-3 px-3 whitespace-nowrap">Fecha</th>
                 <th className="text-left py-3 px-3">Cliente</th>
                 <th className="text-left py-3 px-3">Servicio</th>
@@ -192,11 +317,23 @@ export default function OrdersList() {
             </thead>
             <tbody>
               {paginated.map((o) => (
-                <tr key={o.id} className="border-t border-gold/5 hover:bg-gold/5 transition">
+                <tr key={o.id}
+                  className={`border-t border-gold/5 transition cursor-pointer ${selected.has(o.public_id) ? 'bg-gold/5' : 'hover:bg-gold/5'}`}
+                  onClick={() => toggleSelect(o.public_id)}
+                >
+                  <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(o.public_id)}
+                      onChange={() => toggleSelect(o.public_id)}
+                      className="w-4 h-4 rounded border-gold/40 bg-ink accent-gold cursor-pointer"
+                      aria-label={`Seleccionar orden de ${o.customer_name}`}
+                    />
+                  </td>
                   <td className="py-2.5 px-3 text-cream/60 text-xs tabular-nums whitespace-nowrap">
                     {fmtShortDate(o.created_at)}
                   </td>
-                  <td className="py-2.5 px-3">
+                  <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                     <Link to={`/admin/orders/${o.public_id}`} className="text-cream hover:text-gold text-xs font-medium">
                       {o.customer_name}
                     </Link>
@@ -206,7 +343,7 @@ export default function OrdersList() {
                     {o.option_name}
                     <p className="text-cream/40">{o.product_name}{o.service_date ? ` · ${o.service_date}` : ''}</p>
                   </td>
-                  <td className="py-2.5 px-3 text-xs">
+                  <td className="py-2.5 px-3 text-xs" onClick={(e) => e.stopPropagation()}>
                     {o.seller_name ? (
                       <>
                         <Link to={`/admin/sellers/${o.seller_id}`} className="text-cream/80 hover:text-gold">{o.seller_name}</Link>
@@ -226,7 +363,7 @@ export default function OrdersList() {
                   <td className="py-2.5 px-3 text-right text-gold tabular-nums text-xs whitespace-nowrap">
                     {o.commission_amount_usd != null ? `USD ${o.commission_amount_usd}` : <span className="text-cream/30">—</span>}
                   </td>
-                  <td className="py-2.5 px-3 text-right">
+                  <td className="py-2.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-xs">Ver →</Link>
                   </td>
                 </tr>
@@ -240,14 +377,14 @@ export default function OrdersList() {
           <p className="text-xs text-cream/30">
             {orders.length} orden{pluralSuffix}
           </p>
-          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          <Pagination page={page} totalPages={totalPages} onChange={(p) => { setPage(p); setConfirming(false); }} />
         </div>
       </>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl">
+    <div className={`p-4 md:p-8 max-w-7xl ${selected.size > 0 ? 'pb-24' : ''}`}>
       <header className="mb-4 md:mb-8">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Ventas</p>
         <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Órdenes</h1>
@@ -284,6 +421,16 @@ export default function OrdersList() {
       )}
 
       {mainContent}
+
+      <SelectionBar
+        count={selected.size}
+        onClear={() => { setSelected(new Set()); setConfirming(false); }}
+        onDelete={() => setConfirming(true)}
+        confirming={confirming}
+        onConfirm={handleBulkDelete}
+        onCancelConfirm={() => setConfirming(false)}
+        deleting={deleting}
+      />
     </div>
   );
 }

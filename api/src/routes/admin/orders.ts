@@ -761,6 +761,22 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/admin/orders/bulk-delete — eliminación masiva (hasta 100 órdenes de una vez).
+adminOrdersRouter.post('/bulk-delete', async (req, res, next) => {
+  try {
+    const parsed = z.object({
+      public_ids: z.array(z.string().regex(/^[0-9a-f-]{8,40}$/i)).min(1).max(100),
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const result = await pool.query(
+      `DELETE FROM orders WHERE public_id = ANY($1::text[]) RETURNING id`,
+      [parsed.data.public_ids],
+    );
+    res.json({ data: { deleted: result.rowCount ?? 0 } });
+  } catch (err) { next(err); }
+});
+
 // DELETE /api/admin/orders/:publicId — borrado total e irreversible de la orden.
 // Arrastra (FK ON DELETE CASCADE) order_items y order_attributions; los payment_events
 // quedan con order_id = NULL (ON DELETE SET NULL) como rastro mínimo del cobro.
