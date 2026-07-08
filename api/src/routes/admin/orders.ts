@@ -770,7 +770,7 @@ adminOrdersRouter.post('/bulk-delete', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
     const result = await pool.query(
-      `DELETE FROM orders WHERE public_id = ANY($1::text[]) RETURNING id`,
+      `DELETE FROM orders WHERE public_id = ANY($1::uuid[]) RETURNING id`,
       [parsed.data.public_ids],
     );
     res.json({ data: { deleted: result.rowCount ?? 0 } });
