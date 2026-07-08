@@ -259,7 +259,8 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
-      WHERE a.seller_id = $1 ${statusFilter}
+      WHERE a.seller_id = $1
+        AND o.deleted_at IS NULL ${statusFilter}
       ORDER BY o.created_at DESC`,
     params,
   );

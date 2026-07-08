@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction } from '../../repos/orders.js';
+import { logPaymentEvent, applyOrderReduction, softDeleteOrders, listTrashedOrders, restoreOrders, permanentDeleteOrders, purgeExpiredTrash } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -28,7 +28,7 @@ adminOrdersRouter.get('/', async (req, res, next) => {
     const parsed = listQuery.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid filters', details: parsed.error.flatten() });
 
-    const where: string[] = [];
+    const where: string[] = ['o.deleted_at IS NULL'];
     const params: unknown[] = [];
     const add = (sql: string, ...vals: unknown[]) => {
       vals.forEach((v) => { params.push(v); });
@@ -72,6 +72,83 @@ adminOrdersRouter.get('/', async (req, res, next) => {
     res.json({ data: rows });
   } catch (err) { next(err); }
 });
+
+// ─── Rutas de papelera ────────────────────────────────────────────────────────
+
+async function getRetentionDays(): Promise<number> {
+  const { rows } = await pool.query<{ value: unknown }>(
+    `SELECT value FROM settings WHERE key = 'trash_retention_days' LIMIT 1`,
+  );
+  const val = rows[0]?.value;
+  const days = typeof val === 'number' ? val : parseInt(String(val ?? '30'), 10);
+  return Number.isFinite(days) && days > 0 ? days : 30;
+}
+
+// GET /api/admin/orders/trash — lista las órdenes en papelera
+adminOrdersRouter.get('/trash', async (req, res, next) => {
+  try {
+    const days = await getRetentionDays();
+    const rows = await listTrashedOrders(days);
+    res.json({ data: { orders: rows, retention_days: days } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/orders/trash/restore — restaura órdenes desde la papelera
+adminOrdersRouter.post('/trash/restore', async (req, res, next) => {
+  try {
+    const parsed = z.object({
+      public_ids: z.array(z.string().regex(/^[0-9a-f-]{8,40}$/i)).min(1).max(100),
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const restored = await restoreOrders(parsed.data.public_ids);
+    res.json({ data: { restored } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/orders/trash/permanent-delete — borrado definitivo desde la papelera
+adminOrdersRouter.post('/trash/permanent-delete', async (req, res, next) => {
+  try {
+    const parsed = z.object({
+      public_ids: z.array(z.string().regex(/^[0-9a-f-]{8,40}$/i)).min(1).max(100),
+    }).safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const deleted = await permanentDeleteOrders(parsed.data.public_ids);
+    res.json({ data: { deleted } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/orders/trash/purge — purga todas las órdenes expiradas de la papelera
+adminOrdersRouter.post('/trash/purge', async (req, res, next) => {
+  try {
+    const days = await getRetentionDays();
+    const deleted = await purgeExpiredTrash(days);
+    res.json({ data: { deleted } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/admin/orders/trash/download — descarga CSV de la papelera
+adminOrdersRouter.get('/trash/download', async (req, res, next) => {
+  try {
+    const days = await getRetentionDays();
+    const rows = await listTrashedOrders(days);
+
+    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = ['public_id', 'status', 'customer_name', 'customer_email', 'total_usd', 'total_ars', 'payment_method', 'product_name', 'option_name', 'service_date', 'adults', 'children', 'seller_name', 'seller_code', 'created_at', 'deleted_at'].join(',');
+    const lines = rows.map((r) =>
+      [r.public_id, r.status, r.customer_name, r.customer_email, r.total_usd, r.total_ars, r.payment_method, r.product_name, r.option_name, r.service_date, r.adults, r.children, r.seller_name, r.seller_code, r.created_at, r.deleted_at]
+        .map(escape).join(','),
+    );
+    const csv = [header, ...lines].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="papelera-ordenes.csv"');
+    res.send(csv);
+  } catch (err) { next(err); }
+});
+
+// ─── Detalle de una orden ─────────────────────────────────────────────────────
 
 adminOrdersRouter.get('/:publicId', async (req, res, next) => {
   try {
@@ -122,7 +199,7 @@ const updateStatusSchema = z.object({
 
 // ─── Refund: cancela la reserva y reintegra al cliente ────────
 const refundSchema = z.object({
-  reason: z.string().max(500).optional(),
+  reason: z.string().max(500).nullish(),
   notify_customer: z.boolean().optional().default(true),
   // Si se especifica amount_usd, hace refund parcial. Si se omite, refund total.
   amount_usd: z.number().positive().optional(),
@@ -245,7 +322,7 @@ const modifySchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
   transfer_requested: z.boolean(),
-  reason: z.string().max(500).optional(),
+  reason: z.string().max(500).nullish(),
   notify_customer: z.boolean().optional().default(true),
 });
 
@@ -648,7 +725,7 @@ adminOrdersRouter.post('/:publicId/sync-mp', async (req, res, next) => {
 // POST /api/admin/orders/:publicId/reschedule — reprograma la fecha de servicio.
 const rescheduleSchema = z.object({
   new_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  reason: z.string().max(500).optional(),
+  reason: z.string().max(500).nullish(),
   notify_customer: z.boolean().optional(),
 });
 
@@ -761,7 +838,7 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/admin/orders/bulk-delete — eliminación masiva (hasta 100 órdenes de una vez).
+// POST /api/admin/orders/bulk-delete — mueve hasta 100 órdenes a la papelera (soft delete).
 adminOrdersRouter.post('/bulk-delete', async (req, res, next) => {
   try {
     const parsed = z.object({
@@ -769,26 +846,21 @@ adminOrdersRouter.post('/bulk-delete', async (req, res, next) => {
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
-    const result = await pool.query(
-      `DELETE FROM orders WHERE public_id = ANY($1::uuid[]) RETURNING id`,
-      [parsed.data.public_ids],
-    );
-    res.json({ data: { deleted: result.rowCount ?? 0 } });
+    const adminId = (req as unknown as { admin: { id: string } }).admin.id;
+    const trashed = await softDeleteOrders(parsed.data.public_ids, adminId);
+    res.json({ data: { deleted: trashed } });
   } catch (err) { next(err); }
 });
 
-// DELETE /api/admin/orders/:publicId — borrado total e irreversible de la orden.
-// Arrastra (FK ON DELETE CASCADE) order_items y order_attributions; los payment_events
-// quedan con order_id = NULL (ON DELETE SET NULL) como rastro mínimo del cobro.
-// Se permite incluso para órdenes pagadas: la decisión del negocio es darle flexibilidad
-// total al admin, con la confirmación correspondiente del lado del front.
+// DELETE /api/admin/orders/:publicId — mueve la orden a la papelera (soft delete).
 adminOrdersRouter.delete('/:publicId', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
 
-    const result = await pool.query(`DELETE FROM orders WHERE public_id = $1 RETURNING id`, [publicId]);
-    if ((result.rowCount ?? 0) === 0) return res.status(404).json({ error: 'Not found' });
+    const adminId = (req as unknown as { admin: { id: string } }).admin.id;
+    const trashed = await softDeleteOrders([publicId], adminId);
+    if (trashed === 0) return res.status(404).json({ error: 'Not found or already in trash' });
 
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }

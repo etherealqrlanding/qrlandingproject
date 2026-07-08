@@ -275,6 +275,29 @@ export interface AdminOrderListItem {
   paid_at: string | null;
 }
 
+export interface TrashedOrderItem {
+  id: number;
+  public_id: string;
+  status: string;
+  customer_name: string;
+  customer_email: string;
+  total_usd: number;
+  total_ars: number;
+  payment_method: string;
+  created_at: string;
+  deleted_at: string;
+  seller_name: string | null;
+  seller_code: string | null;
+  product_name: string | null;
+  option_name: string | null;
+  service_date: string | null;
+  adults: number | null;
+  children: number | null;
+  restore_requested_at: string | null;
+  seller_trash_hidden: boolean;
+  days_remaining: number;
+}
+
 export interface AdminSetting {
   key: string;
   value: Record<string, unknown>;
@@ -448,13 +471,30 @@ export const adminApi = {
         method: 'PATCH',
         body: JSON.stringify({ status, note }),
       }),
-    // Borrado total e irreversible de la orden (incluso si está pagada).
+    // Mueve la orden a la papelera (soft delete).
     delete: (publicId: string) =>
       request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}`, { method: 'DELETE' }),
     bulkDelete: (publicIds: string[]) =>
       request<{ deleted: number }>('/api/admin/orders/bulk-delete', {
         method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
       }),
+    trash: {
+      list: () => request<{ orders: TrashedOrderItem[]; retention_days: number }>('/api/admin/orders/trash'),
+      restore: (publicIds: string[]) =>
+        request<{ restored: number }>('/api/admin/orders/trash/restore', {
+          method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
+        }),
+      permanentDelete: (publicIds: string[]) =>
+        request<{ deleted: number }>('/api/admin/orders/trash/permanent-delete', {
+          method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
+        }),
+      purge: () =>
+        request<{ deleted: number }>('/api/admin/orders/trash/purge', { method: 'POST' }),
+      downloadUrl: () => {
+        const base = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
+        return `${base}/api/admin/orders/trash/download`;
+      },
+    },
     refund: (publicId: string, options?: { reason?: string; notify_customer?: boolean; amount_usd?: number }) =>
       request<{
         ok: true; refund_id: number | null;
@@ -561,6 +601,13 @@ export const adminApi = {
       request<{ enabled: boolean }>('/api/admin/settings/maintenance', {
         method: 'PUT',
         body: JSON.stringify({ enabled }),
+      }),
+    getTrashRetention: () =>
+      request<{ days: number }>('/api/admin/settings/trash-retention'),
+    updateTrashRetention: (days: number) =>
+      request<{ days: number }>('/api/admin/settings/trash-retention', {
+        method: 'PUT',
+        body: JSON.stringify({ days }),
       }),
   },
 };

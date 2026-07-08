@@ -242,6 +242,26 @@ export interface SellerCommissionOrder {
   created_at: string;
 }
 
+export interface SellerTrashedOrder {
+  id: number;
+  public_id: string;
+  status: string;
+  customer_name: string;
+  customer_email: string;
+  total_usd: number;
+  total_ars: number;
+  payment_method: string;
+  created_at: string;
+  deleted_at: string;
+  product_name: string | null;
+  option_name: string | null;
+  service_date: string | null;
+  adults: number | null;
+  children: number | null;
+  restore_requested_at: string | null;
+  seller_trash_hidden: boolean;
+}
+
 export interface SellerNotification {
   id: number;
   seller_id: number;
@@ -323,6 +343,16 @@ export const sellerApi = {
   operationWindows: () =>
     request<{ modify: number | null; cancel: number | null }>('/api/seller/me/operation-windows'),
   faq: () => request<{ items: { q_es: string; a_es: string }[]; updated_at: string | null }>('/api/seller/me/faq'),
+  trash: {
+    list: () => request<SellerTrashedOrder[]>('/api/seller/me/orders/trash'),
+    requestRestore: (publicId: string) =>
+      request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/request-restore`, { method: 'POST' }),
+    hide: (publicId: string) =>
+      request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/trash-hide`, { method: 'DELETE' }),
+    downloadUrl: () => {
+      return `${API_URL}/api/seller/me/orders/trash/download`;
+    },
+  },
   notifications: {
     list: () => request<SellerNotification[]>('/api/seller/me/notifications'),
     markAllRead: () => request<{ updated: number }>('/api/seller/me/notifications/read-all', { method: 'PATCH' }),

@@ -30,6 +30,7 @@ import SellersList from './pages/admin/SellersList';
 import SellerForm from './pages/admin/SellerForm';
 import OrdersList from './pages/admin/OrdersList';
 import OrderDetail from './pages/admin/OrderDetail';
+import OrdersTrash from './pages/admin/OrdersTrash';
 import SettingsPage from './pages/admin/SettingsPage';
 import ContentPage from './pages/admin/ContentPage';
 
@@ -43,6 +44,7 @@ import SellerBooking from './pages/seller/SellerBooking';
 import SellerNotifications from './pages/seller/SellerNotifications';
 import SellerCatalog from './pages/seller/SellerCatalog';
 import SellerHelp from './pages/seller/SellerHelp';
+import SellerTrash from './pages/seller/SellerTrash';
 
 export default function App() {
   const location = useLocation();
@@ -71,6 +73,7 @@ export default function App() {
             <Route path="sellers/new" element={<SellerForm />} />
             <Route path="sellers/:id" element={<SellerForm />} />
             <Route path="orders" element={<OrdersList />} />
+            <Route path="orders/trash" element={<OrdersTrash />} />
             <Route path="orders/:publicId" element={<OrderDetail />} />
             <Route path="content" element={<ContentPage />} />
             <Route path="settings" element={<SettingsPage />} />
@@ -95,6 +98,7 @@ export default function App() {
             <Route path="liquidaciones" element={<SellerCommissions />} />
             <Route path="nueva-reserva" element={<SellerBooking />} />
             <Route path="notificaciones" element={<SellerNotifications />} />
+            <Route path="papelera" element={<SellerTrash />} />
             <Route path="ayuda" element={<SellerHelp />} />
           </Route>
         </Routes>

@@ -9,7 +9,7 @@ const NAV = [
   { to: '/seller/catalogo', label: 'Catálogo', icon: '◈' },
   { to: '/seller/nueva-reserva', label: 'Nueva', icon: '＋' },
   { to: '/seller/ventas', label: 'Ventas', icon: '✦' },
-  { to: '/seller/liquidaciones', label: 'Cobros', icon: '⬡' },
+  { to: '/seller/papelera', label: 'Papelera', icon: '🗑' },
   { to: '/seller/notificaciones', label: 'Alertas', icon: '🔔', notif: true },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];

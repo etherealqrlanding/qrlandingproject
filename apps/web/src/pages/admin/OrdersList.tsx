@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
 
+
+
 const PAGE_SIZE = 10;
 const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e'];
 
@@ -153,14 +155,14 @@ function SelectionBar({
             </button>
             <button type="button" onClick={onDelete}
               className="px-4 py-1.5 rounded-md bg-bordeaux-deep border border-bordeaux-light/40 text-bordeaux-light text-xs font-medium hover:bg-bordeaux-deep/80 transition">
-              Eliminar {count === 1 ? 'orden' : 'órdenes'}
+              Mover a papelera
             </button>
           </div>
         </>
       ) : (
         <>
           <p className="text-sm text-cream/80">
-            ¿Eliminar <span className="font-semibold text-bordeaux-light">{count} {count === 1 ? 'orden' : 'órdenes'}</span>? Esta acción es <strong>irreversible</strong>.
+            ¿Mover <span className="font-semibold text-bordeaux-light">{count} {count === 1 ? 'orden' : 'órdenes'}</span> a la papelera?
           </p>
           <div className="flex items-center gap-3">
             <button type="button" onClick={onCancelConfirm} disabled={deleting}
@@ -385,9 +387,15 @@ export default function OrdersList() {
 
   return (
     <div className={`p-4 md:p-8 max-w-7xl ${selected.size > 0 ? 'pb-24' : ''}`}>
-      <header className="mb-4 md:mb-8">
-        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Ventas</p>
-        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Órdenes</h1>
+      <header className="mb-4 md:mb-8 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Ventas</p>
+          <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Órdenes</h1>
+        </div>
+        <Link to="/admin/orders/trash"
+          className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gold/15 text-xs text-cream/50 hover:text-cream/80 hover:border-gold/30 transition">
+          🗑 Papelera
+        </Link>
       </header>
 
       {summary && (

@@ -11,6 +11,7 @@ const NAV = [
   { to: '/seller/nueva-reserva', label: 'Nueva Reserva', icon: '＋' },
   { to: '/seller/ventas', label: 'Mis ventas', icon: '✦' },
   { to: '/seller/liquidaciones', label: 'Liquidaciones', icon: '⬡' },
+  { to: '/seller/papelera', label: 'Papelera', icon: '🗑' },
   { to: '/seller/notificaciones', label: 'Notificaciones', icon: '🔔' },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
