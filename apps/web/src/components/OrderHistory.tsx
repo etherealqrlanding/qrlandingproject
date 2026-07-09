@@ -1,6 +1,13 @@
 import { eventDisplay, type EventTone, type OrderEvent } from '../lib/orderEvents';
 
-interface HistoryItem { id: number; created_at: string; label: string; tone: EventTone; detail: string | null }
+interface HistoryItem {
+  id: number;
+  created_at: string;
+  label: string;
+  tone: EventTone;
+  detail: string | null;
+  highlight: boolean;
+}
 
 const TONE_DOT: Record<string, string> = {
   good: 'bg-emerald-400',
@@ -15,6 +22,11 @@ function fmt(iso: string) {
   });
 }
 
+function fmtShortDate(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${String(y).slice(2)}`;
+}
+
 function fmtArs(n: unknown): string {
   return `ARS ${Math.round(Number(n)).toLocaleString('es-AR')}`;
 }
@@ -25,38 +37,97 @@ function paxLabel(adults: unknown, children: unknown): string {
   return parts.join(' · ');
 }
 
-// Genera una línea de detalle legible a partir del payload del evento.
-// Devuelve null si no hay información útil para mostrar.
+// Extrae un string seguro de un valor desconocido del payload
+function strVal(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v : null;
+}
+
+// Sufijo de actor para eventos de modificación
+function actorSuffix(payload: Record<string, unknown>): string {
+  if (payload.actor === 'admin') return ' (por admin)';
+  if (payload.actor === 'seller') return ' (por vendedor)';
+  return '';
+}
+
+// Prefijo de actor para eventos de cancelación
+function actorPrefix(payload: Record<string, unknown>): string {
+  if (payload.actor === 'admin') return 'Por admin';
+  if (payload.actor === 'seller') return 'Por vendedor';
+  return '';
+}
+
+function detailRescheduled(payload: Record<string, unknown>): string {
+  const prevRaw = strVal(payload.prev_date);
+  const nextRaw = strVal(payload.new_date);
+  const prev = prevRaw ? fmtShortDate(prevRaw) : '?';
+  const next = nextRaw ? fmtShortDate(nextRaw) : '?';
+  const actor = actorSuffix(payload);
+  const rawReason = strVal(payload.reason);
+  const reason = rawReason ? ` · "${rawReason}"` : '';
+  return `${prev} → ${next}${actor}${reason}`;
+}
+
+function detailModified(payload: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  if (payload.new_adults != null) parts.push(paxLabel(payload.new_adults, payload.new_children));
+  if (payload.new_transfer === false) parts.push('sin traslado');
+  if (payload.refund_ars != null) parts.push(`devuelto ${fmtArs(payload.refund_ars)}`);
+  const actor = actorSuffix(payload);
+  if (parts.length > 0) return `${parts.join(' · ')}${actor}`;
+  return actor.trim() || null;
+}
+
+function detailCancelled(payload: Record<string, unknown>): string | null {
+  const actor = actorPrefix(payload);
+  const rawReason = strVal(payload.reason);
+  const reason = rawReason ? `"${rawReason}"` : '';
+  const parts = [actor, reason].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function detailRefund(payload: Record<string, unknown>, partial: boolean): string | null {
+  const parts: string[] = [];
+  const prefix = partial ? 'Parcial ' : '';
+  if (payload.amount_ars != null) {
+    parts.push(`${prefix}${fmtArs(payload.amount_ars)}`);
+  } else if (payload.amount_usd != null) {
+    parts.push(`${prefix}USD ${Number(payload.amount_usd).toFixed(2)}`);
+  }
+  const rawReason = strVal(payload.reason);
+  if (rawReason) parts.push(`"${rawReason}"`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function detailAddonCreated(payload: Record<string, unknown>): string | null {
+  const a = Number(payload.extra_adults ?? 0);
+  const c = Number(payload.extra_children ?? 0);
+  const parts: string[] = [];
+  if (a > 0) parts.push(`+${a} ad`);
+  if (c > 0) parts.push(`+${c} men`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function detailAddonCollected(payload: Record<string, unknown>): string | null {
+  const parts: string[] = [];
+  const a = Number(payload.extra_adults ?? payload.new_adults ?? 0);
+  const c = Number(payload.extra_children ?? payload.new_children ?? 0);
+  if (a > 0) parts.push(`+${a} ad`);
+  if (c > 0) parts.push(`+${c} men`);
+  if (payload.charge_ars != null) parts.push(`cobrado ${fmtArs(payload.charge_ars)}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 function eventDetail(type: string, payload: Record<string, unknown> | null | undefined): string | null {
   if (!payload) return null;
-
-  if (type === 'order_modified') {
-    const comp = paxLabel(payload.new_adults, payload.new_children);
-    const xfer = payload.new_transfer === false ? ' · sin traslado' : '';
-    const refund = payload.refund_ars != null ? ` — devuelto ${fmtArs(payload.refund_ars)}` : '';
-    const actor = payload.actor === 'admin' ? ' (por admin)' : payload.actor === 'seller' ? ' (por vendedor)' : '';
-    return `${comp}${xfer}${refund}${actor}`;
-  }
-
-  if (type === 'addon_cash_created') {
-    const a = Number(payload.extra_adults ?? 0);
-    const c = Number(payload.extra_children ?? 0);
-    const parts: string[] = [];
-    if (a > 0) parts.push(`+${a} ad`);
-    if (c > 0) parts.push(`+${c} men`);
-    return parts.length > 0 ? parts.join(' · ') : null;
-  }
-
+  if (type === 'order_rescheduled') return detailRescheduled(payload);
+  if (type === 'order_modified') return detailModified(payload);
+  if (type === 'order_cancelled') return detailCancelled(payload);
+  if (type === 'refund_processed') return detailRefund(payload, false);
+  if (type === 'refund_partial_processed') return detailRefund(payload, true);
+  if (type === 'addon_cash_created') return detailAddonCreated(payload);
   if (type === 'addon_cash_collected' || type === 'addon_paid' || type === 'order_increased_cash') {
-    const parts: string[] = [];
-    const a = Number(payload.extra_adults ?? payload.new_adults ?? 0);
-    const c = Number(payload.extra_children ?? payload.new_children ?? 0);
-    if (a > 0) parts.push(`+${a} ad`);
-    if (c > 0) parts.push(`+${c} men`);
-    if (payload.charge_ars != null) parts.push(`cobrado ${fmtArs(payload.charge_ars)}`);
-    return parts.length > 0 ? parts.join(' · ') : null;
+    return detailAddonCollected(payload);
   }
-
   return null;
 }
 
@@ -71,6 +142,7 @@ export default function OrderHistory({ events }: Readonly<{ events: OrderEvent[]
         label: d.label,
         tone: d.tone,
         detail: eventDetail(e.event_type, e.payload),
+        highlight: e.event_type === 'order_rescheduled',
       } : null;
     })
     .filter((x): x is HistoryItem => x !== null);
@@ -80,14 +152,23 @@ export default function OrderHistory({ events }: Readonly<{ events: OrderEvent[]
   }
 
   return (
-    <ol className="space-y-3">
+    <ol className="space-y-2">
       {items.map((it) => (
-        <li key={it.id} className="flex gap-3">
+        <li
+          key={it.id}
+          className={it.highlight ? 'flex gap-3 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2.5 -mx-3' : 'flex gap-3'}
+        >
           <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${TONE_DOT[it.tone] ?? TONE_DOT.neutral}`} />
-          <div className="min-w-0">
-            <p className="text-sm text-cream/90">{it.label}</p>
-            {it.detail && <p className="text-xs text-cream/60 mt-0.5">{it.detail}</p>}
-            <p className="text-xs text-cream/40">{fmt(it.created_at)}</p>
+          <div className="min-w-0 flex-1">
+            <p className={`text-sm ${it.highlight ? 'text-amber-300 font-medium' : 'text-cream/90'}`}>
+              {it.label}
+            </p>
+            {it.detail && (
+              <p className={`text-xs mt-0.5 ${it.highlight ? 'text-amber-400/80' : 'text-cream/60'}`}>
+                {it.detail}
+              </p>
+            )}
+            <p className="text-xs text-cream/35 mt-0.5">{fmt(it.created_at)}</p>
           </div>
         </li>
       ))}

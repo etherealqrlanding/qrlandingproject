@@ -15,6 +15,7 @@ const LABELS: Record<string, { label: string; tone: EventTone }> = {
   order_refunded: { label: 'Reintegrada', tone: 'bad' },
   cash_collected_by_seller: { label: 'Cobro en efectivo confirmado', tone: 'good' },
   cash_collected_by_admin: { label: 'Cobro en efectivo confirmado (admin)', tone: 'good' },
+  order_rescheduled: { label: 'Fecha reprogramada', tone: 'warn' },
   order_modified: { label: 'Reserva modificada', tone: 'neutral' },
   order_increased_cash: { label: 'Ampliación cobrada (efectivo)', tone: 'good' },
   addon_paid: { label: 'Ampliación pagada (Mercado Pago)', tone: 'good' },

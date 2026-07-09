@@ -8,13 +8,13 @@ const NAV = [
   { to: '/seller', label: 'Resumen', icon: '◆', end: true },
   { to: '/seller/catalogo', label: 'Catálogo', icon: '◈' },
   { to: '/seller/nueva-reserva', label: 'Nueva', icon: '＋' },
-  { to: '/seller/ventas', label: 'Ventas', icon: '✦' },
+  { to: '/seller/ventas', label: 'Órdenes', icon: '✦' },
   { to: '/seller/archivo', label: 'Archivo', icon: '📁' },
   { to: '/seller/notificaciones', label: 'Alertas', icon: '🔔', notif: true },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
-export default function BottomNavSeller({ unread }: Props) {
+export default function BottomNavSeller({ unread }: Readonly<Props>) {
   return (
     <nav
       className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-ink/[0.97] backdrop-blur-xl border-t border-gold/20"

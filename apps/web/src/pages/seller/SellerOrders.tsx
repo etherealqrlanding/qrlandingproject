@@ -491,7 +491,7 @@ export default function SellerOrders() {
     <div className="p-4 md:p-8 max-w-6xl">
       <header className="mb-4 md:mb-6 flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="font-display text-3xl md:text-4xl text-cream">Mis ventas</h1>
+          <h1 className="font-display text-3xl md:text-4xl text-cream">Mis Órdenes</h1>
           <p className="mt-0.5 text-xs md:text-sm text-cream/50">Órdenes generadas con tu código</p>
         </div>
         <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input w-36 md:w-44 text-sm">
@@ -564,11 +564,12 @@ export default function SellerOrders() {
                       </div>
                       <p className="text-xs text-cream/50 truncate">{o.option_name}</p>
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-cream/40">
-                        <span>{fmtDate(o.service_date || o.created_at)}</span>
+                        <span>Serv. {fmtDate(o.service_date || o.created_at)}</span>
                         <span>·</span>
                         <span>{paxLabel(o.adults ?? 0, o.children ?? 0)}</span>
                         {o.payment_method === 'cash' && <span className="text-cream/30">· Efectivo</span>}
                       </div>
+                      <p className="text-[10px] text-cream/30 mt-0.5">Ord. {fmtDateTime(o.created_at)}</p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-cream font-mono text-sm">{fmtArs(o.total_ars)}</p>
@@ -720,7 +721,10 @@ export default function SellerOrders() {
                         onClick={() => setExpanded(isOpen ? null : o.order_id)}
                         className={`border-b border-gold/5 cursor-pointer select-none transition ${isOpen ? 'bg-gold/5' : 'hover:bg-ink-soft/30'} ${isHighlighted ? 'ring-1 ring-inset ring-gold/40' : ''}`}
                       >
-                        <td className="px-4 py-3 text-cream/70 whitespace-nowrap text-xs">{fmtDate(o.service_date || o.created_at)}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <p className="text-cream/70 text-xs">{fmtDate(o.service_date || o.created_at)}</p>
+                          <p className="text-[10px] text-cream/35 mt-0.5">{fmtDateTime(o.created_at)}</p>
+                        </td>
                         <td className="px-4 py-3">
                           <p className="text-cream text-sm">{o.product_name}</p>
                           <p className="text-xs text-cream/50">{o.option_name}</p>
