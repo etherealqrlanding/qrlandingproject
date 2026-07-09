@@ -90,26 +90,19 @@ export default function SettingsPage() {
   const [maintenance, setMaintenance] = useState<boolean>(false);
   const [maintenanceSaving, setMaintenanceSaving] = useState(false);
   const [maintenanceMsg, setMaintenanceMsg] = useState<string | null>(null);
-  const [trashDays, setTrashDays] = useState<number>(30);
-  const [trashDaysInput, setTrashDaysInput] = useState<string>('30');
-  const [trashSaving, setTrashSaving] = useState(false);
-  const [trashMsg, setTrashMsg] = useState<string | null>(null);
 
   const load = async () => {
     try {
-      const [data, mw, cw, mm, tr] = await Promise.all([
+      const [data, mw, cw, mm] = await Promise.all([
         adminApi.settings.list(),
         adminApi.settings.getModifyWindow(),
         adminApi.settings.getCancelWindow(),
         adminApi.settings.getMaintenanceMode(),
-        adminApi.settings.getTrashRetention(),
       ]);
       setSettings(data);
       setModifyWindow(mw.hours);
       setCancelWindow(cw.hours);
       setMaintenance(mm.enabled);
-      setTrashDays(tr.days);
-      setTrashDaysInput(String(tr.days));
       const exchange = data.find((s) => s.key === 'exchange_rate_usd_ars');
       if (exchange) {
         const value = exchange.value as { rate?: number };
@@ -159,24 +152,6 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleSaveTrashDays = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const d = parseInt(trashDaysInput, 10);
-    if (!Number.isFinite(d) || d < 1 || d > 365) {
-      setTrashMsg('Ingresá un número entre 1 y 365.');
-      return;
-    }
-    setTrashSaving(true);
-    setTrashMsg(null);
-    try {
-      const res = await adminApi.settings.updateTrashRetention(d);
-      setTrashDays(res.days);
-      setTrashMsg('✓ Guardado.');
-      setTimeout(() => setTrashMsg(null), 3000);
-    } catch (err) { setTrashMsg((err as Error).message); }
-    finally { setTrashSaving(false); }
   };
 
   const exchange = settings?.find((s) => s.key === 'exchange_rate_usd_ars');
@@ -287,37 +262,6 @@ export default function SettingsPage() {
           setCancelWindow(res.hours);
         }}
       />
-
-      {/* Papelera de órdenes */}
-      <header>
-        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Papelera</p>
-        <h2 className="mt-1 font-display text-2xl text-cream">Retención de órdenes eliminadas</h2>
-        <p className="mt-1 text-sm text-cream/50">
-          Cuando el admin elimina una orden, esta va a la papelera y se borra definitivamente después de los días configurados.
-        </p>
-      </header>
-
-      <section className="rounded-lg border border-gold/15 bg-ink-soft/50 p-6 max-w-2xl">
-        <form onSubmit={handleSaveTrashDays} className="space-y-4">
-          <label className="block max-w-xs">
-            <span className="block text-sm text-cream/80 mb-1.5">Días de retención</span>
-            <div className="flex items-center gap-2">
-              <input type="number" min={1} max={365} step={1}
-                value={trashDaysInput}
-                onChange={(e) => setTrashDaysInput(e.target.value)}
-                placeholder="30" className="input" />
-              <span className="text-cream/50 text-sm shrink-0">días</span>
-            </div>
-          </label>
-          <button type="submit" disabled={trashSaving} className="btn-primary disabled:opacity-50">
-            {trashSaving ? 'Guardando...' : 'Guardar'}
-          </button>
-          {trashMsg && <p className="text-sm text-gold">{trashMsg}</p>}
-          <p className="text-xs text-cream/40">
-            Activo: las órdenes en papelera se eliminan definitivamente a los {trashDays} días.
-          </p>
-        </form>
-      </section>
 
       {/* Modo mantenimiento */}
       <header>

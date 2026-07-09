@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction, softDeleteOrders, listTrashedOrders, restoreOrders, permanentDeleteOrders, purgeExpiredTrash } from '../../repos/orders.js';
+import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -28,7 +28,7 @@ adminOrdersRouter.get('/', async (req, res, next) => {
     const parsed = listQuery.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid filters', details: parsed.error.flatten() });
 
-    const where: string[] = ['o.deleted_at IS NULL'];
+    const where: string[] = ['o.archived_at IS NULL'];
     const params: unknown[] = [];
     const add = (sql: string, ...vals: unknown[]) => {
       vals.forEach((v) => { params.push(v); });
@@ -73,78 +73,54 @@ adminOrdersRouter.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Rutas de papelera ────────────────────────────────────────────────────────
+// ─── Rutas de archivo ─────────────────────────────────────────────────────────
 
-async function getRetentionDays(): Promise<number> {
-  const { rows } = await pool.query<{ value: unknown }>(
-    `SELECT value FROM settings WHERE key = 'trash_retention_days' LIMIT 1`,
-  );
-  const val = rows[0]?.value;
-  const days = typeof val === 'number' ? val : parseInt(String(val ?? '30'), 10);
-  return Number.isFinite(days) && days > 0 ? days : 30;
-}
+const archiveListQuery = z.object({
+  page:   z.coerce.number().int().min(1).optional(),
+  limit:  z.coerce.number().int().min(1).max(100).optional(),
+  search: z.string().max(120).optional(),
+  status: z.enum(['pending', 'paid', 'failed', 'cancelled', 'refunded', 'expired']).optional(),
+});
 
-// GET /api/admin/orders/trash — lista las órdenes en papelera
-adminOrdersRouter.get('/trash', async (_req, res, next) => {
+// GET /api/admin/orders/archive — lista paginada del archivo
+adminOrdersRouter.get('/archive', async (req, res, next) => {
   try {
-    const days = await getRetentionDays();
-    const rows = await listTrashedOrders(days);
-    res.json({ data: { orders: rows, retention_days: days } });
+    const parsed = archiveListQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid filters', details: parsed.error.flatten() });
+    const result = await listAdminArchive(parsed.data);
+    res.json({ data: result });
   } catch (err) { next(err); }
 });
 
-// POST /api/admin/orders/trash/restore — restaura órdenes desde la papelera
-adminOrdersRouter.post('/trash/restore', async (req, res, next) => {
+// POST /api/admin/orders/archive/restore — restaura órdenes al panel activo
+adminOrdersRouter.post('/archive/restore', async (req, res, next) => {
   try {
     const parsed = z.object({
       public_ids: z.array(z.string().regex(/^[0-9a-f-]{8,40}$/i)).min(1).max(100),
     }).safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
-    const restored = await restoreOrders(parsed.data.public_ids);
+    const restored = await restoreFromArchive(parsed.data.public_ids);
     res.json({ data: { restored } });
   } catch (err) { next(err); }
 });
 
-// POST /api/admin/orders/trash/permanent-delete — borrado definitivo desde la papelera
-adminOrdersRouter.post('/trash/permanent-delete', async (req, res, next) => {
+// GET /api/admin/orders/archive/download — CSV del archivo
+adminOrdersRouter.get('/archive/download', async (req, res, next) => {
   try {
-    const parsed = z.object({
-      public_ids: z.array(z.string().regex(/^[0-9a-f-]{8,40}$/i)).min(1).max(100),
-    }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
-
-    const deleted = await permanentDeleteOrders(parsed.data.public_ids);
-    res.json({ data: { deleted } });
-  } catch (err) { next(err); }
-});
-
-// POST /api/admin/orders/trash/purge — purga todas las órdenes expiradas de la papelera
-adminOrdersRouter.post('/trash/purge', async (_req, res, next) => {
-  try {
-    const days = await getRetentionDays();
-    const deleted = await purgeExpiredTrash(days);
-    res.json({ data: { deleted } });
-  } catch (err) { next(err); }
-});
-
-// GET /api/admin/orders/trash/download — descarga CSV de la papelera
-adminOrdersRouter.get('/trash/download', async (_req, res, next) => {
-  try {
-    const days = await getRetentionDays();
-    const rows = await listTrashedOrders(days);
+    const parsed = archiveListQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid filters', details: parsed.error.flatten() });
+    const result = await listAdminArchive({ ...parsed.data, page: 1, limit: 5000 });
 
     const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = ['public_id', 'status', 'customer_name', 'customer_email', 'total_usd', 'total_ars', 'payment_method', 'product_name', 'option_name', 'service_date', 'adults', 'children', 'seller_name', 'seller_code', 'created_at', 'deleted_at'].join(',');
-    const lines = rows.map((r) =>
-      [r.public_id, r.status, r.customer_name, r.customer_email, r.total_usd, r.total_ars, r.payment_method, r.product_name, r.option_name, r.service_date, r.adults, r.children, r.seller_name, r.seller_code, r.created_at, r.deleted_at]
+    const header = ['public_id', 'status', 'customer_name', 'customer_email', 'total_usd', 'total_ars', 'payment_method', 'product_name', 'option_name', 'service_date', 'adults', 'children', 'seller_name', 'seller_code', 'created_at', 'archived_at'].join(',');
+    const lines = result.orders.map((r) =>
+      [r.public_id, r.status, r.customer_name, r.customer_email, r.total_usd, r.total_ars, r.payment_method, r.product_name, r.option_name, r.service_date, r.adults, r.children, r.seller_name, r.seller_code, r.created_at, r.archived_at]
         .map(escape).join(','),
     );
-    const csv = [header, ...lines].join('\n');
-
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="papelera-ordenes.csv"');
-    res.send(csv);
+    res.setHeader('Content-Disposition', 'attachment; filename="archivo-ordenes.csv"');
+    res.send([header, ...lines].join('\n'));
   } catch (err) { next(err); }
 });
 
@@ -838,8 +814,8 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/admin/orders/bulk-delete — mueve hasta 100 órdenes a la papelera (soft delete).
-adminOrdersRouter.post('/bulk-delete', async (req, res, next) => {
+// POST /api/admin/orders/bulk-archive — mueve hasta 100 órdenes al archivo.
+adminOrdersRouter.post('/bulk-archive', async (req, res, next) => {
   try {
     const parsed = z.object({
       public_ids: z.array(z.string().regex(/^[0-9a-f-]{8,40}$/i)).min(1).max(100),
@@ -847,20 +823,20 @@ adminOrdersRouter.post('/bulk-delete', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
     const adminId = (req as unknown as { admin: { id: string } }).admin.id;
-    const trashed = await softDeleteOrders(parsed.data.public_ids, adminId);
-    res.json({ data: { deleted: trashed } });
+    const archived = await archiveOrders(parsed.data.public_ids, adminId);
+    res.json({ data: { archived } });
   } catch (err) { next(err); }
 });
 
-// DELETE /api/admin/orders/:publicId — mueve la orden a la papelera (soft delete).
-adminOrdersRouter.delete('/:publicId', async (req, res, next) => {
+// POST /api/admin/orders/:publicId/archive — archiva una orden.
+adminOrdersRouter.post('/:publicId/archive', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
 
     const adminId = (req as unknown as { admin: { id: string } }).admin.id;
-    const trashed = await softDeleteOrders([publicId], adminId);
-    if (trashed === 0) return res.status(404).json({ error: 'Not found or already in trash' });
+    const archived = await archiveOrders([publicId], adminId);
+    if (archived === 0) return res.status(404).json({ error: 'Not found or already archived' });
 
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }

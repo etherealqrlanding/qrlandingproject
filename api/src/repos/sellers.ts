@@ -260,7 +260,9 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
       WHERE a.seller_id = $1
-        AND o.deleted_at IS NULL ${statusFilter}
+        AND o.archived_at IS NULL
+        AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
+        AND a.net_settled_at IS NULL ${statusFilter}
       ORDER BY o.created_at DESC`,
     params,
   );

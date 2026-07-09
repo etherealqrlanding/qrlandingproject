@@ -275,7 +275,7 @@ export interface AdminOrderListItem {
   paid_at: string | null;
 }
 
-export interface TrashedOrderItem {
+export interface ArchivedOrderItem {
   id: number;
   public_id: string;
   status: string;
@@ -285,7 +285,8 @@ export interface TrashedOrderItem {
   total_ars: number;
   payment_method: string;
   created_at: string;
-  deleted_at: string;
+  archived_at: string | null;
+  net_settled_at: string | null;
   seller_name: string | null;
   seller_code: string | null;
   product_name: string | null;
@@ -293,9 +294,14 @@ export interface TrashedOrderItem {
   service_date: string | null;
   adults: number | null;
   children: number | null;
-  restore_requested_at: string | null;
-  seller_trash_hidden: boolean;
-  days_remaining: number;
+}
+
+export interface ArchivePage<T> {
+  orders: T[];
+  total: number;
+  page: number;
+  total_pages: number;
+  limit: number;
 }
 
 export interface AdminSetting {
@@ -471,29 +477,28 @@ export const adminApi = {
         method: 'PATCH',
         body: JSON.stringify({ status, note }),
       }),
-    // Mueve la orden a la papelera (soft delete).
-    delete: (publicId: string) =>
-      request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}`, { method: 'DELETE' }),
-    bulkDelete: (publicIds: string[]) =>
-      request<{ deleted: number }>('/api/admin/orders/bulk-delete', {
+    archive: (publicId: string) =>
+      request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}/archive`, { method: 'POST' }),
+    bulkArchive: (publicIds: string[]) =>
+      request<{ archived: number }>('/api/admin/orders/bulk-archive', {
         method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
       }),
-    trash: {
-      list: () => request<{ orders: TrashedOrderItem[]; retention_days: number }>('/api/admin/orders/trash'),
-      restore: (publicIds: string[]) =>
-        request<{ restored: number }>('/api/admin/orders/trash/restore', {
-          method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
-        }),
-      permanentDelete: (publicIds: string[]) =>
-        request<{ deleted: number }>('/api/admin/orders/trash/permanent-delete', {
-          method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
-        }),
-      purge: () =>
-        request<{ deleted: number }>('/api/admin/orders/trash/purge', { method: 'POST' }),
-      downloadUrl: () => {
-        const base = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
-        return `${base}/api/admin/orders/trash/download`;
-      },
+    archiveList: (params?: { page?: number; limit?: number; search?: string; status?: string }) => {
+      const qs = params
+        ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+        : '';
+      return request<ArchivePage<ArchivedOrderItem>>(`/api/admin/orders/archive${qs}`);
+    },
+    archiveRestore: (publicIds: string[]) =>
+      request<{ restored: number }>('/api/admin/orders/archive/restore', {
+        method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
+      }),
+    archiveDownloadUrl: (params?: { status?: string; search?: string }) => {
+      const base = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
+      const qs = params
+        ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+        : '';
+      return `${base}/api/admin/orders/archive/download${qs}`;
     },
     refund: (publicId: string, options?: { reason?: string; notify_customer?: boolean; amount_usd?: number }) =>
       request<{
@@ -601,13 +606,6 @@ export const adminApi = {
       request<{ enabled: boolean }>('/api/admin/settings/maintenance', {
         method: 'PUT',
         body: JSON.stringify({ enabled }),
-      }),
-    getTrashRetention: () =>
-      request<{ days: number }>('/api/admin/settings/trash-retention'),
-    updateTrashRetention: (days: number) =>
-      request<{ days: number }>('/api/admin/settings/trash-retention', {
-        method: 'PUT',
-        body: JSON.stringify({ days }),
       }),
   },
 };

@@ -94,32 +94,6 @@ adminSettingsRouter.put('/maintenance', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Retención de papelera ────────────────────────────────
-adminSettingsRouter.get('/trash-retention', async (_req, res, next) => {
-  try {
-    const { rows } = await pool.query<{ value: unknown }>(
-      `SELECT value FROM settings WHERE key = 'trash_retention_days' LIMIT 1`,
-    );
-    const val = rows[0]?.value;
-    const days = typeof val === 'number' ? val : parseInt(String(val ?? '30'), 10);
-    res.json({ data: { days: Number.isFinite(days) && days > 0 ? days : 30 } });
-  } catch (err) { next(err); }
-});
-
-adminSettingsRouter.put('/trash-retention', async (req, res, next) => {
-  try {
-    const parsed = z.object({ days: z.number().int().min(1).max(365) }).safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
-    await pool.query(
-      `INSERT INTO settings (key, value, description, updated_at)
-       VALUES ('trash_retention_days', $1::jsonb, 'Días de retención en papelera', NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [parsed.data.days],
-    );
-    res.json({ data: { days: parsed.data.days } });
-  } catch (err) { next(err); }
-});
-
 // ─── Contenido: Nosotros ─────────────────────────────────
 const aboutSchema = z.object({
   title_es: z.string().max(200),

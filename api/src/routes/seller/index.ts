@@ -14,7 +14,7 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
-import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerTrashedOrders, hideOrderFromSellerTrash, requestOrderRestore } from '../../repos/orders.js';
+import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
@@ -849,52 +849,41 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ─── Papelera del vendedor ────────────────────────────────────────────────────
+// ─── Archivo del vendedor ─────────────────────────────────────────────────────
+// Incluye automáticamente: canceladas, reintegradas, vencidas, fallidas y rendidas.
 
-// GET /api/seller/me/orders/trash — órdenes eliminadas por el admin atribuidas al vendedor
-sellerRouter.get('/me/orders/trash', async (req, res, next) => {
+const sellerArchiveQuery = z.object({
+  page:   z.coerce.number().int().min(1).optional(),
+  limit:  z.coerce.number().int().min(1).max(100).optional(),
+  status: z.enum(['cancelled', 'refunded', 'expired', 'settled']).optional(),
+  search: z.string().max(120).optional(),
+});
+
+// GET /api/seller/me/orders/archive
+sellerRouter.get('/me/orders/archive', async (req, res, next) => {
   try {
-    const rows = await listSellerTrashedOrders(req.seller!.sellerId);
-    res.json({ data: rows });
+    const parsed = sellerArchiveQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Filtros inválidos', details: parsed.error.flatten() });
+    const result = await listSellerArchive(req.seller!.sellerId, parsed.data);
+    res.json({ data: result });
   } catch (err) { next(err); }
 });
 
-// POST /api/seller/me/orders/:publicId/request-restore — el vendedor pide restaurar una orden
-sellerRouter.post('/me/orders/:publicId/request-restore', async (req, res, next) => {
+// GET /api/seller/me/orders/archive/download — CSV del archivo
+sellerRouter.get('/me/orders/archive/download', async (req, res, next) => {
   try {
-    const publicId = req.params.publicId;
-    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
-    const done = await requestOrderRestore(publicId, req.seller!.sellerId);
-    if (!done) return res.status(404).json({ error: 'Orden no encontrada en papelera o solicitud ya enviada' });
-    res.json({ data: { ok: true } });
-  } catch (err) { next(err); }
-});
-
-// DELETE /api/seller/me/orders/:publicId/trash-hide — el vendedor oculta la orden de su papelera
-sellerRouter.delete('/me/orders/:publicId/trash-hide', async (req, res, next) => {
-  try {
-    const publicId = req.params.publicId;
-    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
-    const done = await hideOrderFromSellerTrash(publicId, req.seller!.sellerId);
-    if (!done) return res.status(404).json({ error: 'Orden no encontrada en papelera' });
-    res.json({ data: { ok: true } });
-  } catch (err) { next(err); }
-});
-
-// GET /api/seller/me/orders/trash/download — CSV de las órdenes en papelera del vendedor
-sellerRouter.get('/me/orders/trash/download', async (req, res, next) => {
-  try {
-    const rows = await listSellerTrashedOrders(req.seller!.sellerId);
+    const parsed = sellerArchiveQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Filtros inválidos' });
+    const result = await listSellerArchive(req.seller!.sellerId, { ...parsed.data, page: 1, limit: 5000 });
     const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const header = ['public_id', 'status', 'customer_name', 'customer_email', 'total_usd', 'total_ars', 'payment_method', 'product_name', 'option_name', 'service_date', 'adults', 'children', 'created_at', 'deleted_at'].join(',');
-    const lines = rows.map((r) =>
-      [r.public_id, r.status, r.customer_name, r.customer_email, r.total_usd, r.total_ars, r.payment_method, r.product_name, r.option_name, r.service_date, r.adults, r.children, r.created_at, r.deleted_at]
+    const header = ['public_id', 'status', 'customer_name', 'customer_email', 'total_usd', 'total_ars', 'payment_method', 'product_name', 'option_name', 'service_date', 'adults', 'children', 'created_at', 'archived_at'].join(',');
+    const lines = result.orders.map((r) =>
+      [r.public_id, r.status, r.customer_name, r.customer_email, r.total_usd, r.total_ars, r.payment_method, r.product_name, r.option_name, r.service_date, r.adults, r.children, r.created_at, r.archived_at]
         .map(escape).join(','),
     );
-    const csv = [header, ...lines].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="papelera-mis-ventas.csv"');
-    res.send(csv);
+    res.setHeader('Content-Disposition', 'attachment; filename="archivo-mis-ventas.csv"');
+    res.send([header, ...lines].join('\n'));
   } catch (err) { next(err); }
 });
 

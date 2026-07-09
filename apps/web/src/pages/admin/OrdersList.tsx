@@ -154,15 +154,15 @@ function SelectionBar({
               Deseleccionar todo
             </button>
             <button type="button" onClick={onDelete}
-              className="px-4 py-1.5 rounded-md bg-bordeaux-deep border border-bordeaux-light/40 text-bordeaux-light text-xs font-medium hover:bg-bordeaux-deep/80 transition">
-              Mover a papelera
+              className="px-4 py-1.5 rounded-md bg-ink-soft border border-gold/30 text-cream/70 text-xs font-medium hover:bg-gold/10 hover:text-cream transition">
+              Archivar
             </button>
           </div>
         </>
       ) : (
         <>
           <p className="text-sm text-cream/80">
-            ¿Mover <span className="font-semibold text-bordeaux-light">{count} {count === 1 ? 'orden' : 'órdenes'}</span> a la papelera?
+            ¿Archivar <span className="font-semibold text-gold">{count} {count === 1 ? 'orden' : 'órdenes'}</span>?
           </p>
           <div className="flex items-center gap-3">
             <button type="button" onClick={onCancelConfirm} disabled={deleting}
@@ -170,8 +170,8 @@ function SelectionBar({
               Cancelar
             </button>
             <button type="button" onClick={onConfirm} disabled={deleting}
-              className="px-4 py-1.5 rounded-md bg-bordeaux-light text-ink text-xs font-bold hover:bg-bordeaux-light/80 transition disabled:opacity-60">
-              {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+              className="px-4 py-1.5 rounded-md bg-gold/20 border border-gold/40 text-cream text-xs font-bold hover:bg-gold/30 transition disabled:opacity-60">
+              {deleting ? 'Archivando…' : 'Sí, archivar'}
             </button>
           </div>
         </>
@@ -251,7 +251,7 @@ export default function OrdersList() {
   async function handleBulkDelete() {
     setDeleting(true);
     try {
-      await adminApi.orders.bulkDelete(Array.from(selected));
+      await adminApi.orders.bulkArchive(Array.from(selected));
       setSelected(new Set());
       setConfirming(false);
       reload();
@@ -392,9 +392,9 @@ export default function OrdersList() {
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Ventas</p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Órdenes</h1>
         </div>
-        <Link to="/admin/orders/trash"
+        <Link to="/admin/orders/archivo"
           className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gold/15 text-xs text-cream/50 hover:text-cream/80 hover:border-gold/30 transition">
-          🗑 Papelera
+          📁 Archivo
         </Link>
       </header>
 

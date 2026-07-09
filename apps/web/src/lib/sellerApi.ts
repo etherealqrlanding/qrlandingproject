@@ -242,7 +242,7 @@ export interface SellerCommissionOrder {
   created_at: string;
 }
 
-export interface SellerTrashedOrder {
+export interface SellerArchivedOrder {
   id: number;
   public_id: string;
   status: string;
@@ -252,14 +252,21 @@ export interface SellerTrashedOrder {
   total_ars: number;
   payment_method: string;
   created_at: string;
-  deleted_at: string;
+  archived_at: string | null;
+  net_settled_at: string | null;
   product_name: string | null;
   option_name: string | null;
   service_date: string | null;
   adults: number | null;
   children: number | null;
-  restore_requested_at: string | null;
-  seller_trash_hidden: boolean;
+}
+
+export interface ArchivePage<T> {
+  orders: T[];
+  total: number;
+  page: number;
+  total_pages: number;
+  limit: number;
 }
 
 export interface SellerNotification {
@@ -343,14 +350,18 @@ export const sellerApi = {
   operationWindows: () =>
     request<{ modify: number | null; cancel: number | null }>('/api/seller/me/operation-windows'),
   faq: () => request<{ items: { q_es: string; a_es: string }[]; updated_at: string | null }>('/api/seller/me/faq'),
-  trash: {
-    list: () => request<SellerTrashedOrder[]>('/api/seller/me/orders/trash'),
-    requestRestore: (publicId: string) =>
-      request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/request-restore`, { method: 'POST' }),
-    hide: (publicId: string) =>
-      request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/trash-hide`, { method: 'DELETE' }),
-    downloadUrl: () => {
-      return `${API_URL}/api/seller/me/orders/trash/download`;
+  archive: {
+    list: (params?: { page?: number; limit?: number; status?: string; search?: string }) => {
+      const qs = params
+        ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+        : '';
+      return request<ArchivePage<SellerArchivedOrder>>(`/api/seller/me/orders/archive${qs}`);
+    },
+    downloadUrl: (params?: { status?: string; search?: string }) => {
+      const qs = params
+        ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
+        : '';
+      return `${API_URL}/api/seller/me/orders/archive/download${qs}`;
     },
   },
   notifications: {

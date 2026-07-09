@@ -265,7 +265,7 @@ export default function OrderDetail() {
     if (!publicId) return;
     setDeleting(true);
     try {
-      await adminApi.orders.delete(publicId);
+      await adminApi.orders.archive(publicId);
       navigate('/admin/orders');
     } catch (err) {
       setError((err as AdminApiError).message);
@@ -608,17 +608,16 @@ export default function OrderDetail() {
             </div>
           )}
 
-          {/* Zona peligrosa: borrado total e irreversible de la orden */}
-          <div className="rounded-lg border border-red-500/30 bg-red-950/10 p-5">
-            <p className="text-xs uppercase tracking-widest text-red-400">Eliminar orden</p>
+          {/* Archivar orden */}
+          <div className="rounded-lg border border-gold/15 bg-ink-soft/30 p-5">
+            <p className="text-xs uppercase tracking-widest text-gold-soft">Archivar orden</p>
             <p className="mt-2 text-sm text-cream/60">
-              Borra esta orden de forma <strong>permanente</strong> (items, atribución de comisión y datos del cliente).
-              {order.status === 'paid' && ' La orden está pagada: si correspondía un reintegro, hacelo antes desde "Cancelar y reintegrar".'}
+              Mueve esta orden al archivo. Desaparece del panel activo pero nunca se borra — podés restaurarla cuando quieras desde el archivo.
             </p>
             <button type="button" onClick={() => setDeleteOpen(true)}
-              className="mt-4 w-full rounded-md border border-red-500/40 px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+              className="mt-4 w-full rounded-md border border-gold/25 px-3 py-2 text-sm text-cream/60 hover:bg-gold/10 hover:text-cream transition"
             >
-              Eliminar orden
+              Archivar orden
             </button>
           </div>
         </aside>
@@ -626,15 +625,15 @@ export default function OrderDetail() {
 
       <ConfirmDialog
         open={deleteOpen}
-        title="Eliminar orden definitivamente"
+        title="Archivar orden"
         message={
           <>
-            <p>Vas a eliminar la orden <strong className="text-cream font-mono break-all">{order.public_id}</strong> de <strong className="text-cream">{order.customer_name}</strong> (USD {order.total_usd}).</p>
-            <p>Se borran los items, la atribución de comisión y los datos del cliente. Esta acción es <strong>irreversible</strong>{order.status === 'paid' ? ' y no genera ningún reintegro automático en Mercado Pago' : ''}.</p>
+            <p>La orden <strong className="text-cream font-mono break-all">{order.public_id}</strong> de <strong className="text-cream">{order.customer_name}</strong> (USD {order.total_usd}) pasará al archivo.</p>
+            <p>Podés restaurarla en cualquier momento desde el archivo de órdenes.</p>
           </>
         }
-        confirmLabel="Eliminar orden"
-        requireText="ELIMINAR"
+        confirmLabel="Archivar"
+        requireText="ARCHIVAR"
         loading={deleting}
         onConfirm={runDelete}
         onCancel={() => setDeleteOpen(false)}

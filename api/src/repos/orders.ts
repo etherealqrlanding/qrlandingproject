@@ -373,9 +373,9 @@ export async function logPaymentEvent(
 }
 
 
-// ─── Papelera ────────────────────────────────────────────────────────────────
+// ─── Archivo ──────────────────────────────────────────────────────────────────
 
-export interface TrashedOrder {
+export interface ArchivedOrder {
   id: number;
   public_id: string;
   status: string;
@@ -385,7 +385,8 @@ export interface TrashedOrder {
   total_ars: number;
   payment_method: string;
   created_at: string;
-  deleted_at: string;
+  archived_at: string | null;
+  net_settled_at: string | null;
   seller_name: string | null;
   seller_code: string | null;
   product_name: string | null;
@@ -393,156 +394,162 @@ export interface TrashedOrder {
   service_date: string | null;
   adults: number | null;
   children: number | null;
-  restore_requested_at: string | null;
-  seller_trash_hidden: boolean;
-  days_remaining: number;
 }
 
-export async function softDeleteOrders(
-  publicIds: string[],
-  adminId: string,
-): Promise<number> {
+export interface ArchivePage {
+  orders: ArchivedOrder[];
+  total: number;
+  page: number;
+  total_pages: number;
+  limit: number;
+}
+
+const ARCHIVE_SELECT = `
+  o.id, o.public_id, o.status::text AS status,
+  o.customer_name, o.customer_email,
+  o.total_usd::float AS total_usd,
+  o.total_ars::float AS total_ars,
+  o.payment_method,
+  o.created_at, o.archived_at,
+  a.net_settled_at,
+  s.name AS seller_name, s.code AS seller_code,
+  oi.product_name_snapshot AS product_name,
+  oi.option_name_snapshot AS option_name,
+  to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+  oi.adults, oi.children`;
+
+export async function archiveOrders(publicIds: string[], adminId: string): Promise<number> {
   if (publicIds.length === 0) return 0;
   const result = await pool.query(
     `UPDATE orders
-        SET deleted_at = NOW(),
-            deleted_by_admin_id = $1::uuid,
+        SET archived_at = NOW(),
+            archived_by_admin_id = $1::uuid,
             updated_at = NOW()
       WHERE public_id = ANY($2::uuid[])
-        AND deleted_at IS NULL`,
+        AND archived_at IS NULL`,
     [adminId, publicIds],
   );
   return result.rowCount ?? 0;
 }
 
-export async function listTrashedOrders(retentionDays: number): Promise<TrashedOrder[]> {
-  const { rows } = await pool.query<TrashedOrder>(
-    `SELECT
-       o.id, o.public_id, o.status::text AS status,
-       o.customer_name, o.customer_email,
-       o.total_usd::float AS total_usd,
-       o.total_ars::float AS total_ars,
-       o.payment_method,
-       o.created_at, o.deleted_at,
-       o.restore_requested_at,
-       o.seller_trash_hidden,
-       s.name AS seller_name, s.code AS seller_code,
-       oi.product_name_snapshot AS product_name,
-       oi.option_name_snapshot AS option_name,
-       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       oi.adults, oi.children,
-       GREATEST(0, $1 - EXTRACT(day FROM NOW() - o.deleted_at)::int) AS days_remaining
+export async function restoreFromArchive(publicIds: string[]): Promise<number> {
+  if (publicIds.length === 0) return 0;
+  const result = await pool.query(
+    `UPDATE orders
+        SET archived_at = NULL,
+            archived_by_admin_id = NULL,
+            updated_at = NOW()
+      WHERE public_id = ANY($1::uuid[])
+        AND archived_at IS NOT NULL`,
+    [publicIds],
+  );
+  return result.rowCount ?? 0;
+}
+
+export async function listAdminArchive(params: {
+  search?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ArchivePage> {
+  const page  = Math.max(1, params.page  ?? 1);
+  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const where: string[] = ['o.archived_at IS NOT NULL'];
+  const args: unknown[] = [];
+  const add = (sql: string, ...vals: unknown[]) => {
+    vals.forEach((v) => args.push(v));
+    where.push(sql);
+  };
+
+  if (params.status) add(`o.status = $${args.length + 1}`, params.status);
+  if (params.search) {
+    const term = `%${params.search.toLowerCase()}%`;
+    args.push(term);
+    where.push(`(LOWER(o.customer_name) LIKE $${args.length} OR LOWER(o.customer_email) LIKE $${args.length})`);
+  }
+
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+  args.push(limit, offset);
+
+  const { rows } = await pool.query<ArchivedOrder & { total_count: number }>(
+    `SELECT COUNT(*) OVER() AS total_count, ${ARCHIVE_SELECT}
        FROM orders o
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN order_attributions a ON a.order_id = o.id
        LEFT JOIN sellers s ON s.id = a.seller_id
-      WHERE o.deleted_at IS NOT NULL
-      ORDER BY o.deleted_at DESC`,
-    [retentionDays],
+      ${whereSql}
+      ORDER BY o.archived_at DESC
+      LIMIT $${args.length - 1} OFFSET $${args.length}`,
+    args,
   );
-  return rows;
+
+  const total = rows[0]?.total_count ?? 0;
+  return { orders: rows, total, page, limit, total_pages: Math.ceil(total / limit) };
 }
 
-export async function restoreOrders(publicIds: string[]): Promise<number> {
-  if (publicIds.length === 0) return 0;
-  const result = await pool.query(
-    `UPDATE orders
-        SET deleted_at = NULL,
-            deleted_by_admin_id = NULL,
-            seller_trash_hidden = FALSE,
-            restore_requested_at = NULL,
-            updated_at = NOW()
-      WHERE public_id = ANY($1::uuid[])
-        AND deleted_at IS NOT NULL`,
-    [publicIds],
-  );
-  return result.rowCount ?? 0;
-}
+export async function listSellerArchive(sellerId: number, params: {
+  status?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<ArchivePage> {
+  const page  = Math.max(1, params.page  ?? 1);
+  const limit = Math.min(100, Math.max(1, params.limit ?? 20));
+  const offset = (page - 1) * limit;
 
-export async function permanentDeleteOrders(publicIds: string[]): Promise<number> {
-  if (publicIds.length === 0) return 0;
-  const result = await pool.query(
-    `DELETE FROM orders
-      WHERE public_id = ANY($1::uuid[])
-        AND deleted_at IS NOT NULL`,
-    [publicIds],
-  );
-  return result.rowCount ?? 0;
-}
+  const baseWhere = `a.seller_id = $1
+    AND (
+      o.status IN ('cancelled', 'refunded', 'expired', 'failed')
+      OR a.net_settled_at IS NOT NULL
+      OR o.archived_at IS NOT NULL
+    )`;
+  const args: unknown[] = [sellerId];
+  const extra: string[] = [];
 
-export async function purgeExpiredTrash(retentionDays: number): Promise<number> {
-  const result = await pool.query(
-    `DELETE FROM orders
-      WHERE deleted_at IS NOT NULL
-        AND deleted_at < NOW() - ($1 || ' days')::interval`,
-    [retentionDays],
-  );
-  return result.rowCount ?? 0;
-}
+  if (params.status === 'cancelled') extra.push(`o.status = 'cancelled'`);
+  else if (params.status === 'refunded') extra.push(`o.status = 'refunded'`);
+  else if (params.status === 'expired')  extra.push(`o.status IN ('expired', 'failed')`);
+  else if (params.status === 'settled')  extra.push(`a.net_settled_at IS NOT NULL`);
 
-export async function listSellerTrashedOrders(sellerId: number): Promise<TrashedOrder[]> {
-  const { rows } = await pool.query<TrashedOrder>(
-    `SELECT
-       o.id, o.public_id, o.status::text AS status,
-       o.customer_name, o.customer_email,
-       o.total_usd::float AS total_usd,
-       o.total_ars::float AS total_ars,
-       o.payment_method,
-       o.created_at, o.deleted_at,
-       o.restore_requested_at,
-       o.seller_trash_hidden,
-       s.name AS seller_name, s.code AS seller_code,
-       oi.product_name_snapshot AS product_name,
-       oi.option_name_snapshot AS option_name,
-       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-       oi.adults, oi.children,
-       0 AS days_remaining
+  if (params.search) {
+    const term = `%${params.search.toLowerCase()}%`;
+    args.push(term);
+    extra.push(`(LOWER(o.customer_name) LIKE $${args.length} OR LOWER(o.customer_email) LIKE $${args.length})`);
+  }
+
+  const whereSql = `WHERE ${baseWhere}${extra.length ? ' AND ' + extra.join(' AND ') : ''}`;
+  args.push(limit, offset);
+
+  const { rows } = await pool.query<ArchivedOrder & { total_count: number }>(
+    `SELECT COUNT(*) OVER() AS total_count, ${ARCHIVE_SELECT}
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN sellers s ON s.id = a.seller_id
-      WHERE a.seller_id = $1
-        AND o.deleted_at IS NOT NULL
-        AND o.seller_trash_hidden = FALSE
-      ORDER BY o.deleted_at DESC`,
-    [sellerId],
+      ${whereSql}
+      ORDER BY COALESCE(o.archived_at, o.cancelled_at, o.updated_at) DESC
+      LIMIT $${args.length - 1} OFFSET $${args.length}`,
+    args,
   );
-  return rows;
+
+  const total = rows[0]?.total_count ?? 0;
+  return { orders: rows, total, page, limit, total_pages: Math.ceil(total / limit) };
 }
 
-export async function hideOrderFromSellerTrash(
-  publicId: string,
-  sellerId: number,
-): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE orders o
-        SET seller_trash_hidden = TRUE, updated_at = NOW()
-       FROM order_attributions a
-      WHERE a.order_id = o.id
-        AND a.seller_id = $1
-        AND o.public_id = $2
-        AND o.deleted_at IS NOT NULL`,
-    [sellerId, publicId],
-  );
-  return (result.rowCount ?? 0) > 0;
+// listSellerTrashedOrders kept for backwards compat — remove after migration
+export async function listSellerTrashedOrders(sellerId: number): Promise<ArchivedOrder[]> {
+  const result = await listSellerArchive(sellerId, { limit: 100 });
+  return result.orders;
 }
 
-export async function requestOrderRestore(
-  publicId: string,
-  sellerId: number,
-): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE orders o
-        SET restore_requested_at = NOW(), updated_at = NOW()
-       FROM order_attributions a
-      WHERE a.order_id = o.id
-        AND a.seller_id = $1
-        AND o.public_id = $2
-        AND o.deleted_at IS NOT NULL
-        AND o.restore_requested_at IS NULL`,
-    [sellerId, publicId],
-  );
-  return (result.rowCount ?? 0) > 0;
+export async function hideOrderFromSellerTrash(_publicId: string, _sellerId: number): Promise<number> {
+  return 0; // no-op — columna eliminada
+}
+
+export async function requestOrderRestore(_publicId: string, _sellerId: number): Promise<number> {
+  return 0; // no-op — columna eliminada
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
