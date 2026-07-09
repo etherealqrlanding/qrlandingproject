@@ -515,8 +515,8 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
     if (row.payment_method !== 'cash') {
       return res.status(400).json({ error: 'Esta vía es solo para reservas en efectivo. Para Mercado Pago usá el reintegro.' });
     }
-    if (row.status !== 'paid') {
-      return res.status(400).json({ error: `Solo se pueden reducir reservas en efectivo ya cobradas. Estado actual: ${row.status}` });
+    if (row.status !== 'paid' && row.status !== 'pending') {
+      return res.status(400).json({ error: `No se puede reducir una reserva en estado ${row.status}` });
     }
     if (row.net_settled_at) {
       return res.status(409).json({ error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' });

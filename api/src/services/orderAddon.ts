@@ -196,8 +196,8 @@ export async function createCashAddonForOrder(params: {
   if (row.payment_method !== 'cash') {
     return { ok: false, httpStatus: 400, error: 'Esta vía es solo para reservas en efectivo.' };
   }
-  if (row.status !== 'paid') {
-    return { ok: false, httpStatus: 400, error: `Solo se pueden ampliar reservas ya cobradas. Estado actual: ${row.status}` };
+  if (row.status !== 'paid' && row.status !== 'pending') {
+    return { ok: false, httpStatus: 400, error: `No se puede ampliar una reserva en estado ${row.status}` };
   }
 
   const snap: OrderIncreaseSnapshot = {

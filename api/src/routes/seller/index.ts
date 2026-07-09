@@ -609,6 +609,9 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     if (row.payment_method !== 'cash') {
       return res.status(400).json({ error: 'Solo podés reducir reservas en efectivo. Las de Mercado Pago las reintegra el administrador.' });
     }
+    if (row.status !== 'paid' && row.status !== 'pending') {
+      return res.status(400).json({ error: `No se puede reducir una reserva en estado ${row.status}` });
+    }
     if (row.net_settled_at) {
       return res.status(409).json({ error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' });
     }

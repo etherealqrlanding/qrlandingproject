@@ -224,12 +224,28 @@ export interface SellerOrder {
   has_paid_addon: boolean;
 }
 
-export async function listSellerOrders(sellerId: number, opts?: { status?: string }): Promise<SellerOrder[]> {
+export async function listSellerOrders(
+  sellerId: number,
+  opts?: { status?: string; settlement?: 'pending' | 'settled' },
+): Promise<SellerOrder[]> {
   const params: unknown[] = [sellerId];
   let statusFilter = '';
   if (opts?.status) {
     params.push(opts.status);
     statusFilter = ` AND o.status = $${params.length}`;
+  }
+  // Liquidación: MP se salda vía paid_to_seller_at, efectivo vía net_settled_at.
+  let settlementFilter = '';
+  if (opts?.settlement === 'pending') {
+    settlementFilter = ` AND o.status = 'paid' AND (
+      (o.payment_method = 'cash' AND a.net_settled_at IS NULL)
+      OR (o.payment_method != 'cash' AND a.paid_to_seller_at IS NULL)
+    )`;
+  } else if (opts?.settlement === 'settled') {
+    settlementFilter = ` AND o.status = 'paid' AND (
+      (o.payment_method = 'cash' AND a.net_settled_at IS NOT NULL)
+      OR (o.payment_method != 'cash' AND a.paid_to_seller_at IS NOT NULL)
+    )`;
   }
   const { rows } = await pool.query<SellerOrder>(
     `SELECT
@@ -262,7 +278,7 @@ export async function listSellerOrders(sellerId: number, opts?: { status?: strin
       WHERE a.seller_id = $1
         AND o.archived_at IS NULL
         AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
-        AND a.net_settled_at IS NULL ${statusFilter}
+        ${statusFilter}${settlementFilter}
       ORDER BY o.created_at DESC`,
     params,
   );

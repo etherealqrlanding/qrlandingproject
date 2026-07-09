@@ -115,7 +115,10 @@ adminSellersRouter.get('/:id/orders', async (req, res, next) => {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const rows = await listSellerOrders(id, { status });
+    const settlement = req.query.settlement === 'pending' || req.query.settlement === 'settled'
+      ? req.query.settlement
+      : undefined;
+    const rows = await listSellerOrders(id, { status, settlement });
     res.json({ data: rows });
   } catch (err) { next(err); }
 });

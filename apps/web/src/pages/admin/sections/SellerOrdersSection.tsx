@@ -13,9 +13,16 @@ const STATUS_OPTIONS = [
   { value: 'refunded', label: 'Reintegradas' },
 ];
 
+const SETTLEMENT_OPTIONS: { value: '' | 'pending' | 'settled'; label: string }[] = [
+  { value: '', label: 'Todas' },
+  { value: 'pending', label: 'Pendientes de liquidar' },
+  { value: 'settled', label: 'Ya rendidas' },
+];
+
 export default function SellerOrdersSection({ seller }: Props) {
   const [orders, setOrders] = useState<AdminSellerOrder[] | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('paid');
+  const [settlementFilter, setSettlementFilter] = useState<'' | 'pending' | 'settled'>('');
   const [error, setError] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
   const [processing, setProcessing] = useState(false);
@@ -23,7 +30,7 @@ export default function SellerOrdersSection({ seller }: Props) {
   const load = async () => {
     try {
       setError(null);
-      const data = await adminApi.sellers.orders(seller.id, statusFilter || undefined);
+      const data = await adminApi.sellers.orders(seller.id, statusFilter || undefined, settlementFilter || undefined);
       setOrders(data);
       setSelectedOrderIds([]);
     } catch (err) {
@@ -34,7 +41,7 @@ export default function SellerOrdersSection({ seller }: Props) {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seller.id, statusFilter]);
+  }, [seller.id, statusFilter, settlementFilter]);
 
   // Una orden está "pendiente de liquidar" según su método:
   //  - MP   → todavía no le pagamos la comisión al vendedor (paid_to_seller_at NULL)
@@ -116,10 +123,18 @@ export default function SellerOrdersSection({ seller }: Props) {
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-cream/60">Estado:</label>
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input max-w-xs">
             {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <label className="text-sm text-cream/60">Liquidación:</label>
+          <select
+            value={settlementFilter}
+            onChange={(e) => setSettlementFilter(e.target.value as '' | 'pending' | 'settled')}
+            className="input max-w-xs"
+          >
+            {SETTLEMENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
         {selectedOrderIds.length > 0 && (
@@ -174,7 +189,14 @@ export default function SellerOrdersSection({ seller }: Props) {
                 const selected = selectedOrderIds.includes(o.order_id);
                 const settledAt = o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at;
                 return (
-                  <tr key={o.order_id} className="border-t border-gold/5 hover:bg-gold/5 transition">
+                  <tr
+                    key={o.order_id}
+                    className={`border-t transition ${
+                      settledAt
+                        ? 'border-emerald-500/10 bg-emerald-500/[0.06] hover:bg-emerald-500/10'
+                        : 'border-gold/5 hover:bg-gold/5'
+                    }`}
+                  >
                     {pendingSettlementOrders.length > 0 && (
                       <td className="text-center py-3 px-3">
                         {canSelect && (
@@ -205,9 +227,9 @@ export default function SellerOrdersSection({ seller }: Props) {
                     </td>
                     <td className="py-3 px-4 text-center">
                       {settledAt ? (
-                        <span className="text-xs text-emerald-400">
+                        <span className="inline-flex flex-col items-center rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400">
                           ✓ {new Date(settledAt).toLocaleDateString()}
-                          <span className="block text-[10px] text-cream/40">{o.payment_method === 'cash' ? 'neto rendido' : 'comisión pagada'}</span>
+                          <span className="text-[10px] text-emerald-400/70">{o.payment_method === 'cash' ? 'neto rendido' : 'comisión pagada'}</span>
                         </span>
                       ) : o.status === 'paid' ? (
                         <span className="text-xs text-bordeaux-light">{o.payment_method === 'cash' ? 'Neto pendiente' : 'Pago pendiente'}</span>

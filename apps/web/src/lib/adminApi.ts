@@ -434,8 +434,11 @@ export const adminApi = {
         `/api/admin/sellers/${id}/permanent${opts?.force ? '?force=true' : ''}`,
         { method: 'DELETE' },
       ),
-    orders: (id: number, status?: string) => {
-      const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+    orders: (id: number, status?: string, settlement?: 'pending' | 'settled') => {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (settlement) params.set('settlement', settlement);
+      const qs = params.toString() ? `?${params.toString()}` : '';
       return request<AdminSellerOrder[]>(`/api/admin/sellers/${id}/orders${qs}`);
     },
     markCommissionsPaid: (id: number, orderIds: number[]) =>
