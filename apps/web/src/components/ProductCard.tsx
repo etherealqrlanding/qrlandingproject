@@ -19,44 +19,53 @@ export default function ProductCard({ product }: Props) {
   return (
     <Link
       to={`/shows/${product.slug}`}
-      className="group relative block aspect-[4/5] rounded-lg overflow-hidden border border-gold/10 bg-ink-soft transition hover:border-gold/40"
+      className="group block rounded-lg overflow-hidden border border-gold/10 bg-ink-soft transition hover:border-gold/40 sm:relative sm:aspect-[4/5]"
     >
-      {product.hero_image ? (
-        <img
-          src={product.hero_image}
-          alt={product.name}
-          loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover opacity-70 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-gradient-to-br from-bordeaux-deep to-ink" />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
-      <div className="absolute inset-x-0 bottom-0 p-5">
-        <p className="text-xs uppercase tracking-widest text-gold-soft">{product.venue_name}</p>
-        <h3 className="mt-1 font-display text-2xl text-cream leading-tight">{product.name}</h3>
-        {description && (
-          <p className="mt-2 text-sm text-cream/70 line-clamp-2">{description}</p>
+      {/* Foto: tira arriba en mobile (flujo normal, no se corta nada del texto), overlay completo desde sm+ */}
+      <div className="relative aspect-[4/3] sm:absolute sm:inset-0 sm:aspect-auto">
+        {product.hero_image ? (
+          <img
+            src={product.hero_image}
+            alt={product.name}
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover opacity-90 sm:opacity-70 transition duration-700 group-hover:scale-105 group-hover:opacity-90"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-bordeaux-deep to-ink" />
         )}
-        <div className="mt-4 flex items-center justify-between">
+        <div className="hidden sm:block absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
+      </div>
+
+      {/* Info: debajo de la foto en mobile, superpuesta abajo desde sm+ */}
+      <div className="p-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:p-5">
+        <p className="text-[10px] sm:text-xs uppercase tracking-widest text-gold-soft">{product.venue_name}</p>
+        <h3 className="mt-0.5 sm:mt-1 font-display text-lg sm:text-2xl text-cream leading-tight">
+          {product.name}
+        </h3>
+        {description && (
+          <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-cream/70 line-clamp-2">{description}</p>
+        )}
+        <div className="mt-2 sm:mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
           {product.starting_price_usd != null && (
-            <p className="text-sm text-cream/80">
+            <p className="text-xs sm:text-sm text-cream/80">
               <span className="text-cream/50">{t('product.from')}</span>{' '}
               <span className="text-gold font-medium">USD {product.starting_price_usd}</span>
               {startingArs != null && (
                 <>
                   <span className="text-cream/30 mx-1">·</span>
-                  <span className="text-gold font-medium">ARS {startingArs.toLocaleString('es-AR')}</span>
+                  <span className="text-gold font-medium">
+                    ARS {startingArs.toLocaleString('es-AR')}
+                  </span>
                 </>
               )}
             </p>
           )}
-          <span className="text-xs text-gold-soft group-hover:text-gold transition">
+          <span className="text-[11px] sm:text-xs text-gold-soft group-hover:text-gold transition">
             {t('product.view_more')} →
           </span>
         </div>
         {product.starting_price_usd != null && (
-          <p className="mt-2 text-[11px] leading-snug text-cream/40">
+          <p className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] leading-snug text-cream/40">
             {t('product.currency_notice')}
           </p>
         )}

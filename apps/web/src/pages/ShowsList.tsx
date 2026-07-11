@@ -36,8 +36,8 @@ export default function ShowsList() {
       )}
 
       {!products && !error && (
-        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[0, 1, 2].map((i) => (
+        <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+          {[0, 1, 2, 3].map((i) => (
             <div key={i} className="aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
           ))}
         </div>
@@ -48,7 +48,7 @@ export default function ShowsList() {
       )}
 
       {products && products.length > 0 && (
-        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {products.map((p) => (
             <ProductCard key={p.id} product={p} />
           ))}
