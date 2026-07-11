@@ -247,10 +247,10 @@ export default function Home() {
           </Link>
         </div>
 
-        <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {featured.length === 0
             ? [0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
+                <div key={i} className="aspect-[4/3] sm:aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
               ))
             : featured.map((p) => <ProductCard key={p.id} product={p} />)}
         </div>

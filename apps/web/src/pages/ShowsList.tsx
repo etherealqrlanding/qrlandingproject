@@ -38,7 +38,7 @@ export default function ShowsList() {
       {!products && !error && (
         <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
+            <div key={i} className="aspect-[4/3] sm:aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
           ))}
         </div>
       )}
