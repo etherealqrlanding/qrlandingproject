@@ -1,29 +1,57 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import RefBadge from '../components/RefBadge';
 import Logo from '../components/Logo';
 import ProductCard from '../components/ProductCard';
 import HeroSlideshow from '../components/HeroSlideshow';
+import QuickSelect from '../components/QuickSelect';
 import { api } from '../lib/api';
-import type { ProductSummary } from '../types/api';
+import { localized, localizedArray } from '../lib/i18nFields';
+import type { ProductDetail, ProductSummary } from '../types/api';
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+const HouseIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" aria-hidden>
+    <path d="M3 9.5L10 3.5L17 9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M5 8.5V16.5H15V8.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M8 16.5V12H12V16.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const ServiceIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5" aria-hidden>
+    <path d="M10 2.5L12.2 7.3L17.5 8L13.7 11.5L14.7 16.8L10 14.2L5.3 16.8L6.3 11.5L2.5 8L7.8 7.3L10 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+  </svg>
+);
 
 interface HeroStep {
   title: string;
   desc: string;
 }
 
+const HOUSES_CATEGORY = 'shows-de-tango';
+
 export default function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.resolvedLanguage;
+  const navigate = useNavigate();
   const [featured, setFeatured] = useState<ProductSummary[]>([]);
   const [heroImages, setHeroImages] = useState<string[]>([]);
+  const [houses, setHouses] = useState<ProductSummary[]>([]);
+  const [selectedHouseSlug, setSelectedHouseSlug] = useState('');
+  const [selectedHouseDetail, setSelectedHouseDetail] = useState<ProductDetail | null>(null);
   const steps = t('hero.steps', { returnObjects: true }) as HeroStep[];
 
   useEffect(() => {
     let cancelled = false;
-    api.products.list({ category: 'shows-de-tango' })
+    api.products.list({ category: HOUSES_CATEGORY })
       .then((rows) => {
         if (cancelled) return;
+        setHouses(rows);
         setFeatured(rows.slice(0, 6));
         setHeroImages(
           rows.map((r) => r.hero_image).filter((u): u is string => !!u).slice(0, 5),
@@ -32,6 +60,23 @@ export default function Home() {
       .catch(() => { /* silencioso en home; lo verán en /shows */ });
     return () => { cancelled = true; };
   }, []);
+
+  // Selector rápido del hero: primero se elige la casa, y recién ahí se cargan
+  // sus servicios (los "tiers" / product_options de esa casa) para elegir directo.
+  function handleHouseSelect(slug: string) {
+    setSelectedHouseSlug(slug);
+    setSelectedHouseDetail(null);
+    if (!slug) return;
+    api.products.bySlug(slug)
+      .then(setSelectedHouseDetail)
+      .catch(() => setSelectedHouseDetail(null));
+  }
+
+  function handleServiceSelect(optionId: string) {
+    if (optionId && selectedHouseSlug) {
+      navigate(`/shows/${selectedHouseSlug}?option=${optionId}`);
+    }
+  }
 
   return (
     <>
@@ -43,20 +88,70 @@ export default function Home() {
           aria-hidden
           className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,#c8a85a40,transparent_50%),radial-gradient(circle_at_80%_60%,#3a4d7355,transparent_55%)]"
         />
-        <div className="relative container-narrow pt-20 pb-28">
+        <div className="relative container-narrow pt-6 pb-16 md:pb-24 min-h-[85vh] flex flex-col items-center justify-center text-center">
           <RefBadge />
-          <Logo className="mt-8 h-28 md:h-36 w-auto" />
-          <p className="mt-8 text-xs uppercase tracking-[0.3em] text-gold-soft">
+          <Logo className="mt-2 h-14 md:h-16 w-auto" />
+          <p className="mt-3 text-xs uppercase tracking-[0.3em] text-gold-soft">
             {t('hero.eyebrow')}
           </p>
-          <h1 className="mt-4 font-display text-5xl md:text-7xl leading-[1.05] text-cream max-w-3xl">
+          <h1 className="mt-1.5 font-display text-3xl md:text-4xl leading-[1.05] text-cream max-w-3xl">
             {t('hero.title')}
           </h1>
-          <p className="mt-6 max-w-xl text-lg text-cream/70">
-            {t('hero.subtitle')}
-          </p>
-          <div className="mt-10 flex flex-wrap gap-3">
-            <Link to="/shows" className="btn-primary">{t('hero.cta_primary')}</Link>
+
+          <div className="mt-5 w-full max-w-3xl rounded-2xl border-2 border-gold/40 bg-ink-soft/80 backdrop-blur-sm p-5 md:p-7 shadow-2xl shadow-gold/10">
+            <p className="font-display text-xl md:text-2xl text-gold">
+              {t('hero.quick_select.label')}
+            </p>
+            <p className="mt-1 text-sm text-cream/60">
+              {t('hero.quick_select.subtitle')}
+            </p>
+
+            <div className="mt-4 grid sm:grid-cols-2 gap-4 text-left">
+              <QuickSelect
+                label={t('hero.quick_select.group_houses')}
+                icon={HouseIcon}
+                placeholder={t('hero.quick_select.placeholder_house')}
+                value={selectedHouseSlug}
+                onChange={handleHouseSelect}
+                options={houses.map((p) => {
+                  const services = localizedArray(p, 'option_names', lang);
+                  return {
+                    value: p.slug,
+                    label: p.name,
+                    sublabel: services.length > 0 ? truncate(services.join(' · '), 46) : undefined,
+                  };
+                })}
+              />
+
+              <QuickSelect
+                label={t('hero.quick_select.group_services')}
+                icon={ServiceIcon}
+                placeholder={
+                  !selectedHouseSlug
+                    ? t('hero.quick_select.placeholder_service_locked')
+                    : !selectedHouseDetail
+                    ? t('hero.quick_select.loading')
+                    : t('hero.quick_select.placeholder_service')
+                }
+                value=""
+                onChange={handleServiceSelect}
+                disabled={!selectedHouseDetail}
+                loading={Boolean(selectedHouseSlug) && !selectedHouseDetail}
+                options={(selectedHouseDetail?.options ?? []).map((opt) => {
+                  const description = localized(opt, 'description', lang);
+                  const price = t('hero.quick_select.price', { price: opt.price_adult_usd });
+                  return {
+                    value: String(opt.id),
+                    label: localized(opt, 'name', lang) ?? '',
+                    sublabel: description ? `${truncate(description, 42)} · ${price}` : price,
+                  };
+                })}
+              />
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link to="/shows" className="btn-ghost">{t('hero.cta_primary')}</Link>
             <a
               href="https://wa.me/5491132368312"
               target="_blank"
@@ -68,7 +163,7 @@ export default function Home() {
           </div>
 
           {/* Cómo funciona: guía para el cliente que recién llega por el QR del vendedor */}
-          <div className="mt-16 rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 md:p-8">
+          <div className="mt-16 w-full text-left rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 md:p-8">
             <p className="font-display text-2xl text-cream">{t('hero.how_title')}</p>
             <p className="mt-1 text-sm text-cream/60 max-w-2xl">{t('hero.how_subtitle')}</p>
 

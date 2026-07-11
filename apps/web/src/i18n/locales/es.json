@@ -37,6 +37,18 @@
     "subtitle": "Cenas, shows y experiencias en las 14 casas de tango más emblemáticas de la ciudad. Reservas en minutos, traslado incluido.",
     "cta_primary": "Ver experiencias",
     "cta_secondary": "Hablar por WhatsApp",
+    "quick_select": {
+      "label": "Reservá en un click",
+      "subtitle": "Elegí una casa de tango o un servicio y vas directo a la reserva.",
+      "group_houses": "Casa de Tango",
+      "group_services": "Servicio",
+      "placeholder_house": "Elegí una casa…",
+      "placeholder_service": "Elegí un servicio…",
+      "placeholder_service_locked": "Primero elegí una casa",
+      "loading": "Cargando…",
+      "from_price": "Desde USD {{price}}",
+      "price": "USD {{price}} por adulto"
+    },
     "how_title": "Cómo reservás, paso a paso",
     "how_subtitle": "Llegaste recomendado: en pocos minutos elegís y asegurás tu noche de tango.",
     "steps": [

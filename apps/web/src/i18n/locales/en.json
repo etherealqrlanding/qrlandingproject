@@ -37,6 +37,18 @@
     "subtitle": "Dinners, shows and experiences in the 14 most iconic tango houses of the city. Book in minutes, transfer included.",
     "cta_primary": "Explore experiences",
     "cta_secondary": "Chat on WhatsApp",
+    "quick_select": {
+      "label": "Book in one click",
+      "subtitle": "Choose a tango house or a service and go straight to booking.",
+      "group_houses": "Tango House",
+      "group_services": "Service",
+      "placeholder_house": "Choose a house…",
+      "placeholder_service": "Choose a service…",
+      "placeholder_service_locked": "Choose a house first",
+      "loading": "Loading…",
+      "from_price": "From USD {{price}}",
+      "price": "USD {{price}} per adult"
+    },
     "how_title": "How to book, step by step",
     "how_subtitle": "You arrived through a recommendation: in just a few minutes you choose and secure your tango night.",
     "steps": [

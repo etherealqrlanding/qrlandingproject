@@ -54,6 +54,9 @@ export default function App() {
   const isActionRoute = location.pathname.startsWith('/accion/');
 
   useEffect(() => {
+    // Si venimos del selector rápido de la home con un servicio elegido (?option=),
+    // no reseteamos el scroll: ProductPage lleva la vista directo a ese servicio.
+    if (new URLSearchParams(location.search).has('option')) return;
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [location.pathname]);
 

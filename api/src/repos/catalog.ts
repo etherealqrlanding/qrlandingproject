@@ -31,14 +31,28 @@ export async function listProducts(opts?: { categorySlug?: string }): Promise<Pr
           WHERE pi.product_id = p.id
           ORDER BY pi.is_hero DESC, pi.display_order
           LIMIT 1
-       ) AS hero_image
+       ) AS hero_image,
+       (
+         SELECT array_agg(po.name_es ORDER BY po.display_order)
+           FROM product_options po
+          WHERE po.product_id = p.id AND po.is_active = TRUE
+       ) AS option_names_es,
+       (
+         SELECT array_agg(po.name_en ORDER BY po.display_order)
+           FROM product_options po
+          WHERE po.product_id = p.id AND po.is_active = TRUE
+       ) AS option_names_en
        FROM products p
        JOIN categories c ON c.id = p.category_id
       WHERE ${where.join(' AND ')}
       ORDER BY p.display_order, p.name`,
     params,
   );
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    option_names_es: r.option_names_es ?? [],
+    option_names_en: r.option_names_en ?? [],
+  }));
 }
 
 export async function getProductBySlug(slug: string): Promise<ProductDetail | null> {

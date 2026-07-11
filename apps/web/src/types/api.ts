@@ -52,6 +52,8 @@ export interface ProductSummary {
   short_description_en: string | null;
   starting_price_usd: number | null;
   hero_image: string | null;
+  option_names_es: string[];
+  option_names_en: string[];
 }
 
 export interface ProductDetail extends ProductSummary {

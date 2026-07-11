@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type SellerPublicInfo } from '../lib/api';
 import type { ProductDetail, ProductOption } from '../types/api';
@@ -12,6 +12,8 @@ import { useExchangeRate } from '../lib/useExchangeRate';
 
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
+  const [searchParams] = useSearchParams();
+  const requestedOptionId = searchParams.get('option');
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
 
@@ -42,11 +44,31 @@ export default function ProductPage() {
       .then((p) => {
         if (cancelled) return;
         setProduct(p);
-        setSelectedOptionId(p.options[0]?.id ?? null);
+        const requested = requestedOptionId
+          ? p.options.find((o) => String(o.id) === requestedOptionId)
+          : null;
+        setSelectedOptionId((requested ?? p.options[0])?.id ?? null);
       })
       .catch((err: Error) => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [slug]);
+  }, [slug, requestedOptionId]);
+
+  // Vino del selector rápido de la home: una vez que el producto está renderizado
+  // (recién ahí existe #product-options en el DOM) hacemos scroll al servicio elegido.
+  useEffect(() => {
+    if (!product || !requestedOptionId) return;
+    const hasRequested = product.options.some((o) => String(o.id) === requestedOptionId);
+    if (!hasRequested) return;
+    // Doble rAF: esperamos a que el navegador termine de pintar el layout real
+    // (imágenes, secciones) antes de calcular la posición del scroll.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const target = document.getElementById(`product-option-${requestedOptionId}`)
+          ?? document.getElementById('product-options');
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }, [product, requestedOptionId]);
 
 
   if (error) {
@@ -112,7 +134,7 @@ export default function ProductPage() {
             </section>
           )}
 
-          <section className="mt-12">
+          <section id="product-options" className="mt-12 scroll-mt-24">
             <h2 className="font-display text-3xl text-cream">{t('product.options_title')}</h2>
             <p className="mt-2 text-cream/60 text-sm">{t('product.options_subtitle')}</p>
 
@@ -181,6 +203,7 @@ function OptionCard({
 
   return (
     <div
+      id={`product-option-${option.id}`}
       role="button"
       tabIndex={0}
       aria-pressed={selected}
