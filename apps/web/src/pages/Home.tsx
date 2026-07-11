@@ -6,8 +6,10 @@ import Logo from '../components/Logo';
 import ProductCard from '../components/ProductCard';
 import HeroSlideshow from '../components/HeroSlideshow';
 import QuickSelect from '../components/QuickSelect';
+import PaymentMethods from '../components/PaymentMethods';
 import { api } from '../lib/api';
 import { localized, localizedArray } from '../lib/i18nFields';
+import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
 import type { ProductDetail, ProductSummary } from '../types/api';
 
 function truncate(text: string, max: number): string {
@@ -28,6 +30,22 @@ const ServiceIcon = (
   </svg>
 );
 
+const DinnerIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-3 w-3" aria-hidden>
+    <path d="M5 2.5v5.5a1.5 1.5 0 003 0V2.5M6.5 2.5V18" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M14.5 2.5c-1.4 0-2.5 1.6-2.5 4s1.1 3.2 2 3.6V18" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const TransferIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-3 w-3" aria-hidden>
+    <path d="M2 12.5V7a1 1 0 011-1h9l3 3.5h2a1 1 0 011 1v2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M2 12.5h16" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="6" cy="14.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+    <circle cx="15" cy="14.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+);
+
 interface HeroStep {
   title: string;
   desc: string;
@@ -39,6 +57,7 @@ export default function Home() {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const navigate = useNavigate();
+  const exchangeRate = useExchangeRate();
   const [featured, setFeatured] = useState<ProductSummary[]>([]);
   const [heroImages, setHeroImages] = useState<string[]>([]);
   const [houses, setHouses] = useState<ProductSummary[]>([]);
@@ -115,10 +134,19 @@ export default function Home() {
                 onChange={handleHouseSelect}
                 options={houses.map((p) => {
                   const services = localizedArray(p, 'option_names', lang);
+                  const shortDesc = localized(p, 'short_description', lang);
+                  // Mostramos siempre la lista completa de servicios de la casa (no un conteo),
+                  // compacta y con quiebre de línea en vez de cortarse con "...".
+                  const meta = services.length > 0
+                    ? services.join(' · ')
+                    : (shortDesc ? truncate(shortDesc, 90) : undefined);
                   return {
                     value: p.slug,
                     label: p.name,
-                    sublabel: services.length > 0 ? truncate(services.join(' · '), 46) : undefined,
+                    price: p.starting_price_usd != null
+                      ? t('hero.quick_select.from_price', { price: p.starting_price_usd })
+                      : undefined,
+                    meta,
                   };
                 })}
               />
@@ -139,11 +167,19 @@ export default function Home() {
                 loading={Boolean(selectedHouseSlug) && !selectedHouseDetail}
                 options={(selectedHouseDetail?.options ?? []).map((opt) => {
                   const description = localized(opt, 'description', lang);
-                  const price = t('hero.quick_select.price', { price: opt.price_adult_usd });
+                  const tags: { icon: typeof DinnerIcon; label: string }[] = [];
+                  if (opt.has_dinner) tags.push({ icon: DinnerIcon, label: t('hero.quick_select.tag_dinner') });
+                  if (opt.has_transfer) tags.push({ icon: TransferIcon, label: t('hero.quick_select.tag_transfer') });
+                  const usdPrice = t('hero.quick_select.price_badge', { price: opt.price_adult_usd });
+                  const price = exchangeRate != null
+                    ? `${usdPrice} · ${fmtArs(opt.price_adult_usd * exchangeRate)}`
+                    : usdPrice;
                   return {
                     value: String(opt.id),
                     label: localized(opt, 'name', lang) ?? '',
-                    sublabel: description ? `${truncate(description, 42)} · ${price}` : price,
+                    price,
+                    tags,
+                    meta: description ? truncate(description, 70) : undefined,
                   };
                 })}
               />
@@ -161,6 +197,8 @@ export default function Home() {
               {t('hero.cta_secondary')}
             </a>
           </div>
+
+          <PaymentMethods variant="compact" className="mt-6" />
 
           {/* Cómo funciona: guía para el cliente que recién llega por el QR del vendedor */}
           <div className="mt-16 w-full text-left rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 md:p-8">

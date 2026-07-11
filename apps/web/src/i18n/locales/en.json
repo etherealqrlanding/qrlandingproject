@@ -47,7 +47,10 @@
       "placeholder_service_locked": "Choose a house first",
       "loading": "Loading…",
       "from_price": "From USD {{price}}",
-      "price": "USD {{price}} per adult"
+      "price": "USD {{price}} per adult",
+      "price_badge": "USD {{price}}",
+      "tag_dinner": "Dinner",
+      "tag_transfer": "Transfer"
     },
     "how_title": "How to book, step by step",
     "how_subtitle": "You arrived through a recommendation: in just a few minutes you choose and secure your tango night.",
@@ -82,7 +85,7 @@
     "your_selection": "Your selection",
     "book_cta": "Book now",
     "book_option": "Book this option",
-    "secure_payment": "Secure payment with Mercado Pago",
+    "secure_payment": "100% secure payment with Mercado Pago: credit card, debit or account balance. PIX coming soon.",
     "back_to_list": "Back to list",
     "error": "We couldn't load this experience",
     "currency_notice": "Charges will be processed in Argentine Pesos (ARS) at the exchange rate determined by the operator.",
@@ -146,6 +149,14 @@
     "order_not_found": "We couldn't find the order. Check your email or contact us.",
     "back_to_shows": "Browse more shows",
     "back_home": "Back home"
+  },
+  "payment_methods": {
+    "secure_note": "100% secure payments",
+    "mp_credit": "Credit",
+    "mp_debit": "Debit",
+    "mp_wallet": "Mercado Pago balance",
+    "mp_types_short": "Credit, debit and account balance",
+    "pix_soon": "Coming soon"
   },
   "categories": {
     "shows": "Tango Shows",

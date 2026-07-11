@@ -47,7 +47,10 @@
       "placeholder_service_locked": "Escolha uma casa primeiro",
       "loading": "Carregando…",
       "from_price": "A partir de USD {{price}}",
-      "price": "USD {{price}} por adulto"
+      "price": "USD {{price}} por adulto",
+      "price_badge": "USD {{price}}",
+      "tag_dinner": "Jantar",
+      "tag_transfer": "Translado"
     },
     "how_title": "Como reservar, passo a passo",
     "how_subtitle": "Você chegou por indicação: em poucos minutos você escolhe e garante sua noite de tango.",
@@ -82,7 +85,7 @@
     "your_selection": "Sua escolha",
     "book_cta": "Reservar agora",
     "book_option": "Reservar esta opção",
-    "secure_payment": "Pagamento seguro com Mercado Pago",
+    "secure_payment": "Pagamento 100% seguro com Mercado Pago: cartão de crédito, débito ou saldo em conta. PIX em breve.",
     "back_to_list": "Voltar à lista",
     "error": "Não foi possível carregar este serviço",
     "currency_notice": "Os valores serão processados em pesos argentinos (ARS) e convertidos pela taxa de câmbio que o operador determinar.",
@@ -146,6 +149,14 @@
     "order_not_found": "Não foi possível encontrar o pedido. Verifique seu e-mail ou fale conosco.",
     "back_to_shows": "Ver outros shows",
     "back_home": "Voltar ao início"
+  },
+  "payment_methods": {
+    "secure_note": "Pagamentos 100% seguros",
+    "mp_credit": "Crédito",
+    "mp_debit": "Débito",
+    "mp_wallet": "Saldo em conta Mercado Pago",
+    "mp_types_short": "Crédito, débito e saldo em conta",
+    "pix_soon": "Em breve"
   },
   "categories": {
     "shows": "Shows de Tango",

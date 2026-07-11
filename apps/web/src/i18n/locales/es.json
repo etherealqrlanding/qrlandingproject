@@ -47,7 +47,10 @@
       "placeholder_service_locked": "Primero elegí una casa",
       "loading": "Cargando…",
       "from_price": "Desde USD {{price}}",
-      "price": "USD {{price}} por adulto"
+      "price": "USD {{price}} por adulto",
+      "price_badge": "USD {{price}}",
+      "tag_dinner": "Cena",
+      "tag_transfer": "Traslado"
     },
     "how_title": "Cómo reservás, paso a paso",
     "how_subtitle": "Llegaste recomendado: en pocos minutos elegís y asegurás tu noche de tango.",
@@ -82,7 +85,7 @@
     "your_selection": "Tu elección",
     "book_cta": "Reservar ahora",
     "book_option": "Reservar esta opción",
-    "secure_payment": "Pago seguro con Mercado Pago",
+    "secure_payment": "Pago 100% seguro con Mercado Pago: tarjeta de crédito, débito o dinero en cuenta. PIX próximamente.",
     "back_to_list": "Volver al listado",
     "error": "No pudimos cargar este servicio",
     "currency_notice": "Los cargos se procesarán en pesos argentinos (ARS) y serán convertidos al tipo de cambio que determine el operador.",
@@ -146,6 +149,14 @@
     "order_not_found": "No pudimos encontrar la orden. Verificá tu email o contactanos.",
     "back_to_shows": "Ver otros shows",
     "back_home": "Volver al inicio"
+  },
+  "payment_methods": {
+    "secure_note": "Pagos 100% seguros",
+    "mp_credit": "Crédito",
+    "mp_debit": "Débito",
+    "mp_wallet": "Dinero en cuenta MP",
+    "mp_types_short": "Crédito, débito y dinero en cuenta",
+    "pix_soon": "Próximamente"
   },
   "categories": {
     "shows": "Shows de Tango",

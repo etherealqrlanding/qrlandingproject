@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, type SellerPublicInfo } from '../lib/api';
 import { clearRef } from '../lib/referral';
+import PaymentMethods from './PaymentMethods';
 
 interface Props {
   code: string;
@@ -166,6 +167,9 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
                   </div>
                 ))}
               </div>
+
+              {/* Medios de pago */}
+              <PaymentMethods variant="detailed" className="mb-6" />
 
               {/* CTA */}
               <button

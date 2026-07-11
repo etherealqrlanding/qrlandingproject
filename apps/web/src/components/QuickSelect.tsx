@@ -4,7 +4,12 @@ import { Listbox, ListboxButton, ListboxLabel, ListboxOption, ListboxOptions } f
 export interface QuickSelectOption {
   value: string;
   label: string;
-  sublabel?: string;
+  /** Precio corto alineado a la derecha del nombre, ej. "USD 63". */
+  price?: string;
+  /** Chips ícono + palabra (ej. "Cena", "Traslado") — no emojis. */
+  tags?: { icon: ReactNode; label: string }[];
+  /** Línea secundaria compacta (servicios de la casa, descripción del servicio). Hace quiebre de línea, no se corta. */
+  meta?: string;
 }
 
 interface QuickSelectProps {
@@ -77,10 +82,27 @@ export default function QuickSelect({
             >
               {({ selected: isSelected }) => (
                 <>
-                  <span className="truncate">
-                    <span className="font-medium">{opt.label}</span>
-                    {opt.sublabel && (
-                      <span className="block truncate text-xs text-cream/50">{opt.sublabel}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate font-medium">{opt.label}</span>
+                      {opt.price && (
+                        <span className="shrink-0 text-right text-[11px] font-medium leading-tight text-gold/90">
+                          {opt.price}
+                        </span>
+                      )}
+                    </span>
+                    {opt.tags && opt.tags.length > 0 && (
+                      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        {opt.tags.map((tag, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 text-[11px] text-cream/60">
+                            <span className="shrink-0 text-gold/70">{tag.icon}</span>
+                            {tag.label}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {opt.meta && (
+                      <span className="mt-0.5 block text-[11px] leading-snug text-cream/50">{opt.meta}</span>
                     )}
                   </span>
                   {isSelected && (

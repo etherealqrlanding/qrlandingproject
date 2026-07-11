@@ -10,6 +10,13 @@ import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
+const PixIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0" aria-hidden>
+    <path d="M10 2L18 10L10 18L2 10Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    <circle cx="10" cy="10" r="2" fill="currentColor" />
+  </svg>
+);
+
 export default function ProductPage() {
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
@@ -316,9 +323,20 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full"
+            className="btn-primary w-full gap-2"
           >
+            <img src="/mercadopagolog.png" alt="" className="h-5 w-5 shrink-0" />
             {t('checkout.pay_with_mp')}
+          </button>
+          <button
+            type="button"
+            disabled
+            title={t('payment_methods.pix_soon')}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/25 bg-[#32BCAD]/5 px-6 py-3 text-sm font-medium text-cream/40 cursor-not-allowed"
+          >
+            {PixIcon}
+            PIX
+            <span className="text-[10px] uppercase tracking-wide text-cream/30">({t('payment_methods.pix_soon')})</span>
           </button>
           <button
             type="button"
@@ -334,9 +352,20 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full mt-4"
+            className="btn-primary w-full mt-4 gap-2"
           >
+            <img src="/mercadopagolog.png" alt="" className="h-5 w-5 shrink-0" />
             {t('product.book_cta')}
+          </button>
+          <button
+            type="button"
+            disabled
+            title={t('payment_methods.pix_soon')}
+            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/25 bg-[#32BCAD]/5 px-6 py-3 text-sm font-medium text-cream/40 cursor-not-allowed"
+          >
+            {PixIcon}
+            PIX
+            <span className="text-[10px] uppercase tracking-wide text-cream/30">({t('payment_methods.pix_soon')})</span>
           </button>
           <p className="mt-2 text-xs text-cream/40 text-center">{t('product.secure_payment')}</p>
         </>
