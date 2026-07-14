@@ -167,7 +167,7 @@ export async function createCashAddonForOrder(params: {
     adults: number; children: number;
     unit_price_adult_usd: number; unit_price_child_usd: number | null;
     subtotal_usd: number; transfer_requested: boolean;
-    seller_id: number | null;
+    seller_id: number | null; net_settled_at: string | null;
   }>(
     `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
             o.exchange_rate_used::float AS exchange_rate_used,
@@ -178,7 +178,7 @@ export async function createCashAddonForOrder(params: {
             oi.unit_price_adult_usd::float AS unit_price_adult_usd,
             oi.unit_price_child_usd::float AS unit_price_child_usd,
             oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
-            a.seller_id
+            a.seller_id, a.net_settled_at
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
        JOIN product_options po ON po.id = oi.option_id
@@ -198,6 +198,10 @@ export async function createCashAddonForOrder(params: {
   }
   if (row.status !== 'paid' && row.status !== 'pending') {
     return { ok: false, httpStatus: 400, error: `No se puede ampliar una reserva en estado ${row.status}` };
+  }
+  // Una vez rendida al operador, la orden queda bloqueada para ampliar (igual que reduce-cash).
+  if (row.net_settled_at) {
+    return { ok: false, httpStatus: 409, error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' };
   }
 
   const snap: OrderIncreaseSnapshot = {

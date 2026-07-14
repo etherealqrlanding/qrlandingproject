@@ -8,7 +8,7 @@ import {
 import { config } from '../../config.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
-import { sendSellerPortalInvite, sendSellerPasswordReset } from '../../services/email.js';
+import { sendSellerPortalInvite, sendSellerPasswordReset, sendSellerCommissionPaid, sendNetSettledConfirmation } from '../../services/email.js';
 import { createCommissionPaidNotification, createNetSettledNotification } from '../../repos/notifications.js';
 
 export const adminSellersRouter = Router();
@@ -137,20 +137,36 @@ adminSellersRouter.post('/:id/commissions/mark-paid', async (req, res, next) => 
     const updated = await markCommissionsPaid(id, parsed.data.order_ids);
 
     if (updated > 0) {
-      // Sumar comisiones en ARS recién marcadas para la notificación in-app
-      const { rows: sumRows } = await pool.query<{ total: string }>(
-        `SELECT SUM(a.commission_amount_ars)::text AS total
+      // Sumar comisiones (ARS y USD) recién marcadas para la notificación in-app y el email
+      const { rows: sumRows } = await pool.query<{ total_ars: string; total_usd: string }>(
+        `SELECT SUM(a.commission_amount_ars)::text AS total_ars,
+                SUM(a.commission_amount_usd)::text AS total_usd
            FROM order_attributions a
           WHERE a.seller_id = $1
             AND a.order_id = ANY($2::int[])
             AND a.paid_to_seller_at IS NOT NULL`,
         [id, parsed.data.order_ids],
       );
-      const totalArs = parseFloat(sumRows[0]?.total ?? '0');
+      const totalArs = parseFloat(sumRows[0]?.total_ars ?? '0');
+      const totalUsd = parseFloat(sumRows[0]?.total_usd ?? '0');
 
       // Notificación in-app (fire-and-forget)
       createCommissionPaidNotification(id, parsed.data.order_ids, totalArs)
         .catch((e) => console.error('[notif] createCommissionPaidNotification failed:', e));
+
+      // Email al vendedor + copia al admin, informando que se confirmó el pago.
+      const seller = await getSeller(id);
+      if (seller?.contact_email) {
+        sendSellerCommissionPaid({
+          sellerId: id,
+          sellerName: seller.name,
+          sellerEmail: seller.contact_email,
+          ordersCount: updated,
+          totalCommissionUsd: totalUsd,
+          totalCommissionArs: totalArs,
+          portalUrl: `${config.WEB_ORIGIN}/seller/ventas`,
+        }).catch((e) => console.error('[email] sendSellerCommissionPaid failed:', e));
+      }
     }
 
     res.json({ data: { updated } });
@@ -183,6 +199,19 @@ adminSellersRouter.post('/:id/net-settlements/mark-settled', async (req, res, ne
       const totalNetArs = parseFloat(sumRows[0]?.total ?? '0');
       createNetSettledNotification(id, parsed.data.order_ids, totalNetArs)
         .catch((e) => console.error('[notif] createNetSettledNotification failed:', e));
+
+      // Email al vendedor + copia al admin, confirmando que la rendición en efectivo llegó.
+      const seller = await getSeller(id);
+      if (seller?.contact_email) {
+        sendNetSettledConfirmation({
+          sellerId: id,
+          sellerName: seller.name,
+          sellerEmail: seller.contact_email,
+          ordersCount: updated,
+          totalNetArs,
+          portalUrl: `${config.WEB_ORIGIN}/seller/ventas`,
+        }).catch((e) => console.error('[email] sendNetSettledConfirmation failed:', e));
+      }
     }
 
     res.json({ data: { updated } });

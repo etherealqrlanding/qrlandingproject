@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
-import { getExchangeRate, setExchangeRate, getSameDayCutoff, setSameDayCutoff, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode } from '../../services/settings.js';
+import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays } from '../../services/settings.js';
+import { fetchOficialVentaRate } from '../../services/exchangeRateSync.js';
 import { getAbout, setAbout, getFaq, setFaq, getSellerFaq, setSellerFaq } from '../../services/content.js';
 
 export const adminSettingsRouter = Router();
@@ -22,6 +23,41 @@ adminSettingsRouter.put('/exchange-rate', async (req, res, next) => {
     await setExchangeRate(parsed.data.rate);
     const current = await getExchangeRate();
     res.json({ data: { rate: current } });
+  } catch (err) { next(err); }
+});
+
+// ─── Modo de tipo de cambio: automático (dolarapi.com, oficial) o manual ───
+const rateModeSchema = z.object({ mode: z.enum(['auto', 'manual']) });
+
+adminSettingsRouter.get('/exchange-rate-mode', async (_req, res, next) => {
+  try {
+    res.json({ data: { mode: await getExchangeRateMode() } });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/exchange-rate-mode', async (req, res, next) => {
+  try {
+    const parsed = rateModeSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await setExchangeRateMode(parsed.data.mode);
+    // Al activar "auto" refrescamos ya mismo — no tiene sentido dejar el valor viejo
+    // hasta el próximo barrido de hasta 30 minutos.
+    if (parsed.data.mode === 'auto') {
+      const rate = await fetchOficialVentaRate();
+      await setExchangeRateFromAuto(rate);
+    }
+    res.json({ data: { rate: await getExchangeRate(), mode: await getExchangeRateMode() } });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.post('/exchange-rate/sync-now', async (_req, res, next) => {
+  try {
+    if ((await getExchangeRateMode()) !== 'auto') {
+      return res.status(400).json({ error: 'El tipo de cambio está en modo manual. Activá "automático" para poder sincronizar.' });
+    }
+    const rate = await fetchOficialVentaRate();
+    await setExchangeRateFromAuto(rate);
+    res.json({ data: { rate: await getExchangeRate(), mode: await getExchangeRateMode() } });
   } catch (err) { next(err); }
 });
 
@@ -75,6 +111,24 @@ adminSettingsRouter.put('/cancel-window', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     await setCancelWindow(parsed.data.hours);
     res.json({ data: { hours: await getCancelWindow() } });
+  } catch (err) { next(err); }
+});
+
+// ─── Retención en tabla principal antes del auto-archivado ───
+const archiveRetentionSchema = z.object({ days: z.number().int().min(1).max(365).nullable() });
+
+adminSettingsRouter.get('/archive-retention', async (_req, res, next) => {
+  try {
+    res.json({ data: { days: await getArchiveRetentionDays() } });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/archive-retention', async (req, res, next) => {
+  try {
+    const parsed = archiveRetentionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await setArchiveRetentionDays(parsed.data.days);
+    res.json({ data: { days: await getArchiveRetentionDays() } });
   } catch (err) { next(err); }
 });
 

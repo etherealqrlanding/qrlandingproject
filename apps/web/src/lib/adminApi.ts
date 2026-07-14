@@ -566,6 +566,17 @@ export const adminApi = {
         method: 'PUT',
         body: JSON.stringify({ rate }),
       }),
+    getExchangeRateMode: () =>
+      request<{ mode: 'auto' | 'manual' }>('/api/admin/settings/exchange-rate-mode'),
+    updateExchangeRateMode: (mode: 'auto' | 'manual') =>
+      request<{ rate: number; mode: 'auto' | 'manual' }>('/api/admin/settings/exchange-rate-mode', {
+        method: 'PUT',
+        body: JSON.stringify({ mode }),
+      }),
+    syncExchangeRateNow: () =>
+      request<{ rate: number; mode: 'auto' | 'manual' }>('/api/admin/settings/exchange-rate/sync-now', {
+        method: 'POST',
+      }),
     getBookingCutoff: () =>
       request<{ time: string | null }>('/api/admin/settings/booking-cutoff'),
     updateBookingCutoff: (time: string | null) =>
@@ -584,6 +595,12 @@ export const adminApi = {
     updateCancelWindow: (hours: number | null) =>
       request<{ hours: number | null }>('/api/admin/settings/cancel-window', {
         method: 'PUT', body: JSON.stringify({ hours }),
+      }),
+    getArchiveRetention: () =>
+      request<{ days: number | null }>('/api/admin/settings/archive-retention'),
+    updateArchiveRetention: (days: number | null) =>
+      request<{ days: number | null }>('/api/admin/settings/archive-retention', {
+        method: 'PUT', body: JSON.stringify({ days }),
       }),
     getAbout: () => request<AboutContent>('/api/admin/settings/content/about'),
     updateAbout: (input: Omit<AboutContent, 'updated_at'>) =>

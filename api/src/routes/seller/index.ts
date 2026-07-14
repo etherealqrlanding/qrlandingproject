@@ -6,10 +6,10 @@ import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications } from '../../services/email.js';
+import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail } from '../../services/email.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
-import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
+import { createCashAddonForOrder } from '../../services/orderAddon.js';
 import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon } from '../../repos/addons.js';
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
@@ -87,10 +87,14 @@ sellerRouter.get('/me', async (req, res, next) => {
        LEFT JOIN LATERAL (
          SELECT
            COUNT(*) FILTER (WHERE o.status = 'paid') AS orders_paid,
-           SUM(o.total_usd) FILTER (WHERE o.status = 'paid') AS revenue_paid_usd,
-           SUM(o.total_ars) FILTER (WHERE o.status = 'paid') AS revenue_paid_ars,
-           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid') AS commission_earned_usd,
-           SUM(a.commission_amount_ars) FILTER (WHERE o.status = 'paid') AS commission_earned_ars,
+           -- Facturación y comisión: SOLO Mercado Pago. En efectivo (pago manual) el
+           -- vendedor cobra el monto que decide y no lo trazamos: solo nos importa el
+           -- neto a rendir (net_pending_settlement, abajo). Ver migración 016 / feature
+           -- de monto abierto en efectivo.
+           SUM(o.total_usd) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS revenue_paid_usd,
+           SUM(o.total_ars) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS revenue_paid_ars,
+           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS commission_earned_usd,
+           SUM(a.commission_amount_ars) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS commission_earned_ars,
            -- MP: comisión que ya te liquidamos
            SUM(a.commission_amount_usd) FILTER (
              WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NOT NULL
@@ -133,7 +137,9 @@ sellerRouter.get('/me/orders', async (req, res, next) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const rows = await listSellerOrders(req.seller!.sellerId, { status });
-    res.json({ data: rows });
+    // El vendedor no ve links de Mercado Pago (ni para vender ni para reenviar).
+    const sanitized = rows.map(({ mp_init_point: _mp_init_point, ...rest }) => rest);
+    res.json({ data: sanitized });
   } catch (err) { next(err); }
 });
 
@@ -370,13 +376,15 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     await setOrderPreferenceId(order.id, pref.id, pref.init_point);
     await logPaymentEvent(order.id, 'preference_created_by_seller', pref.id, { init_point: pref.init_point });
 
+    // El vendedor no ve ni reenvía el link de MP — se lo mandamos al cliente por email.
+    sendPaymentLinkEmail(order.id, pref.init_point).catch((err) =>
+      console.error('[email] sendPaymentLinkEmail failed for seller order', order.id, err),
+    );
+
     res.json({
       data: {
         order_public_id: order.public_id,
         payment_method: 'mercadopago',
-        preference_id: pref.id,
-        init_point: pref.init_point,
-        sandbox_init_point: pref.sandbox_init_point,
         total_usd: subtotalUsd,
         total_ars: totalArs,
       },
@@ -523,7 +531,9 @@ sellerRouter.get('/me/orders/:publicId/addons', async (req, res, next) => {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
     const addons = await listPendingAddonsByOrderPublicId(publicId, req.seller!.sellerId);
-    res.json({ data: addons });
+    // El vendedor no ve links de Mercado Pago de ampliaciones tampoco.
+    const sanitized = addons.map(({ mp_init_point: _mp_init_point, ...rest }) => rest);
+    res.json({ data: sanitized });
   } catch (err) { next(err); }
 });
 
@@ -671,29 +681,12 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-// POST /api/seller/me/orders/:publicId/add-mp — el vendedor genera un link incremental
-// de MP para sumar pasajeros a una reserva SUYA pagada por MP. El link es para el pasajero.
-const sellerAddMpSchema = z.object({
-  adults: z.number().int().min(1).max(20),
-  children: z.number().int().min(0).max(20),
-});
-
-sellerRouter.post('/me/orders/:publicId/add-mp', async (req, res, next) => {
-  try {
-    const publicId = req.params.publicId;
-    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
-    const parsed = sellerAddMpSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
-
-    const result = await createAddonForOrder({
-      orderPublicId: publicId,
-      adults: parsed.data.adults,
-      children: parsed.data.children,
-      restrictSellerId: req.seller!.sellerId,
-    });
-    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
-    res.json({ data: result.data });
-  } catch (err) { next(err); }
+// POST /api/seller/me/orders/:publicId/add-mp — deshabilitado: el vendedor no opera
+// sobre órdenes de Mercado Pago. El admin gestiona los links de diferencia.
+sellerRouter.post('/me/orders/:publicId/add-mp', async (_req, res) => {
+  res.status(403).json({
+    error: 'Las reservas de Mercado Pago las gestiona el administrador. Si el cliente necesita sumar pasajeros, coordinalo con nosotros.',
+  });
 });
 
 // GET /api/seller/me/orders/:publicId/events — histórico de pasos de una orden suya
@@ -716,7 +709,8 @@ sellerRouter.get('/me/orders/:publicId/events', async (req, res, next) => {
 });
 
 // POST /api/seller/me/orders/:publicId/cancel — el vendedor cancela una reserva
-// SUYA (cualquier método de pago), siempre que no esté liquidada ni dentro de la ventana de cancelación.
+// SUYA pagada en efectivo, siempre que no esté liquidada ni dentro de la ventana de cancelación.
+// Las órdenes de Mercado Pago las cancela el administrador (ver payment_method check abajo).
 const sellerCancelSchema = z.object({
   reason: z.string().max(500).nullish(),
 });
@@ -745,6 +739,9 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
     );
     const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
+    if (row.payment_method === 'mercadopago') {
+      return res.status(403).json({ error: 'Las reservas de Mercado Pago las cancela el administrador. Pedile al cliente que se contacte con nosotros.' });
+    }
     if (!['pending', 'paid'].includes(row.status)) {
       return res.status(400).json({ error: `No se puede cancelar una reserva en estado "${row.status}".` });
     }
@@ -799,8 +796,9 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
     const { rows } = await pool.query<{
       order_id: number; status: string; item_id: number; option_id: number;
       adults: number; children: number; service_date: string; net_settled_at: string | null;
+      payment_method: string;
     }>(
-      `SELECT o.id AS order_id, o.status::text AS status,
+      `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
               oi.id AS item_id, oi.option_id, oi.adults, oi.children,
               to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
               a.net_settled_at
@@ -813,6 +811,9 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
     );
     const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
+    if (row.payment_method === 'mercadopago') {
+      return res.status(403).json({ error: 'Las reservas de Mercado Pago las reprograma el administrador. Pedile al cliente que se contacte con nosotros.' });
+    }
     if (!['pending', 'paid'].includes(row.status)) {
       return res.status(400).json({ error: `No se puede reprogramar una reserva en estado "${row.status}".` });
     }
@@ -847,6 +848,12 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
       prev_date: row.service_date, new_date, actor: 'seller',
       reason: reason ?? null, notify: notify_customer ?? true,
     });
+
+    if (notify_customer !== false) {
+      sendOrderRescheduledNotifications(row.order_id, row.service_date, new_date, reason ?? null, 'seller').catch((e) =>
+        console.error('[email] reschedule notification failed for order', row.order_id, e),
+      );
+    }
 
     res.json({ data: { ok: true, prev_date: row.service_date, new_date } });
   } catch (err) { next(err); }

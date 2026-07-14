@@ -79,6 +79,82 @@ function CutoffForm({
   );
 }
 
+function ArchiveRetentionForm({
+  days,
+  onSave,
+}: {
+  days: number | null;
+  onSave: (d: number | null) => Promise<void>;
+}) {
+  const [value, setValue] = useState(days != null ? String(days) : '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { setValue(days != null ? String(days) : ''); }, [days]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const d = parseInt(value, 10);
+    if (!Number.isFinite(d) || d < 1) { setErr('Ingresá una cantidad de días válida (mínimo 1).'); return; }
+    setErr(null); setMsg(null); setSaving(true);
+    try {
+      await onSave(d);
+      setMsg('✓ Guardado.');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const handleDisable = async () => {
+    setErr(null); setMsg(null); setSaving(true);
+    try {
+      await onSave(null);
+      setMsg('✓ Auto-archivado desactivado — solo se archiva a mano.');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <section className="rounded-lg border border-gold/15 bg-ink-soft/50 p-6 max-w-2xl">
+      <h2 className="font-display text-2xl text-cream">Archivo automático</h2>
+      <p className="mt-2 text-sm text-cream/60">
+        Las órdenes canceladas, reintegradas, caducadas o fallidas permanecen en la tabla principal este tiempo antes de archivarse solas.
+        El botón de archivar a mano sigue disponible en cualquier momento.
+      </p>
+      <form onSubmit={handleSave} className="mt-5 space-y-4">
+        <label className="block max-w-xs">
+          <span className="block text-sm text-cream/80 mb-1.5">Días en la tabla principal</span>
+          <div className="flex items-center gap-2">
+            <input type="number" min={1} max={365} step={1}
+              value={value} onChange={(e) => setValue(e.target.value)}
+              placeholder="Ej: 5" className="input" />
+            <span className="text-cream/50 text-sm shrink-0">días</span>
+          </div>
+        </label>
+        <div className="flex gap-3">
+          <button type="submit" disabled={saving || !value} className="btn-primary disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+          {days != null && (
+            <button type="button" onClick={handleDisable} disabled={saving}
+              className="rounded-md border border-red-500/30 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition disabled:opacity-50">
+              Desactivar auto-archivado
+            </button>
+          )}
+        </div>
+        {msg && <p className="text-sm text-gold">{msg}</p>}
+        {err && <p className="text-sm text-bordeaux-light">{err}</p>}
+        {days != null
+          ? <p className="text-xs text-cream/40">Activo: se archivan solas {days} día(s) después de cancelarse/reintegrarse/caducar.</p>
+          : <p className="text-xs text-cream/40">Desactivado — el archivado es solo manual.</p>
+        }
+      </form>
+    </section>
+  );
+}
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AdminSetting[] | null>(null);
   const [rate, setRate] = useState<string>('');
@@ -87,22 +163,30 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [modifyWindow, setModifyWindow] = useState<number | null>(null);
   const [cancelWindow, setCancelWindow] = useState<number | null>(null);
+  const [archiveRetention, setArchiveRetention] = useState<number | null>(null);
   const [maintenance, setMaintenance] = useState<boolean>(false);
   const [maintenanceSaving, setMaintenanceSaving] = useState(false);
   const [maintenanceMsg, setMaintenanceMsg] = useState<string | null>(null);
+  const [rateMode, setRateMode] = useState<'auto' | 'manual'>('manual');
+  const [rateModeSaving, setRateModeSaving] = useState(false);
+  const [rateModeMsg, setRateModeMsg] = useState<string | null>(null);
 
   const load = async () => {
     try {
-      const [data, mw, cw, mm] = await Promise.all([
+      const [data, mw, cw, ar, mm, rm] = await Promise.all([
         adminApi.settings.list(),
         adminApi.settings.getModifyWindow(),
         adminApi.settings.getCancelWindow(),
+        adminApi.settings.getArchiveRetention(),
         adminApi.settings.getMaintenanceMode(),
+        adminApi.settings.getExchangeRateMode(),
       ]);
       setSettings(data);
       setModifyWindow(mw.hours);
       setCancelWindow(cw.hours);
+      setArchiveRetention(ar.days);
       setMaintenance(mm.enabled);
+      setRateMode(rm.mode);
       const exchange = data.find((s) => s.key === 'exchange_rate_usd_ars');
       if (exchange) {
         const value = exchange.value as { rate?: number };
@@ -132,6 +216,44 @@ export default function SettingsPage() {
       setMaintenanceMsg(`Error: ${(err as Error).message}`);
     } finally {
       setMaintenanceSaving(false);
+    }
+  };
+
+  const handleToggleRateMode = async () => {
+    setRateModeSaving(true);
+    setRateModeMsg(null);
+    const next = rateMode === 'auto' ? 'manual' : 'auto';
+    try {
+      const res = await adminApi.settings.updateExchangeRateMode(next);
+      setRateMode(res.mode);
+      setRate(String(res.rate));
+      setRateModeMsg(
+        res.mode === 'auto'
+          ? '✓ Automático activado — sincronizado con dolarapi.com (oficial).'
+          : '✓ Modo manual — el valor no se actualiza solo.',
+      );
+      await load();
+      setTimeout(() => setRateModeMsg(null), 4000);
+    } catch (err) {
+      setRateModeMsg(`Error: ${(err as Error).message}`);
+    } finally {
+      setRateModeSaving(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setRateModeSaving(true);
+    setRateModeMsg(null);
+    try {
+      const res = await adminApi.settings.syncExchangeRateNow();
+      setRate(String(res.rate));
+      setRateModeMsg('✓ Sincronizado.');
+      await load();
+      setTimeout(() => setRateModeMsg(null), 3000);
+    } catch (err) {
+      setRateModeMsg(`Error: ${(err as Error).message}`);
+    } finally {
+      setRateModeSaving(false);
     }
   };
 
@@ -170,8 +292,44 @@ export default function SettingsPage() {
         <h2 className="font-display text-2xl text-cream">Tipo de cambio USD → ARS</h2>
         <p className="mt-2 text-sm text-cream/60">
           Se aplica al crear cada preference de Mercado Pago. El precio se muestra en USD pero el cobro se procesa en pesos argentinos.
-          Actualizá manualmente cuando varíe el dólar.
         </p>
+
+        <div className="mt-5 flex items-center justify-between gap-4 rounded-md border border-gold/10 bg-ink/30 p-4">
+          <div>
+            <p className="text-sm text-cream/80">
+              {rateMode === 'auto' ? 'Automático — dolarapi.com (oficial)' : 'Manual'}
+            </p>
+            <p className="mt-0.5 text-xs text-cream/45">
+              {rateMode === 'auto'
+                ? 'Se sincroniza solo cada 30 minutos con la cotización oficial (venta).'
+                : 'El valor queda fijo hasta que lo cambies vos o actives el automático.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            {rateMode === 'auto' && (
+              <button type="button" onClick={handleSyncNow} disabled={rateModeSaving}
+                className="rounded-md border border-gold/20 px-3 py-1.5 text-xs text-cream/70 hover:border-gold/40 transition disabled:opacity-50">
+                Sincronizar ahora
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={rateModeSaving}
+              onClick={handleToggleRateMode}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 focus:outline-none disabled:opacity-50 ${
+                rateMode === 'auto' ? 'border-gold bg-gold' : 'border-gold/30 bg-ink-soft'
+              }`}
+              aria-pressed={rateMode === 'auto'}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-cream shadow transition-transform duration-200 mt-0.5 ${
+                  rateMode === 'auto' ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+        {rateModeMsg && <p className="mt-2 text-sm text-gold">{rateModeMsg}</p>}
 
         <form onSubmit={handleSaveRate} className="mt-5 grid sm:grid-cols-[1fr_auto] gap-3">
           <label className="block">
@@ -192,6 +350,9 @@ export default function SettingsPage() {
             </button>
           </div>
         </form>
+        {rateMode === 'auto' && (
+          <p className="mt-2 text-xs text-cream/40">Guardar un valor acá pasa el modo a manual.</p>
+        )}
 
         {savedMessage && <p className="mt-3 text-sm text-gold">{savedMessage}</p>}
         {error && <p className="mt-3 text-sm text-bordeaux-light">{error}</p>}
@@ -260,6 +421,14 @@ export default function SettingsPage() {
         onSave={async (h) => {
           const res = await adminApi.settings.updateCancelWindow(h);
           setCancelWindow(res.hours);
+        }}
+      />
+
+      <ArchiveRetentionForm
+        days={archiveRetention}
+        onSave={async (d) => {
+          const res = await adminApi.settings.updateArchiveRetention(d);
+          setArchiveRetention(res.days);
         }}
       />
 

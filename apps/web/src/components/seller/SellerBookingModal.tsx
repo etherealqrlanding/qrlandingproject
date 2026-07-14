@@ -24,13 +24,15 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SellerBookingResult | null>(null);
-  const [copied, setCopied] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash'>(isPermanent ? 'cash' : 'mercadopago');
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
+  // Monto que el vendedor le cobra al pasajero en efectivo. Es SOLO referencia visual
+  // para el momento del cobro: no se envía al backend ni se guarda en ningún lado.
+  const [chargedAmount, setChargedAmount] = useState('');
 
   const today = new Date().toISOString().slice(0, 10);
   const horizonDate = useMemo(() => {
@@ -161,8 +163,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
         transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
       });
 
-      // MP: NO redirigimos al vendedor. El pago es del pasajero (su cuenta/tarjeta),
-      // así que le mostramos el link generado para que se lo pase al cliente.
+      // MP: el vendedor no ve ni reenvía el link — se lo mandamos al pasajero por email.
       setResult(res);
     } catch (err) {
       const message = err instanceof SellerApiError ? err.message : (err as Error).message;
@@ -171,24 +172,9 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
     }
   };
 
-  // ── Pantalla de éxito: MP (link para el cliente) o efectivo ──────────────
+  // ── Pantalla de éxito: MP (avisamos que el email ya salió) o efectivo ────
   if (result) {
-    const isMpLink = result.payment_method === 'mercadopago' && Boolean(result.init_point);
-    const payLink = result.init_point ?? '';
-    const phoneDigits = form.phone.replace(/\D/g, '');
-    const arsHint = result.total_ars != null ? ` (≈ ARS ${Math.round(result.total_ars).toLocaleString('es-AR')})` : '';
-    const waMessage = `Hola ${form.name}, te dejo el link para pagar tu reserva de ${option.name_es} para el ${form.service_date}. Total USD ${result.total_usd}${arsHint}. Pagá de forma segura acá: ${payLink}`;
-    const waUrl = phoneDigits
-      ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(waMessage)}`
-      : `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
-
-    const copyLink = async () => {
-      try {
-        await navigator.clipboard.writeText(payLink);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      } catch { /* clipboard no disponible */ }
-    };
+    const isMp = result.payment_method === 'mercadopago';
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm">
@@ -199,35 +185,16 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             </svg>
           </div>
 
-          {isMpLink ? (
+          {isMp ? (
             <>
-              <h2 className="font-display text-2xl text-cream mb-2">¡Link de pago generado!</h2>
+              <h2 className="font-display text-2xl text-cream mb-2">¡Reserva creada!</h2>
               <p className="text-sm text-cream/60 mb-1">
                 Ref. <span className="font-mono text-gold-soft">{result.order_public_id.slice(0, 8).toUpperCase()}</span>
               </p>
-              <p className="text-sm text-cream/70 mb-5">
-                Enviale este link al pasajero para que <strong className="text-cream/90">pague con su propia cuenta o tarjeta</strong>.
-                La reserva queda pendiente hasta que complete el pago.
+              <p className="text-sm text-cream/70 mb-6">
+                Le enviamos el link de pago a <strong className="text-cream/90">{form.email}</strong> para que pague con su propia cuenta o tarjeta.
+                La reserva queda pendiente hasta que complete el pago. Si no le llega, que se contacte con nosotros.
               </p>
-
-              <div className="flex items-center gap-2 rounded-lg border border-gold/20 bg-ink/40 p-2 mb-3">
-                <span className="flex-1 truncate text-left text-xs text-cream/60 px-1">{payLink}</span>
-                <button
-                  onClick={copyLink}
-                  className="shrink-0 rounded-md border border-gold/30 px-3 py-1.5 text-xs text-cream hover:bg-gold/10 transition-colors"
-                >
-                  {copied ? '✓ Copiado' : 'Copiar'}
-                </button>
-              </div>
-
-              <a
-                href={waUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full rounded-lg bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-ink hover:brightness-95 transition mb-3"
-              >
-                Enviar por WhatsApp{phoneDigits ? ' al pasajero' : ''}
-              </a>
 
               <div className="flex gap-3">
                 <button
@@ -420,10 +387,35 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
               </div>
             )}
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-cream/70">Total</span>
+              <span className="text-sm text-cream/70">{paymentMethod === 'cash' ? 'Precio sugerido' : 'Total'}</span>
               <span className="font-display text-3xl text-gold">USD {totalUsd}</span>
             </div>
-            <p className="mt-1 text-xs text-cream/50 text-right">El cobro se procesa en ARS al tipo de cambio vigente.</p>
+            {paymentMethod === 'cash' ? (
+              <>
+                <p className="mt-1 text-xs text-cream/50">
+                  Es una referencia: al pasajero le cobrás el monto que definas. A nosotros nos rendís solo el neto.
+                </p>
+                <div className="mt-4 pt-4 border-t border-gold/15">
+                  <label className="block">
+                    <span className="block text-sm text-cream/80 mb-1.5">
+                      ¿Cuánto le cobrás al pasajero? <span className="text-cream/40">(USD · opcional)</span>
+                    </span>
+                    <input
+                      type="number" min={0} step="0.01" inputMode="decimal"
+                      value={chargedAmount}
+                      onChange={(e) => setChargedAmount(e.target.value)}
+                      className="input"
+                      placeholder={`Sugerido: ${totalUsd}`}
+                    />
+                  </label>
+                  <p className="mt-1.5 text-xs text-cream/40">
+                    Es solo para tu referencia en el momento — no se guarda ni figura en ningún lado.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="mt-1 text-xs text-cream/50 text-right">El cobro se procesa en ARS al tipo de cambio vigente.</p>
+            )}
           </div>
 
           {/* Traslado */}

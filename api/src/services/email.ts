@@ -69,7 +69,7 @@ async function send(to: string | string[], subject: string, html: string): Promi
 // ─── Templates ───────────────────────────────────────────
 // HTML simple, dark theme inline-style para que se vea correcto en Gmail/Outlook.
 
-interface OrderEmailData {
+export interface OrderEmailData {
   public_id: string;
   customer_name: string;
   customer_email: string;
@@ -120,6 +120,24 @@ function supportBlock(): string {
   </div>`;
 }
 
+// Lema de "entrada válida" — se repite en todos los emails que reflejan el estado
+// vigente de la reserva (confirmación, modificación, ampliación, reprogramación),
+// para que el cliente sepa que ESE email (el más reciente) es lo que presenta en la casa.
+function ticketBadge(): string {
+  return `<p style="text-align:center;margin:0 0 20px;font-size:12px;letter-spacing:0.5px;color:#c8a85a;text-transform:uppercase">🎫 Este email es tu entrada — mostralo en la puerta de la casa de tango</p>`;
+}
+
+// Botón de descarga del voucher en PDF — para guardarlo en el celular y no depender
+// de conexión al presentarlo en la casa de tango. El endpoint exige la orden "paid",
+// así que este bloque solo se agrega en emails que reflejan una reserva vigente.
+function voucherButtonBlock(publicId: string): string {
+  const url = `${config.WEB_ORIGIN}/api/checkout/orders/${publicId}/voucher.pdf`;
+  return `<div style="text-align:center;margin:4px 0 24px">
+    <a href="${url}" style="display:inline-block;background:transparent;border:1.5px solid #c8a85a;color:#e0c787;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:600;font-size:13px">⬇ Descargar voucher PDF</a>
+    <p style="margin:8px 0 0;font-size:11px;color:rgba(245,239,230,0.4)">Guardalo en tu celular — te sirve como entrada aunque no tengas señal.</p>
+  </div>`;
+}
+
 // Fila etiqueta/valor reutilizable.
 function emailRow(label: string, value: string, accent = false): string {
   return `<div style="${baseStyles.row}"><span>${label}</span><strong${accent ? ' style="color:#c8a85a"' : ''}>${value}</strong></div>`;
@@ -134,6 +152,14 @@ function arsOf(usd: number | null | undefined, rate: number): string {
   return fmtArs((usd ?? 0) * rate);
 }
 
+// Neto que el vendedor nos rinde en una venta en EFECTIVO = total − comisión.
+// En efectivo no mostramos "total cobrado" ni "comisión" (el vendedor cobra el monto
+// que define y no lo trazamos): el único número que importa es el neto a rendir.
+function cashNetArs(raw: Record<string, unknown>, d: OrderEmailData): number {
+  const commissionArs = (raw.commission_ars as number | null) ?? 0;
+  return Math.max(0, Math.round(d.total_ars - commissionArs));
+}
+
 // Bloque de detalle COMPLETO de la reserva, reutilizado en todos los emails al cliente
 // y al vendedor. Renderiza solo lo que existe (campos opcionales). La idea es que el
 // cliente tenga TODA la info y no tenga que consultar nada.
@@ -144,12 +170,13 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   if (d.address) rows.push(emailRow('Dirección', escapeHtml(d.address)));
   rows.push(emailRow('Fecha', d.service_date));
 
+  const showAmounts = opts?.showAmounts !== false;
   let pax = `${d.adults} adulto(s)`;
-  if (d.unit_price_adult_usd != null) pax += ` · ${arsOf(d.unit_price_adult_usd, d.exchange_rate_used)} c/u`;
+  if (showAmounts && d.unit_price_adult_usd != null) pax += ` · ${arsOf(d.unit_price_adult_usd, d.exchange_rate_used)} c/u`;
   rows.push(emailRow('Adultos', pax));
   if (d.children > 0) {
     let ch = `${d.children} menor(es)`;
-    if (d.unit_price_child_usd != null) ch += ` · ${arsOf(d.unit_price_child_usd, d.exchange_rate_used)} c/u`;
+    if (showAmounts && d.unit_price_child_usd != null) ch += ` · ${arsOf(d.unit_price_child_usd, d.exchange_rate_used)} c/u`;
     rows.push(emailRow('Menores', ch));
   }
 
@@ -160,7 +187,7 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
     rows.push(emailRow('Traslado', `Incluido${d.transfer_hotel ? ` — retiro en ${escapeHtml(d.transfer_hotel)}` : ''}`));
   }
 
-  if (opts?.showAmounts !== false) {
+  if (showAmounts) {
     rows.push(emailRow('Total', fmtArs(d.total_ars), true));
   }
   rows.push(`<div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${d.public_id}</span></div>`);
@@ -182,8 +209,13 @@ function htmlForCustomer(data: OrderEmailData): string {
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
+  ${ticketBadge()}
   <p>Hola ${escapeHtml(data.customer_name)}, recibimos tu pago para una experiencia inolvidable en Buenos Aires. Acá tenés todos los detalles de tu reserva:</p>
   ${reservationCard(data, { showContact: true })}
+  ${voucherButtonBlock(data.public_id)}
+  <div style="background:rgba(200,168,90,0.08);border:1px solid rgba(200,168,90,0.25);border-radius:10px;padding:16px 18px;margin:20px 0">
+    <p style="margin:0;font-size:13px;line-height:1.6"><strong style="color:#c8a85a">¿Necesitás cancelar o modificar tu reserva?</strong> Como pagaste con Mercado Pago, cualquier gestión relacionada con tu cobro (cancelación, cambio de fecha, sumar o quitar pasajeros, reintegros) la manejamos nosotros directamente — escribinos por WhatsApp con tu número de referencia y te ayudamos al instante.</p>
+  </div>
   <p>Guardá este email como comprobante. Si tenés cualquier consulta, respondé este mismo correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
@@ -292,7 +324,7 @@ function escapeHtml(s: string): string {
 }
 
 // SELECT compartido con TODOS los datos de la orden para los emails detallados.
-const ORDER_EMAIL_SELECT = `
+export const ORDER_EMAIL_SELECT = `
        o.id AS order_id,
        o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
@@ -320,7 +352,7 @@ const ORDER_EMAIL_SELECT = `
     WHERE o.id = $1 LIMIT 1`;
 
 // Mapea una fila (con los alias de ORDER_EMAIL_SELECT) al OrderEmailData completo.
-function toOrderData(data: Record<string, unknown>): OrderEmailData {
+export function toOrderData(data: Record<string, unknown>): OrderEmailData {
   return {
     public_id: data.public_id as string,
     customer_name: data.customer_name as string,
@@ -348,6 +380,36 @@ function toOrderData(data: Record<string, unknown>): OrderEmailData {
     seller_name: (data.seller_name as string) ?? null,
     seller_email: (data.seller_email as string) ?? null,
   };
+}
+
+// ─── Link de pago pendiente (pre-pago) ──────────────────────
+// Se manda al cliente apenas se crea una orden por Mercado Pago que todavía no pagó
+// (ej. reserva armada por un vendedor). Es la ÚNICA vía para que el cliente reciba el
+// link — el vendedor no ve ni reenvía links de MP, así que si el cliente lo pierde,
+// tiene que pedirnos a nosotros que se lo reenviemos (no al vendedor).
+export async function sendPaymentLinkEmail(orderId: number, initPoint: string): Promise<void> {
+  if (!isEnabled()) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const html = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Completá tu pago</h1>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, ¡ya casi! Para confirmar tu reserva de ${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}, pagá con Mercado Pago acá:</p>
+  <div style="text-align:center;margin:24px 0">
+    <a href="${initPoint}" style="display:inline-block;background:#009ee3;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px">Pagar con Mercado Pago</a>
+  </div>
+  ${reservationCard(orderData, { showContact: true })}
+  <p style="font-size:13px;color:rgba(245,239,230,0.6)">El lugar queda reservado hasta que completes el pago; si no lo hacés a tiempo, la reserva caduca. Si necesitás que te reenviemos este link, escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Completá tu pago — ${orderData.option_name}`, html);
 }
 
 // ─── Función principal: notifica los 3 destinatarios cuando una orden se paga ──
@@ -427,7 +489,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(baseData.option_name)} — ${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(baseData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Sugerido</span><strong>${fmtArs(baseData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${baseData.public_id}</span></div>
   </div>
   ${data.seller_name ? `
@@ -435,7 +497,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <p style="${baseStyles.eyebrow}">Vendedor que cobra</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Ganancia estimada</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, baseData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el vendedor confirme el cobro desde su portal.</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
@@ -483,9 +545,10 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total a cobrar</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(baseData.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, baseData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Sugerido</span><strong>${fmtArs(baseData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>
+  <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">Al pasajero le cobrás el monto que definas; a nosotros nos rendís el neto.</p>
   ${actionButtons}
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
@@ -512,8 +575,10 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
+  ${ticketBadge()}
   <p>Hola ${escapeHtml(baseData.customer_name)}, tu reserva está confirmada (pago en efectivo). ¡Nos vemos pronto en Buenos Aires! Acá tenés todos los detalles:</p>
-  ${reservationCard(baseData, { showContact: true })}
+  ${reservationCard(baseData, { showContact: true, showAmounts: false })}
+  ${voucherButtonBlock(baseData.public_id)}
   <p>Guardá este email como comprobante. Si tenés alguna consulta, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
@@ -537,7 +602,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(baseData.option_name)} — ${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(baseData.total_ars)}</strong></div>
+    <div style="${baseStyles.row}"><span>Sugerido</span><strong>${fmtArs(baseData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${baseData.public_id}</span></div>
   </div>
   ${data.seller_name ? `
@@ -545,7 +610,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     <p style="${baseStyles.eyebrow}">Vendedor</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, baseData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">${actorNote}</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
@@ -569,9 +634,9 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total cobrado</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(baseData.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu ganancia</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, baseData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>
+  <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">El monto que le cobraste al pasajero lo definiste vos; lo que nos rendís es el neto.</p>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
@@ -738,10 +803,12 @@ export async function sendOrderModifiedNotifications(
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Actualizamos tu reserva</h1>
+  ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, modificamos tu reserva según lo acordado${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   ${refundLine}
   <p style="color:rgba(245,239,230,0.7)">Así queda tu reserva actualizada:</p>
   ${reservationCard(orderData, { showContact: true })}
+  ${voucherButtonBlock(orderData.public_id)}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
@@ -812,9 +879,11 @@ export async function sendOrderIncreasedNotifications(
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Sumamos pasajeros a tu reserva</h1>
+  ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, actualizamos tu reserva con los pasajeros que agregaste${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <p>Cargo adicional: <strong style="color:#c8a85a">ARS ${arsStr}</strong>.</p>
   ${reservationCard(orderData, { showContact: true })}
+  ${voucherButtonBlock(orderData.public_id)}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
@@ -859,6 +928,82 @@ export async function sendOrderIncreasedNotifications(
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml);
+  }
+}
+
+// ─── Reprogramación de fecha ──────────────────────────────────
+// No cambia ningún monto, solo la fecha de servicio — pero las 3 partes necesitan
+// enterarse: el cliente para no presentarse el día viejo, y admin/vendedor para el seguimiento.
+export async function sendOrderRescheduledNotifications(
+  orderId: number,
+  prevDate: string,
+  newDate: string,
+  reason?: string | null,
+  actor: 'admin' | 'seller' = 'admin',
+): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const actorLabel = actor === 'seller' ? 'tu vendedor' : 'nuestro equipo';
+
+  // 1) Cliente
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Reprogramamos tu reserva</h1>
+  ${ticketBadge()}
+  <p>Hola ${escapeHtml(orderData.customer_name)}, ${actorLabel} reprogramó tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p><strong style="color:#c8a85a">Nueva fecha: ${newDate}</strong> (antes era ${prevDate}).</p>
+  ${reservationCard(orderData, { showAmounts: false })}
+  ${voucherButtonBlock(orderData.public_id)}
+  <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Reserva reprogramada — nueva fecha ${newDate}`, customerHtml);
+
+  // 2) Admin
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Reserva reprogramada</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha anterior</span><strong>${prevDate}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha nueva</span><strong style="color:#c8a85a">${newDate}</strong></div>
+    <div style="${baseStyles.row}"><span>Reprogramado por</span><strong>${actor === 'seller' ? 'Vendedor' : 'Admin'}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Reprogramada] ${orderData.customer_name} — ${prevDate} → ${newDate}`, adminHtml);
+  }
+
+  // 3) Vendedor (si hay atribución y email) — no afecta su comisión, solo aviso operativo
+  if (data.seller_name && data.seller_email) {
+    const sellerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <h1 style="${baseStyles.title}">Una venta tuya se reprogramó</h1>
+  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código cambió de fecha${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha anterior</span><strong>${prevDate}</strong></div>
+    <div style="${baseStyles.row}"><span>Fecha nueva</span><strong style="color:#c8a85a">${newDate}</strong></div>
+  </div>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+</div></body></html>`;
+    await send(data.seller_email, `Venta reprogramada — ${orderData.option_name}`, sellerHtml);
   }
 }
 
@@ -1042,13 +1187,15 @@ export async function sendAdminCancelledNotifications(
 
 // ─── Email de liquidación al vendedor ───────────────────────
 export async function sendSellerCommissionPaid(input: {
+  sellerId: number;
   sellerName: string;
   sellerEmail: string;
   ordersCount: number;
   totalCommissionUsd: number;
+  totalCommissionArs: number;
   portalUrl: string;
 }): Promise<void> {
-  const { sellerName, sellerEmail, ordersCount, totalCommissionUsd, portalUrl } = input;
+  const { sellerId, sellerName, sellerEmail, ordersCount, totalCommissionUsd, totalCommissionArs, portalUrl } = input;
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -1071,4 +1218,74 @@ export async function sendSellerCommissionPaid(input: {
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
   await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html);
+
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Liquidación MP confirmada</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(sellerName)}</strong></div>
+    <div style="${baseStyles.row}"><span>Ventas liquidadas</span><strong>${ordersCount}</strong></div>
+    <div style="${baseStyles.row}"><span>Total pagado</span><strong style="color:#c8a85a">${fmtArs(totalCommissionArs)} (USD ${totalCommissionUsd.toFixed(2)})</strong></div>
+    <div style="${baseStyles.row}"><span>Vendedor ID</span><span style="font-family:monospace">${sellerId}</span></div>
+  </div>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Liquidación MP] ${sellerName} — ${fmtArs(totalCommissionArs)}`, adminHtml);
+  }
+}
+
+// ─── Rendición en efectivo confirmada por el admin ───────────
+// El vendedor le rinde a la agencia el neto de sus ventas en efectivo; esto confirma
+// que ese dinero YA llegó y quedó reconciliado (dirección opuesta a la comisión MP).
+export async function sendNetSettledConfirmation(input: {
+  sellerId: number;
+  sellerName: string;
+  sellerEmail: string;
+  ordersCount: number;
+  totalNetArs: number;
+  portalUrl: string;
+}): Promise<void> {
+  const { sellerId, sellerName, sellerEmail, ordersCount, totalNetArs, portalUrl } = input;
+  const html = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Liquidaciones</p>
+  <h1 style="${baseStyles.title}">¡Rendición confirmada!</h1>
+  <p>Hola ${escapeHtml(sellerName)}, confirmamos que recibimos tu rendición en efectivo. Ya quedó todo en orden.</p>
+  <div style="${baseStyles.card}">
+    <p style="${baseStyles.eyebrow}">Detalle de la rendición</p>
+    <div style="${baseStyles.row}"><span>Ventas rendidas</span><strong>${ordersCount} venta${ordersCount === 1 ? '' : 's'}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto recibido</span><strong style="color:#c8a85a;font-size:22px">${fmtArs(totalNetArs)}</strong></div>
+  </div>
+  <p>Podés ver el detalle completo en tu portal de vendedores.</p>
+  <div style="${baseStyles.card}">
+    <a href="${portalUrl}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
+      Ver mi portal
+    </a>
+  </div>
+  <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Alguna diferencia en el monto? Escribinos por WhatsApp y lo revisamos.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+</div></body></html>`;
+  await send(sellerEmail, `Rendición confirmada — ${fmtArs(totalNetArs)} recibidos`, html);
+
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <h1 style="${baseStyles.title}">Rendición en efectivo confirmada</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(sellerName)}</strong></div>
+    <div style="${baseStyles.row}"><span>Ventas rendidas</span><strong>${ordersCount}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto recibido</span><strong style="color:#c8a85a">${fmtArs(totalNetArs)}</strong></div>
+    <div style="${baseStyles.row}"><span>Vendedor ID</span><span style="font-family:monospace">${sellerId}</span></div>
+  </div>
+  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Rendición efectivo] ${sellerName} — ${fmtArs(totalNetArs)}`, adminHtml);
+  }
 }

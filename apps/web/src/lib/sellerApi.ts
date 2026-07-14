@@ -172,7 +172,6 @@ export interface SellerOrder {
   created_at: string;
   utm_source: string | null;
   payment_method: string;
-  mp_init_point: string | null;
   was_reduced: boolean;
   has_paid_addon: boolean;
 }
@@ -199,9 +198,6 @@ export interface SellerBookingResult {
   order_public_id: string;
   payment_method: 'mercadopago' | 'cash';
   total_usd: number;
-  preference_id?: string;
-  init_point?: string;
-  sandbox_init_point?: string;
   total_ars?: number;
 }
 
@@ -212,7 +208,6 @@ export interface SellerPendingAddon {
   extra_children: number;
   charge_usd: number;
   charge_ars: number;
-  mp_init_point: string | null;
   created_at: string;
 }
 
@@ -319,11 +314,6 @@ export const sellerApi = {
   increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean }) =>
     request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/increase-cash`,
-      { method: 'POST', body: JSON.stringify(body) },
-    ),
-  addMp: (publicId: string, body: { adults: number; children: number }) =>
-    request<{ addon_public_id: string; order_public_id: string; init_point: string; charge_usd: number; charge_ars: number; new_total_usd: number }>(
-      `/api/seller/me/orders/${encodeURIComponent(publicId)}/add-mp`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
   orderEvents: (publicId: string) =>

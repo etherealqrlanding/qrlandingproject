@@ -88,15 +88,18 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const isMp = order.payment_method === 'mercadopago';
   const phoneDigits = (order.customer_phone ?? '').replace(/\D/g, '');
 
-  // El vendedor no puede reintegrar por MP (lo hace el admin) → reduceMp ausente.
+  // El vendedor no tiene operaciones sobre órdenes de Mercado Pago (lo hace el admin)
+  // → reduceMp/addMp/reschedule ausentes cuando la orden es MP y el caller es el portal seller.
   const reduceBlocked = preview.direction === 'reduce' && isMp && !handlers.reduceMp;
+  const increaseBlocked = preview.direction === 'increase' && isMp && !handlers.addMp;
+  const rescheduleBlocked = hasDateChange && isMp && !handlers.reschedule;
 
   const confirmLabel = (() => {
     const hasPax = preview.direction !== 'none';
     if (!hasPax && !hasDateChange) return 'Sin cambios';
-    if (!hasPax && hasDateChange) return 'Reprogramar fecha';
+    if (!hasPax && hasDateChange) return rescheduleBlocked ? 'No disponible' : 'Reprogramar fecha';
     if (preview.direction === 'reduce') return hasDateChange ? 'Guardar cambios' : `Reintegrar ${fmtArs(preview.deltaArs)}`;
-    if (isMp) return hasDateChange ? 'Guardar cambios' : `Generar link · ${fmtArs(preview.deltaArs)}`;
+    if (isMp) return increaseBlocked ? 'No disponible' : (hasDateChange ? 'Guardar cambios' : `Generar link · ${fmtArs(preview.deltaArs)}`);
     return hasDateChange ? 'Guardar cambios' : `Registrar ampliación · ${fmtArs(preview.deltaArs)}`;
   })();
 
@@ -223,9 +226,14 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             : 'border-cream/15 bg-ink/30'
           }`}>
             {preview.direction === 'none' && !hasDateChange && <p className="text-sm text-cream/60">Sin cambios respecto de la reserva actual.</p>}
-            {hasDateChange && (
+            {hasDateChange && !rescheduleBlocked && (
               <p className="text-sm text-cream/80">
                 Nueva fecha: <strong className="text-cream">{newDate}</strong>
+              </p>
+            )}
+            {rescheduleBlocked && (
+              <p className="text-sm text-bordeaux-light">
+                Las reservas de Mercado Pago las reprograma el administrador. Pedile al cliente que se contacte con nosotros.
               </p>
             )}
             {preview.direction === 'reduce' && !reduceBlocked && (
@@ -240,12 +248,17 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
                 El reintegro de reservas por Mercado Pago lo realiza el administrador. Pedile que lo procese.
               </p>
             )}
-            {preview.direction === 'increase' && (
+            {preview.direction === 'increase' && !increaseBlocked && (
               <p className="text-sm text-cream/80">
                 {isMp ? 'Se generará un link de MP por ' : 'Se registra una ampliación pendiente de cobro por '}
                 <strong className="text-cream">{fmtArs(preview.deltaArs)}</strong>.
                 Nuevo total: <strong className="text-cream">{fmtArs(preview.newSubtotalArs)}</strong>.
                 {isMp ? ' El pasajero paga con su cuenta.' : ' Confirmás el cobro después, cuando recibas el dinero.'}
+              </p>
+            )}
+            {increaseBlocked && (
+              <p className="text-sm text-bordeaux-light">
+                Las ampliaciones de reservas de Mercado Pago las gestiona el administrador. Pedile al cliente que se contacte con nosotros.
               </p>
             )}
           </div>
@@ -272,7 +285,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
         <div className="p-6 border-t border-gold/10 flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} disabled={processing} className="btn-ghost text-sm disabled:opacity-40">Cancelar</button>
-          <button type="button" onClick={handleConfirm} disabled={processing || (preview.direction === 'none' && !hasDateChange) || reduceBlocked}
+          <button type="button" onClick={handleConfirm} disabled={processing || (preview.direction === 'none' && !hasDateChange) || reduceBlocked || increaseBlocked || rescheduleBlocked}
             className="btn-primary text-sm disabled:opacity-40">
             {processing ? 'Procesando...' : confirmLabel}
           </button>

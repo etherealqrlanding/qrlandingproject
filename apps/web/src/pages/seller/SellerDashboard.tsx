@@ -120,7 +120,7 @@ export default function SellerDashboard() {
       {/* Stats */}
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 md:mb-8">
         <StatCard label="Ventas" value={String(me.orders_paid)} sub="órdenes cobradas" />
-        <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="suma de tus ventas" />
+        <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="ventas por Mercado Pago" />
         <StatCard label="Comisión ganada" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
         <StatCard label="Pendiente (MP)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
@@ -140,7 +140,7 @@ export default function SellerDashboard() {
         <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-4 text-sm text-cream/80 mb-5 md:mb-8">
           <p className="font-medium text-emerald-400 mb-1">Tenés neto pendiente de rendir</p>
           <p className="text-xs md:text-sm">
-            Por tus ventas en <strong>efectivo</strong> cobraste el total y te quedaste con tu comisión. Nos tenés que rendir el neto: <strong>{fmt(netToSettle)}</strong>.
+            Por tus ventas en <strong>efectivo</strong> nos tenés que rendir el neto: <strong>{fmt(netToSettle)}</strong>. El monto que le cobrás al pasajero lo definís vos.
           </p>
         </div>
       )}

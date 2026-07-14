@@ -14,7 +14,6 @@ function windowBlockMsg(hours: number | null): string {
   return `Se requieren al menos ${hours} hs de anticipación al servicio.`;
 }
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
-import PaymentLinkShare from '../../components/PaymentLinkShare';
 import OrderHistory from '../../components/OrderHistory';
 import type { OrderEvent } from '../../lib/orderEvents';
 
@@ -64,10 +63,6 @@ const PAYMENT_LABEL: Record<string, string> = {
   mercadopago: 'Mercado Pago',
   cash: 'Efectivo',
 };
-
-function fmt(usd: number) {
-  return `USD ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 // El portal muestra la plata en pesos (el negocio opera en ARS).
 function fmtArs(ars: number) {
@@ -258,11 +253,7 @@ export default function SellerOrders() {
               </div>
             ) : (
               <div className="mt-2 space-y-2">
-                <p className="text-xs text-cream/45">Esperando el pago del pasajero.</p>
-                {ad.mp_init_point && (
-                  <PaymentLinkShare link={ad.mp_init_point} phone={o.customer_phone}
-                    waMessage={`Hola ${o.customer_name}, para sumar pasajeros pagá la diferencia (${fmtArs(ad.charge_ars)}) acá: ${ad.mp_init_point}`} />
-                )}
+                <p className="text-xs text-cream/45">Le enviamos el link de pago al pasajero por email.</p>
                 <button type="button" onClick={(e) => { e.stopPropagation(); handleCancelAddon(o.public_id, ad.public_id); }}
                   disabled={addonBusy === ad.public_id}
                   className="w-full rounded-md border border-gold/20 px-3 py-2 text-sm text-cream/60 hover:border-gold/40 transition disabled:opacity-50">
@@ -356,8 +347,10 @@ export default function SellerOrders() {
         handlers={{
           reduceCash: (body) => sellerApi.reduceCash(modifyOrder.public_id, body),
           increaseCash: (body) => sellerApi.increaseCash(modifyOrder.public_id, body),
-          addMp: (body) => sellerApi.addMp(modifyOrder.public_id, body),
-          reschedule: (body) => sellerApi.reschedule(modifyOrder.public_id, body),
+          // addMp ausente: el vendedor no genera links de MP, eso lo hace el administrador.
+          ...(modifyOrder.payment_method !== 'mercadopago'
+            ? { reschedule: (body) => sellerApi.reschedule(modifyOrder.public_id, body) }
+            : {}),
         }}
         onClose={() => setModifyOrder(null)}
         onDone={() => {
@@ -392,12 +385,16 @@ export default function SellerOrders() {
                 <span className="text-cream/80">{fmtDate(pendingOrder.service_date)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-cream/50">Total</span>
-                <span className="text-gold font-mono font-semibold">{fmt(pendingOrder.total_usd)}</span>
+                <span className="text-cream/50">Sugerido</span>
+                <span className="text-cream/70 font-mono">{fmtArs(pendingOrder.total_ars)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-cream/50">Neto a rendir</span>
+                <span className="text-gold font-mono font-semibold">{fmtArs(effectiveNetArs(pendingOrder))}</span>
               </div>
             </div>
             <p className="text-xs text-cream/40 mb-5">
-              Al confirmar, la reserva pasa a <strong className="text-cream/60">Cobrada</strong> y se envía el email de confirmación al pasajero.
+              El monto que le cobrás al pasajero lo definís vos. Al confirmar, la reserva pasa a <strong className="text-cream/60">Cobrada</strong> y se envía el email de confirmación al pasajero.
             </p>
             {collectError && (
               <p className="text-xs text-bordeaux-light mb-4">⚠ {collectError}</p>
@@ -446,8 +443,8 @@ export default function SellerOrders() {
                 <span className="text-cream/80">{fmtDate(cancelConfirmOrder.service_date)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-cream/50">Total</span>
-                <span className="text-gold font-mono font-semibold">{fmtArs(cancelConfirmOrder.total_ars)}</span>
+                <span className="text-cream/50">Sugerido</span>
+                <span className="text-cream/70 font-mono">{fmtArs(cancelConfirmOrder.total_ars)}</span>
               </div>
             </div>
             <label className="block mb-4">
@@ -572,9 +569,20 @@ export default function SellerOrders() {
                       <p className="text-[10px] text-cream/30 mt-0.5">Ord. {fmtDateTime(o.created_at)}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-cream font-mono text-sm">{fmtArs(o.total_ars)}</p>
-                      {(o.status === 'paid' || o.status === 'pending') && (
-                        <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmtArs(effectiveCommissionArs(o))}</p>
+                      {o.payment_method === 'cash' ? (
+                        (o.status === 'paid' || o.status === 'pending') && (
+                          <>
+                            <p className="text-cream font-mono text-sm">{fmtArs(effectiveNetArs(o))}</p>
+                            <p className="text-[10px] text-cream/40 -mt-0.5">neto a rendir</p>
+                          </>
+                        )
+                      ) : (
+                        <>
+                          <p className="text-cream font-mono text-sm">{fmtArs(o.total_ars)}</p>
+                          {(o.status === 'paid' || o.status === 'pending') && (
+                            <p className="text-gold font-mono text-xs" title="Tu ganancia">{fmtArs(effectiveCommissionArs(o))}</p>
+                          )}
+                        </>
                       )}
                       <span className={`text-gold/50 text-xs inline-block mt-1 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                     </div>
@@ -599,15 +607,19 @@ export default function SellerOrders() {
                         );
                       })()}
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                      <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
-                      {(o.status === 'paid' || o.status === 'pending') && (
-                        <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
-                          <span className="text-gold font-mono">{fmtArs(effectiveCommissionArs(o))}</span>
-                        </DetailRow>
+                      {o.payment_method !== 'cash' && (
+                        <>
+                          <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
+                          {(o.status === 'paid' || o.status === 'pending') && (
+                            <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
+                              <span className="text-gold font-mono">{fmtArs(effectiveCommissionArs(o))}</span>
+                            </DetailRow>
+                          )}
+                        </>
                       )}
                       {o.payment_method === 'cash' ? (
                         <>
-                          {o.status === 'paid' && (
+                          {(o.status === 'paid' || o.status === 'pending') && (
                             <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs(effectiveNetArs(o))}</span></DetailRow>
                           )}
                           <DetailRow label="Neto rendido">
@@ -627,14 +639,11 @@ export default function SellerOrders() {
                               : <span className="text-cream/30">—</span>}
                         </DetailRow>
                       )}
-                      {o.status === 'pending' && o.payment_method === 'mercadopago' && o.mp_init_point && (
+                      {o.status === 'pending' && o.payment_method === 'mercadopago' && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
-                          <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Link de pago (re-compartir)</p>
-                          <PaymentLinkShare
-                            link={o.mp_init_point}
-                            phone={o.customer_phone}
-                            waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmtArs(o.total_ars)}. Pagá acá: ${o.mp_init_point}`}
-                          />
+                          <p className="text-[10px] text-cream/40">
+                            Le enviamos el link de pago al pasajero por email. Si no lo recibió, decile que nos escriba por WhatsApp.
+                          </p>
                         </div>
                       )}
                       {o.payment_method === 'cash' && o.status === 'pending' && (
@@ -648,7 +657,17 @@ export default function SellerOrders() {
                           </button>
                         </div>
                       )}
-                      {(o.status === 'pending' || o.status === 'paid') && (() => {
+                      {o.payment_method === 'mercadopago' && (o.status === 'pending' || o.status === 'paid') && (
+                        <p className="mt-3 pt-3 border-t border-gold/10 text-[10px] text-cream/40">
+                          Esta reserva es de Mercado Pago: cualquier cambio o cancelación lo gestiona el administrador. El cliente puede contactarnos directamente.
+                        </p>
+                      )}
+                      {o.payment_method === 'cash' && o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (
+                        <p className="mt-3 pt-3 border-t border-gold/10 text-[10px] text-cream/40">
+                          Esta reserva ya fue rendida al operador: no se puede modificar ni cancelar.
+                        </p>
+                      )}
+                      {o.payment_method === 'cash' && !o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (() => {
                         const modBlocked = isWindowBlocked(modifyWindow, o.service_date);
                         return (
                           <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
@@ -664,7 +683,7 @@ export default function SellerOrders() {
                           </div>
                         );
                       })()}
-                      {(o.status === 'pending' || o.status === 'paid') && (() => {
+                      {o.payment_method === 'cash' && !o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (() => {
                         const cancelBlocked = isWindowBlocked(cancelWindow, o.service_date);
                         return (
                           <div className="mt-2">
@@ -704,7 +723,7 @@ export default function SellerOrders() {
                   <th className="text-left px-4 py-3">Pasajeros</th>
                   <th className="text-left px-4 py-3">Estado</th>
                   <th className="text-right px-4 py-3">Venta</th>
-                  <th className="text-right px-4 py-3">Comisión</th>
+                  <th className="text-right px-4 py-3">Comisión / Neto</th>
                   <th className="text-center px-4 py-3">Liquidado</th>
                   <th className="w-8 px-3 py-3" />
                 </tr>
@@ -749,9 +768,17 @@ export default function SellerOrders() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right text-cream font-mono whitespace-nowrap text-xs">{fmtArs(o.total_ars)}</td>
-                        <td className="px-4 py-3 text-right text-gold font-mono whitespace-nowrap text-xs">
-                          {(o.status === 'paid' || o.status === 'pending') ? fmtArs(effectiveCommissionArs(o)) : '—'}
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-xs">
+                          {o.payment_method === 'cash'
+                            ? <span className="text-cream/30">—</span>
+                            : <span className="text-cream">{fmtArs(o.total_ars)}</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-xs">
+                          {(o.status === 'paid' || o.status === 'pending')
+                            ? (o.payment_method === 'cash'
+                                ? <span className="text-cream/80">{fmtArs(effectiveNetArs(o))}</span>
+                                : <span className="text-gold">{fmtArs(effectiveCommissionArs(o))}</span>)
+                            : <span className="text-cream/30">—</span>}
                         </td>
                         <td className="px-4 py-3 text-center text-xs">
                           {(o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at)
@@ -794,17 +821,21 @@ export default function SellerOrders() {
                                 <DetailRow label="Compra">{fmtDateTime(o.created_at)}</DetailRow>
                               </div>
                               <div className="space-y-1.5">
-                                <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y comisión</p>
+                                <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y liquidación</p>
                                 <DetailRow label="Medio">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                                <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
-                                {(o.status === 'paid' || o.status === 'pending') && (
-                                  <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
-                                    <span className="text-gold font-mono">{fmtArs(effectiveCommissionArs(o))}</span>
-                                  </DetailRow>
+                                {o.payment_method !== 'cash' && (
+                                  <>
+                                    <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
+                                    {(o.status === 'paid' || o.status === 'pending') && (
+                                      <DetailRow label={o.status === 'paid' ? 'Tu ganancia' : 'Tu ganancia (estimada)'}>
+                                        <span className="text-gold font-mono">{fmtArs(effectiveCommissionArs(o))}</span>
+                                      </DetailRow>
+                                    )}
+                                  </>
                                 )}
                                 {o.payment_method === 'cash' ? (
                                   <>
-                                    {o.status === 'paid' && (
+                                    {(o.status === 'paid' || o.status === 'pending') && (
                                       <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs(effectiveNetArs(o))}</span></DetailRow>
                                     )}
                                     <DetailRow label="Neto rendido">
@@ -827,14 +858,11 @@ export default function SellerOrders() {
                                 <DetailRow label="N° orden"><span className="font-mono text-cream/50">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
                               </div>
                             </div>
-                            {o.status === 'pending' && o.payment_method === 'mercadopago' && o.mp_init_point && (
+                            {o.status === 'pending' && o.payment_method === 'mercadopago' && (
                               <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
-                                <PaymentLinkShare
-                                  link={o.mp_init_point}
-                                  phone={o.customer_phone}
-                                  label="Link de pago (re-compartir)"
-                                  waMessage={`Hola ${o.customer_name}, te dejo el link para pagar tu reserva de ${o.option_name} (${fmtDate(o.service_date)}). Total ${fmtArs(o.total_ars)}. Pagá acá: ${o.mp_init_point}`}
-                                />
+                                <p className="text-xs text-cream/40">
+                                  Le enviamos el link de pago al pasajero por email. Si no lo recibió, decile que nos escriba por WhatsApp.
+                                </p>
                               </div>
                             )}
                             {o.payment_method === 'cash' && o.status === 'pending' && (
@@ -849,7 +877,17 @@ export default function SellerOrders() {
                                 <p className="mt-1.5 text-xs text-cream/35 text-center">Confirmar envía el email al pasajero</p>
                               </div>
                             )}
-                            {(o.status === 'pending' || o.status === 'paid') && (() => {
+                            {o.payment_method === 'mercadopago' && (o.status === 'pending' || o.status === 'paid') && (
+                              <p className="mt-4 pt-4 border-t border-gold/10 text-xs text-cream/40">
+                                Esta reserva es de Mercado Pago: cualquier cambio o cancelación lo gestiona el administrador. El cliente puede contactarnos directamente.
+                              </p>
+                            )}
+                            {o.payment_method === 'cash' && o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (
+                              <p className="mt-4 pt-4 border-t border-gold/10 text-xs text-cream/40">
+                                Esta reserva ya fue rendida al operador: no se puede modificar ni cancelar.
+                              </p>
+                            )}
+                            {o.payment_method === 'cash' && !o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (() => {
                               const modBlocked = isWindowBlocked(modifyWindow, o.service_date);
                               return (
                                 <div className="mt-4 pt-4 border-t border-gold/10">
@@ -863,14 +901,12 @@ export default function SellerOrders() {
                                     ✎ Modificar pasajeros / traslado
                                   </button>
                                   <p className="mt-1.5 text-xs text-cream/35 text-center">
-                                    {o.payment_method === 'cash'
-                                      ? 'Sumás/bajás pax y cobrás o devolvés en el momento'
-                                      : 'Sumar pax genera un link de pago para el cliente'}
+                                    Sumás/bajás pax y cobrás o devolvés en el momento
                                   </p>
                                 </div>
                               );
                             })()}
-                            {(o.status === 'pending' || o.status === 'paid') && (() => {
+                            {o.payment_method === 'cash' && !o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (() => {
                               const cancelBlocked = isWindowBlocked(cancelWindow, o.service_date);
                               return (
                                 <div className="mt-3 pt-3 border-t border-gold/10">

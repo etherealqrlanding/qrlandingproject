@@ -58,10 +58,13 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
          SELECT
            COUNT(*) FILTER (WHERE o.id IS NOT NULL) AS orders_total,
            COUNT(*) FILTER (WHERE o.status = 'paid') AS orders_paid,
-           SUM(o.total_usd) FILTER (WHERE o.status = 'paid') AS revenue_paid_usd,
-           SUM(o.total_ars) FILTER (WHERE o.status = 'paid') AS revenue_paid_ars,
-           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid') AS commission_paid_usd,
-           SUM(a.commission_amount_ars) FILTER (WHERE o.status = 'paid') AS commission_paid_ars,
+           -- Facturación y comisión: SOLO Mercado Pago. En efectivo el vendedor cobra el
+           -- monto que decide y no lo trazamos; su aporte al negocio se mide por el neto
+           -- (net_pending_settlement, abajo), no por venta/comisión.
+           SUM(o.total_usd) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS revenue_paid_usd,
+           SUM(o.total_ars) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS revenue_paid_ars,
+           SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS commission_paid_usd,
+           SUM(a.commission_amount_ars) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago') AS commission_paid_ars,
            -- MP: lo que le debemos liquidar al vendedor (comisión pendiente)
            SUM(a.commission_amount_usd) FILTER (
              WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL

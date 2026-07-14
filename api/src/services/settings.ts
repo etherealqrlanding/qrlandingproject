@@ -1,36 +1,72 @@
 import { pool } from '../db.js';
 
 const RATE_KEY = 'exchange_rate_usd_ars';
+const RATE_DESCRIPTION = 'Tipo de cambio USD→ARS aplicado al cobrar con Mercado Pago.';
+
+export type ExchangeRateMode = 'auto' | 'manual';
 
 interface ExchangeRatePayload {
   rate: number;
   updated_at: string;
+  mode?: ExchangeRateMode;
+  source?: 'manual' | 'dolarapi_oficial';
 }
 
-export async function getExchangeRate(): Promise<number> {
+async function getExchangeRatePayload(): Promise<ExchangeRatePayload | null> {
   const { rows } = await pool.query<{ value: ExchangeRatePayload }>(
     `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
     [RATE_KEY],
   );
-  const rate = rows[0]?.value?.rate;
+  return rows[0]?.value ?? null;
+}
+
+async function saveExchangeRatePayload(payload: ExchangeRatePayload): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [RATE_KEY, JSON.stringify(payload), RATE_DESCRIPTION],
+  );
+}
+
+export async function getExchangeRate(): Promise<number> {
+  const rate = (await getExchangeRatePayload())?.rate;
   if (typeof rate !== 'number' || rate <= 0) {
     throw new Error('Exchange rate USD→ARS not configured. Set "exchange_rate_usd_ars" in settings.');
   }
   return rate;
 }
 
+export async function getExchangeRateMode(): Promise<ExchangeRateMode> {
+  return (await getExchangeRatePayload())?.mode ?? 'manual';
+}
+
+// Carga manual desde el admin: fija el valor y pasa a modo "manual" explícitamente
+// (si estaba en automático, el próximo sync no lo pisa hasta que el admin reactive "auto").
 export async function setExchangeRate(rate: number): Promise<void> {
   if (rate <= 0) throw new Error('Exchange rate must be positive');
-  await pool.query(
-    `INSERT INTO settings (key, value, description)
-     VALUES ($1, $2::jsonb, $3)
-     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-    [
-      RATE_KEY,
-      JSON.stringify({ rate, updated_at: new Date().toISOString() }),
-      'Tipo de cambio USD→ARS aplicado al cobrar con Mercado Pago.',
-    ],
-  );
+  await saveExchangeRatePayload({
+    rate, updated_at: new Date().toISOString(), mode: 'manual', source: 'manual',
+  });
+}
+
+// Cambia el modo sin tocar el valor actual (útil al togglear el switch en el admin).
+export async function setExchangeRateMode(mode: ExchangeRateMode): Promise<void> {
+  const current = await getExchangeRatePayload();
+  await saveExchangeRatePayload({
+    rate: current?.rate ?? 0,
+    updated_at: current?.updated_at ?? new Date().toISOString(),
+    mode,
+    source: current?.source,
+  });
+}
+
+// Usado únicamente por el sync automático (dolarapi.com) — nunca lo llama el admin directo.
+export async function setExchangeRateFromAuto(rate: number): Promise<void> {
+  if (rate <= 0) throw new Error('Exchange rate must be positive');
+  await saveExchangeRatePayload({
+    rate, updated_at: new Date().toISOString(), mode: 'auto', source: 'dolarapi_oficial',
+  });
 }
 
 const CUTOFF_KEY = 'same_day_booking_cutoff';
@@ -128,6 +164,33 @@ export async function setMaintenanceMode(enabled: boolean): Promise<void> {
       MAINTENANCE_KEY,
       JSON.stringify({ enabled }),
       'Modo mantenimiento: bloquea el acceso al sitio público cuando está activo.',
+    ],
+  );
+}
+
+const ARCHIVE_RETENTION_KEY = 'archive_retention_days';
+const DEFAULT_ARCHIVE_RETENTION_DAYS = 5;
+
+// Días que una orden cancelada/reintegrada/expirada/fallida permanece en la tabla
+// principal antes de archivarse sola. `null` desactiva el auto-archivado (solo manual).
+export async function getArchiveRetentionDays(): Promise<number | null> {
+  const { rows } = await pool.query<{ value: { days: number | null } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [ARCHIVE_RETENTION_KEY],
+  );
+  if (rows.length === 0) return DEFAULT_ARCHIVE_RETENTION_DAYS;
+  return rows[0].value?.days ?? null;
+}
+
+export async function setArchiveRetentionDays(days: number | null): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [
+      ARCHIVE_RETENTION_KEY,
+      JSON.stringify({ days }),
+      'Días que una orden cancelada/reintegrada/expirada/fallida permanece en la tabla principal antes de archivarse sola. null = desactivado.',
     ],
   );
 }

@@ -10,6 +10,8 @@ import { adminRouter } from './routes/admin/index.js';
 import { sellerRouter } from './routes/seller/index.js';
 import { actionRouter } from './routes/action.js';
 import { startExpiryJob } from './services/expireOrders.js';
+import { startAutoArchiveJob } from './services/autoArchiveOrders.js';
+import { startExchangeRateSyncJob } from './services/exchangeRateSync.js';
 import { AvailabilityError } from './repos/availability.js';
 
 const app = express();
@@ -75,4 +77,8 @@ app.listen(config.PORT, () => {
   console.log(`   Resend: ${config.RESEND_API_KEY ? 'enabled (' + config.EMAIL_FROM + ')' : 'disabled'}`);
   // Caducidad automática de reservas en efectivo no cobradas (>24h).
   startExpiryJob();
+  // Auto-archivado de órdenes canceladas/reintegradas/caducadas/fallidas tras N días.
+  startAutoArchiveJob();
+  // Sync automático del tipo de cambio USD→ARS desde dolarapi.com (solo si el modo es "auto").
+  startExchangeRateSyncJob();
 });

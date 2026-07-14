@@ -22,6 +22,7 @@ import { createOrderPaidNotification, createCashBookingNotification } from '../r
 import { checkSingleDateAvailability } from '../repos/availability.js';
 import { findAddonByPublicId, applyAddonPayment } from '../repos/addons.js';
 import { checkoutLimiter } from '../middleware/rateLimit.js';
+import { generateVoucherPdf } from '../services/voucherPdf.js';
 
 export const checkoutRouter = Router();
 
@@ -662,6 +663,27 @@ checkoutRouter.get('/orders/:publicId', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─── GET /api/checkout/orders/:publicId/voucher.pdf ───────
+// Voucher descargable para presentar en la casa de tango sin depender de internet
+// en el momento. Público (capability URL por public_id, mismo modelo que el resto
+// de los links de la orden) — solo disponible una vez que la orden está pagada.
+checkoutRouter.get('/orders/:publicId/voucher.pdf', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const order = await findOrderByPublicId(publicId);
+    if (!order) return res.status(404).json({ error: 'Not found' });
+    if (order.status !== 'paid') {
+      return res.status(409).json({ error: 'El voucher solo está disponible una vez confirmado el pago.' });
+    }
+    const pdf = await generateVoucherPdf(order.id);
+    if (!pdf) return res.status(404).json({ error: 'Not found' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="voucher-${publicId.slice(0, 8)}.pdf"`);
+    res.send(pdf);
+  } catch (err) { next(err); }
 });
 
 // ─── POST /api/checkout/orders/:publicId/sync ─────────────

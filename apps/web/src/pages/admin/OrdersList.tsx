@@ -100,7 +100,7 @@ function OrderCard({ o, selected, onToggle }: Readonly<{ o: AdminOrderListItem; 
             )}
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {o.commission_amount_usd != null && (
+            {o.payment_method !== 'cash' && o.commission_amount_usd != null && (
               <span className="text-[10px] text-gold font-mono">Com. {o.commission_amount_usd}</span>
             )}
             <Link to={`/admin/orders/${o.public_id}`} className="text-xs text-gold-soft hover:text-gold transition">Ver →</Link>
@@ -215,8 +215,11 @@ export default function OrdersList() {
       acc.count++;
       if (o.status === 'paid') {
         acc.paidCount++;
-        acc.revenue += o.total_usd ?? 0;
-        acc.commission += o.commission_amount_usd ?? 0;
+        // Facturación/comisiones: solo MP. En efectivo no trazamos venta ni comisión.
+        if (o.payment_method !== 'cash') {
+          acc.revenue += o.total_usd ?? 0;
+          acc.commission += o.commission_amount_usd ?? 0;
+        }
       }
       return acc;
     }, { count: 0, paidCount: 0, revenue: 0, commission: 0 });
@@ -363,7 +366,9 @@ export default function OrdersList() {
                     USD {o.total_usd}
                   </td>
                   <td className="py-2.5 px-3 text-right text-gold tabular-nums text-xs whitespace-nowrap">
-                    {o.commission_amount_usd != null ? `USD ${o.commission_amount_usd}` : <span className="text-cream/30">—</span>}
+                    {o.payment_method !== 'cash' && o.commission_amount_usd != null
+                      ? `USD ${o.commission_amount_usd}`
+                      : <span className="text-cream/30">—</span>}
                   </td>
                   <td className="py-2.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
                     <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-xs">Ver →</Link>

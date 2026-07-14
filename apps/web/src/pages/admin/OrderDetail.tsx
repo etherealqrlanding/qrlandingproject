@@ -116,7 +116,7 @@ export default function OrderDetail() {
 
   const handleCollectCash = async () => {
     if (!order || !publicId) return;
-    if (!confirm(`¿Confirmar que se cobró en efectivo la orden de ${order.customer_name}?\n\nTotal: ARS ${order.total_ars.toLocaleString('es-AR')}\n\nQuedará registrado como cobrado por el admin.`)) return;
+    if (!confirm(`¿Confirmar que se cobró en efectivo la orden de ${order.customer_name}?\n\nSugerido: ARS ${order.total_ars.toLocaleString('es-AR')} (el monto lo define el vendedor)\n\nQuedará registrado como cobrado por el admin.`)) return;
     try {
       setCollectingCash(true);
       await adminApi.orders.collectCash(publicId);
@@ -323,7 +323,7 @@ export default function OrderDetail() {
             <p className="mt-1 font-display text-xl text-cream">Confirmar cobro en nombre del vendedor</p>
             <p className="mt-1 text-sm text-cream/70">
               El vendedor no pudo operar el portal. Confirmá que el dinero fue recibido en efectivo.
-              Total: <strong className="text-cream">ARS {order.total_ars.toLocaleString('es-AR')}</strong>.
+              Sugerido: <strong className="text-cream">ARS {order.total_ars.toLocaleString('es-AR')}</strong> <span className="text-cream/50">(el monto lo define el vendedor)</span>.
             </p>
           </div>
           <button
@@ -391,8 +391,11 @@ export default function OrderDetail() {
             <p className="text-xs uppercase tracking-widest text-gold-soft">Estado</p>
             <StatusBadge status={order.status} large />
             <div className="mt-4 space-y-2">
-              <Row label="Total USD" highlight>USD {order.total_usd}</Row>
-              <Row label="Total ARS">ARS {order.total_ars.toLocaleString('es-AR')}</Row>
+              <Row label={order.payment_method === 'cash' ? 'Sugerido USD' : 'Total USD'} highlight>USD {order.total_usd}</Row>
+              <Row label={order.payment_method === 'cash' ? 'Sugerido ARS' : 'Total ARS'}>ARS {order.total_ars.toLocaleString('es-AR')}</Row>
+              {order.payment_method === 'cash' && (
+                <p className="text-[11px] text-cream/40 leading-snug">Referencia — el vendedor le cobra al pasajero el monto que define; no lo registramos.</p>
+              )}
               <Row label="Tipo de cambio">{Number(order.exchange_rate_used).toFixed(2)}</Row>
               {order.paid_at && <Row label="Pagada">{new Date(order.paid_at).toLocaleString()}</Row>}
             </div>
@@ -477,19 +480,12 @@ export default function OrderDetail() {
 
               {order.payment_method === 'cash' ? (
                 <>
-                  {/* Efectivo: el vendedor cobró el total y NOS debe liquidar el neto */}
+                  {/* Efectivo: no trazamos cuánto cobró el vendedor; solo nos rinde el neto */}
                   <div className="mt-3 space-y-1.5">
-                    <Row label="Venta total">{fmtArs(order.total_ars)}</Row>
-                    <Row label="Ganancia del vendedor">{fmtArs(order.commission_amount_ars ?? 0)}</Row>
-                    <Row label="% de ganancia">
-                      {order.total_usd > 0
-                        ? `${(((order.commission_amount_usd ?? 0) / order.total_usd) * 100).toFixed(1)}%`
-                        : '—'}
-                    </Row>
-                    <Row label="Nos liquida (neto)" highlight>{fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))}</Row>
+                    <Row label="Nos rinde (neto)" highlight>{fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))}</Row>
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ El vendedor cobró {fmtArs(order.total_ars)} y <strong>nos tiene que rendir el neto ({fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))})</strong>.
+                    ➜ El vendedor le cobra al pasajero el monto que define (no lo registramos) y <strong>nos rinde el neto ({fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))})</strong>.
                   </p>
                   <div className="mt-2">
                     <Row label="Neto cobrado">
@@ -676,10 +672,10 @@ export default function OrderDetail() {
             </header>
 
             <div className="p-6 space-y-4">
-              {/* Selector total / parcial */}
+              {/* Selector total / por pasajeros-traslado / monto manual */}
               <div>
                 <span className="block text-sm text-cream/80 mb-2">Monto a reintegrar</span>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button type="button"
                     onClick={() => setRefundMode('total')}
                     className={`px-3 py-2 rounded-md border text-sm transition ${
@@ -691,6 +687,12 @@ export default function OrderDetail() {
                     Total (USD {order.total_usd})
                   </button>
                   <button type="button"
+                    onClick={() => { setRefundOpen(false); setModifyOpen(true); }}
+                    className="px-3 py-2 rounded-md border text-sm transition border-gold/15 bg-ink/40 text-cream/60 hover:border-gold/30"
+                  >
+                    Por pasajeros / traslado
+                  </button>
+                  <button type="button"
                     onClick={() => setRefundMode('partial')}
                     className={`px-3 py-2 rounded-md border text-sm transition ${
                       refundMode === 'partial'
@@ -698,15 +700,18 @@ export default function OrderDetail() {
                         : 'border-gold/15 bg-ink/40 text-cream/60 hover:border-gold/30'
                     }`}
                   >
-                    Parcial
+                    Monto manual
                   </button>
                 </div>
+                <p className="mt-2 text-xs text-cream/40">
+                  "Por pasajeros / traslado" calcula el monto automáticamente según cuánto saques y actualiza la reserva y el email con el detalle nuevo.
+                </p>
               </div>
 
               {refundMode === 'partial' && (
                 <label className="block">
                   <span className="block text-sm text-cream/80 mb-1.5">
-                    Monto parcial en USD (entre 0 y {order.total_usd})
+                    Monto manual en USD (entre 0 y {order.total_usd})
                   </span>
                   <input
                     type="number" step={0.01} min={0.01} max={order.total_usd}
@@ -720,7 +725,7 @@ export default function OrderDetail() {
                     <p className="mt-1 text-xs text-cream/50">
                       Se reintegrarán USD {Number(refundAmount).toFixed(2)} ·
                       ~ ARS {(Number(refundAmount) * (order.total_ars / order.total_usd)).toLocaleString('es-AR', { maximumFractionDigits: 0 })}.
-                      La orden seguirá como "Pagada".
+                      La orden seguirá como "Pagada". Este monto no descuenta pasajeros del sistema.
                     </p>
                   )}
                 </label>
@@ -753,7 +758,7 @@ export default function OrderDetail() {
                   <p>⚠ Refund total: la orden pasa a <strong className="text-cream">"Reintegrada"</strong>, la comisión al vendedor (si la había) deja de aplicar.</p>
                 )}
                 {refundMode === 'partial' && (
-                  <p>ℹ Refund parcial: la orden sigue como <strong className="text-cream">"Pagada"</strong>. Esta acción es irreversible pero podés hacer otro refund parcial después sobre el remanente.</p>
+                  <p>ℹ Monto manual: la orden sigue como <strong className="text-cream">"Pagada"</strong> y no descuenta pasajeros del sistema. Esta acción es irreversible pero podés hacer otro reintegro después sobre el remanente.</p>
                 )}
               </div>
             </div>

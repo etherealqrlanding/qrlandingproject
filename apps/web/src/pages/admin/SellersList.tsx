@@ -221,8 +221,8 @@ export default function SellersList() {
 
       {totals && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 md:mb-8">
-          <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Total ventas pagadas atribuidas" />
-          <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Acumulado de todas las ventas pagadas" />
+          <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas pagadas por Mercado Pago" />
+          <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Comisiones de ventas por Mercado Pago" />
           <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight />
           <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" />
         </div>

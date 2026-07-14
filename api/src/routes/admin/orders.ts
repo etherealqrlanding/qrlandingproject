@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications } from '../../services/email.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications } from '../../services/email.js';
 import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
@@ -258,6 +258,7 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
       `UPDATE orders
           SET status = $1::order_status,
               internal_notes = COALESCE(internal_notes || E'\\n', '') || $2,
+              refunded_at = CASE WHEN $1::order_status = 'refunded' THEN NOW() ELSE refunded_at END,
               updated_at = NOW()
         WHERE id = $3`,
       [newStatus, noteLine, order.id],
@@ -712,7 +713,7 @@ adminOrdersRouter.post('/:publicId/reschedule', async (req, res, next) => {
     const parsed = rescheduleSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
-    const { new_date, reason } = parsed.data;
+    const { new_date, reason, notify_customer } = parsed.data;
     const newDateObj = new Date(`${new_date}T00:00:00`);
     if (Number.isNaN(newDateObj.getTime())) return res.status(400).json({ error: 'Fecha inválida' });
     if (newDateObj.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'La fecha no puede ser pasada' });
@@ -759,6 +760,12 @@ adminOrdersRouter.post('/:publicId/reschedule', async (req, res, next) => {
     await logPaymentEvent(row.order_id, 'order_rescheduled', null, {
       prev_date: row.service_date, new_date, actor: 'admin', reason: reason ?? null,
     });
+
+    if (notify_customer !== false) {
+      sendOrderRescheduledNotifications(row.order_id, row.service_date, new_date, reason ?? null, 'admin').catch((e) =>
+        console.error('[email] reschedule notification failed for order', row.order_id, e),
+      );
+    }
 
     res.json({ data: { ok: true, prev_date: row.service_date, new_date } });
   } catch (err) { next(err); }
