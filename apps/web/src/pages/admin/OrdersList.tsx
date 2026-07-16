@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
 
 
@@ -49,9 +49,12 @@ function SummaryCard({ label, value, highlight }: Readonly<{ label: string; valu
 }
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
-function OrderCard({ o, selected, onToggle }: Readonly<{ o: AdminOrderListItem; selected: boolean; onToggle: () => void }>) {
+function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOrderListItem; selected: boolean; onToggle: () => void; highlighted?: boolean }>) {
   return (
-    <div className={`rounded-xl border transition overflow-hidden ${selected ? 'border-gold/50 bg-gold/5' : 'border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60'}`}>
+    <div
+      id={`order-row-mobile-${o.public_id}`}
+      className={`rounded-xl border transition overflow-hidden ${highlighted ? 'ring-2 ring-inset ring-gold/60 border-gold/60' : selected ? 'border-gold/50 bg-gold/5' : 'border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60'}`}
+    >
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <input
@@ -182,6 +185,8 @@ function SelectionBar({
 
 // ── Componente principal ───────────────────────────────────────────────────────
 export default function OrdersList() {
+  const [searchParams] = useSearchParams();
+  const highlight = searchParams.get('highlight');
   const [orders, setOrders] = useState<AdminOrderListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({ status: '', ref: '', from: '', to: '', search: '' });
@@ -208,6 +213,23 @@ export default function OrdersList() {
     reload();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
+
+  // Venimos del detalle de una orden (?highlight=<public_id>): saltamos a la página
+  // donde está y la resaltamos, para que el admin/vendedor no la pierda de vista.
+  useEffect(() => {
+    if (!highlight || !orders) return;
+    const idx = orders.findIndex((o) => o.public_id === highlight);
+    if (idx >= 0) setPage(Math.floor(idx / PAGE_SIZE));
+  }, [highlight, orders]);
+
+  useEffect(() => {
+    if (!highlight || !orders) return;
+    const t = setTimeout(() => {
+      document.getElementById(`order-row-desktop-${highlight}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById(`order-row-mobile-${highlight}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+    return () => clearTimeout(t);
+  }, [highlight, orders, page]);
 
   const summary = useMemo(() => {
     if (!orders) return null;
@@ -291,6 +313,7 @@ export default function OrdersList() {
               o={o}
               selected={selected.has(o.public_id)}
               onToggle={() => toggleSelect(o.public_id)}
+              highlighted={o.public_id === highlight}
             />
           ))}
         </div>
@@ -323,7 +346,12 @@ export default function OrdersList() {
             <tbody>
               {paginated.map((o) => (
                 <tr key={o.id}
-                  className={`border-t border-gold/5 transition cursor-pointer ${selected.has(o.public_id) ? 'bg-gold/5' : 'hover:bg-gold/5'}`}
+                  id={`order-row-desktop-${o.public_id}`}
+                  className={`border-t border-gold/5 transition cursor-pointer ${
+                    o.public_id === highlight
+                      ? 'bg-gold/10 border-y-2 border-y-gold/60'
+                      : selected.has(o.public_id) ? 'bg-gold/5' : 'hover:bg-gold/5'
+                  }`}
                   onClick={() => toggleSelect(o.public_id)}
                 >
                   <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>

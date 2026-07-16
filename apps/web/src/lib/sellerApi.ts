@@ -174,6 +174,7 @@ export interface SellerOrder {
   payment_method: string;
   was_reduced: boolean;
   has_paid_addon: boolean;
+  restored_at: string | null;
 }
 
 export interface SellerBookingInput {
@@ -243,12 +244,19 @@ export interface SellerArchivedOrder {
   status: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string | null;
+  customer_nationality: string | null;
   total_usd: number;
   total_ars: number;
   payment_method: string;
   created_at: string;
   archived_at: string | null;
   net_settled_at: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
+  cancelled_at: string | null;
+  commission_amount_ars: number | null;
+  paid_to_seller_at: string | null;
   product_name: string | null;
   option_name: string | null;
   service_date: string | null;
@@ -337,6 +345,8 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify({ reason: reason ?? null }),
     }),
+  archiveOrder: (publicId: string) =>
+    request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/archive`, { method: 'POST' }),
   operationWindows: () =>
     request<{ modify: number | null; cancel: number | null }>('/api/seller/me/operation-windows'),
   faq: () => request<{ items: { q_es: string; a_es: string }[]; updated_at: string | null }>('/api/seller/me/faq'),
@@ -353,6 +363,8 @@ export const sellerApi = {
         : '';
       return `${API_URL}/api/seller/me/orders/archive/download${qs}`;
     },
+    restore: (publicId: string) =>
+      request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/restore`, { method: 'POST' }),
   },
   notifications: {
     list: () => request<SellerNotification[]>('/api/seller/me/notifications'),

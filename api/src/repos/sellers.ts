@@ -225,11 +225,12 @@ export interface SellerOrder {
   // Trazabilidad de modificaciones
   was_reduced: boolean;
   has_paid_addon: boolean;
+  restored_at: string | null;
 }
 
 export async function listSellerOrders(
   sellerId: number,
-  opts?: { status?: string; settlement?: 'pending' | 'settled' },
+  opts?: { status?: string; settlement?: 'pending' | 'settled'; hideAutoArchived?: boolean },
 ): Promise<SellerOrder[]> {
   const params: unknown[] = [sellerId];
   let statusFilter = '';
@@ -250,6 +251,13 @@ export async function listSellerOrders(
       OR (o.payment_method != 'cash' AND a.paid_to_seller_at IS NOT NULL)
     )`;
   }
+  // "Mis Órdenes" del portal del vendedor archiva automáticamente las rendidas
+  // (net_settled_at) para no acumular para siempre — quedan solo en el Archivo,
+  // salvo que el vendedor las haya restaurado a propósito. La vista de admin por
+  // vendedor (con filtro de liquidación) no usa este flag: ahí sí debe verse todo.
+  const autoArchivedFilter = opts?.hideAutoArchived
+    ? ` AND (a.net_settled_at IS NULL OR o.restored_at IS NOT NULL)`
+    : '';
   const { rows } = await pool.query<SellerOrder>(
     `SELECT
        o.id AS order_id, o.public_id, o.status::text AS status,
@@ -270,7 +278,7 @@ export async function listSellerOrders(
        a.net_total_usd_snapshot::float AS net_total_usd,
        a.commission_percent_snapshot::float AS commission_percent_snapshot,
        a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.created_at,
-       o.utm_source, o.payment_method, o.mp_init_point,
+       o.utm_source, o.payment_method, o.mp_init_point, o.restored_at,
        COALESCE(o.refunded_amount_ars, 0) > 0 AS was_reduced,
        EXISTS (
          SELECT 1 FROM order_addons ad WHERE ad.order_id = o.id AND ad.status = 'paid'
@@ -281,7 +289,7 @@ export async function listSellerOrders(
       WHERE a.seller_id = $1
         AND o.archived_at IS NULL
         AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
-        ${statusFilter}${settlementFilter}
+        ${statusFilter}${settlementFilter}${autoArchivedFilter}
       ORDER BY o.created_at DESC`,
     params,
   );

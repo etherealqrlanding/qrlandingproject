@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { sellerApi, type SellerArchivedOrder, type ArchivePage } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, type SellerArchivedOrder, type ArchivePage } from '../../lib/sellerApi';
 
 const STATUS_TABS = [
   { value: '', label: 'Todas' },
@@ -21,12 +21,29 @@ const STATUS_COLOR: Record<string, string> = {
   expired: 'text-cream/40 border-cream/15',
   failed: 'text-bordeaux-light border-bordeaux-light/30',
 };
+const PAYMENT_LABEL: Record<string, string> = {
+  mercadopago: 'Mercado Pago',
+  cash: 'Efectivo',
+};
+const CANCELLED_BY_LABEL: Record<string, string> = {
+  seller: 'Vos',
+  admin: 'El operador',
+};
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-xs">
+      <span className="text-cream/40 shrink-0">{label}</span>
+      <span className="text-cream/80 text-right">{children}</span>
+    </div>
+  );
 }
 
 const PAGE_SIZE = 20;
@@ -37,6 +54,17 @@ export default function SellerArchive() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    return sellerApi.archive.list({ page, limit: PAGE_SIZE, ...(status ? { status } : {}) })
+      .then((res) => { setData(res); setLoading(false); })
+      .catch((e) => { setError((e as Error).message); setLoading(false); });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +76,22 @@ export default function SellerArchive() {
     return () => { cancelled = true; };
   }, [page, status]);
 
-  function handleStatus(v: string) { setStatus(v); setPage(1); }
+  function handleStatus(v: string) { setStatus(v); setPage(1); setExpanded(null); }
+
+  async function handleRestore(publicId: string) {
+    setRestoring(publicId);
+    setRestoreMsg(null);
+    try {
+      await sellerApi.archive.restore(publicId);
+      setRestoreMsg('✓ Orden restaurada a "Mis Órdenes".');
+      setExpanded(null);
+      await load();
+    } catch (err) {
+      setRestoreMsg(`Error: ${(err as SellerApiError).message}`);
+    } finally {
+      setRestoring(null);
+    }
+  }
 
   async function handleDownload() {
     const { supabase } = await import('../../lib/supabase');
@@ -95,6 +138,9 @@ export default function SellerArchive() {
         ))}
       </div>
 
+      {restoreMsg && (
+        <div className="rounded-md border border-gold/20 bg-gold/5 px-4 py-2 text-sm text-gold mb-4">{restoreMsg}</div>
+      )}
       {error && (
         <div className="rounded-xl border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90 mb-4">{error}</div>
       )}
@@ -114,29 +160,97 @@ export default function SellerArchive() {
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map((o) => (
-            <div key={o.public_id} className="rounded-xl border border-gold/10 bg-ink-soft/40 p-4">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="min-w-0">
-                  <p className="text-cream font-medium truncate">{o.customer_name}</p>
-                  <p className="text-cream/40 text-[11px] truncate">{o.customer_email}</p>
+          {orders.map((o) => {
+            const isOpen = expanded === o.public_id;
+            const canRestore = (!!o.archived_at || !!o.net_settled_at) && !['cancelled', 'refunded', 'expired', 'failed'].includes(o.status);
+            return (
+              <div key={o.public_id} className="rounded-xl border border-gold/10 bg-ink-soft/40 overflow-hidden">
+                <div
+                  onClick={() => setExpanded(isOpen ? null : o.public_id)}
+                  className="p-4 cursor-pointer select-none"
+                >
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-cream font-medium truncate">{o.customer_name}</p>
+                      <p className="text-cream/40 text-[11px] truncate">{o.customer_email}</p>
+                    </div>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_COLOR[o.status] ?? 'text-cream/50 border-cream/20'}`}>
+                      {STATUS_LABEL[o.status] ?? o.status}
+                    </span>
+                  </div>
+                  <p className="text-cream/70 text-xs truncate mb-0.5">{o.product_name ?? '—'}</p>
+                  <div className="flex items-center justify-between text-[11px] text-cream/40">
+                    <span>{o.option_name ?? '—'}{o.service_date ? ` · ${fmtDate(o.service_date + 'T00:00:00')}` : ''}</span>
+                    <span className="font-mono text-cream/70">{fmtArs(o.total_ars)}</span>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between">
+                    {(o.archived_at || o.net_settled_at) ? (
+                      <div className="flex gap-3 text-[10px] text-cream/30">
+                        {o.net_settled_at && <span>Rendida {fmtDate(o.net_settled_at)}</span>}
+                        {o.archived_at && <span>Archivada {fmtDate(o.archived_at)}</span>}
+                      </div>
+                    ) : <span />}
+                    <span className={`text-gold/50 text-xs transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                  </div>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_COLOR[o.status] ?? 'text-cream/50 border-cream/20'}`}>
-                  {STATUS_LABEL[o.status] ?? o.status}
-                </span>
+
+                {isOpen && (
+                  <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20 space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
+                    <DetailRow label="Email">{o.customer_email}</DetailRow>
+                    {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
+                    {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
+                    {o.product_name && <DetailRow label="Casa / Show">{o.product_name}</DetailRow>}
+                    {o.option_name && <DetailRow label="Opción">{o.option_name}</DetailRow>}
+                    {o.service_date && <DetailRow label="Fecha servicio">{fmtDate(o.service_date + 'T00:00:00')}</DetailRow>}
+                    {(o.adults != null) && (
+                      <DetailRow label="Pasajeros">
+                        {o.adults} adulto{o.adults !== 1 ? 's' : ''}{(o.children ?? 0) > 0 ? ` · ${o.children} menor(es)` : ''}
+                      </DetailRow>
+                    )}
+                    <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
+                    <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
+                    {o.commission_amount_ars != null && o.commission_amount_ars > 0 && (
+                      <DetailRow label="Tu comisión"><span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span></DetailRow>
+                    )}
+                    <DetailRow label="Te liquidamos">
+                      {o.paid_to_seller_at
+                        ? <span className="text-emerald-400">✓ {fmtDate(o.paid_to_seller_at)}</span>
+                        : o.net_settled_at
+                          ? <span className="text-amber-400">Pendiente</span>
+                          : <span className="text-cream/30">—</span>}
+                    </DetailRow>
+                    {o.status === 'cancelled' && (o.cancelled_by || o.cancel_reason) && (
+                      <>
+                        {o.cancelled_by && <DetailRow label="Cancelada por">{CANCELLED_BY_LABEL[o.cancelled_by] ?? o.cancelled_by}</DetailRow>}
+                        {o.cancelled_at && <DetailRow label="Fecha cancelación">{fmtDate(o.cancelled_at)}</DetailRow>}
+                        {o.cancel_reason && (
+                          <div className="pt-1">
+                            <p className="text-cream/40 text-xs mb-0.5">Motivo</p>
+                            <p className="text-cream/70 text-xs italic">"{o.cancel_reason}"</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <DetailRow label="N° orden"><span className="font-mono text-cream/50">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
+
+                    {canRestore && (
+                      <div className="mt-3 pt-3 border-t border-gold/10">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleRestore(o.public_id); }}
+                          disabled={restoring === o.public_id}
+                          className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors disabled:opacity-50"
+                        >
+                          {restoring === o.public_id ? 'Restaurando...' : '↺ Restaurar a Mis Órdenes'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="flex items-center justify-between text-[11px] text-cream/40">
-                <span>{o.option_name ?? '—'}{o.service_date ? ` · ${fmtDate(o.service_date + 'T00:00:00')}` : ''}</span>
-                <span className="font-mono text-cream/70">{fmtArs(o.total_ars)}</span>
-              </div>
-              {(o.archived_at || o.net_settled_at) && (
-                <div className="mt-2 flex gap-3 text-[10px] text-cream/30">
-                  {o.net_settled_at && <span>Rendida {fmtDate(o.net_settled_at)}</span>}
-                  {o.archived_at && <span>Archivada {fmtDate(o.archived_at)}</span>}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

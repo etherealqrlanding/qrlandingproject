@@ -381,12 +381,19 @@ export interface ArchivedOrder {
   status: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string | null;
+  customer_nationality: string | null;
   total_usd: number;
   total_ars: number;
   payment_method: string;
   created_at: string;
   archived_at: string | null;
   net_settled_at: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
+  cancelled_at: string | null;
+  commission_amount_ars: number | null;
+  paid_to_seller_at: string | null;
   seller_name: string | null;
   seller_code: string | null;
   product_name: string | null;
@@ -406,12 +413,13 @@ export interface ArchivePage {
 
 const ARCHIVE_SELECT = `
   o.id, o.public_id, o.status::text AS status,
-  o.customer_name, o.customer_email,
+  o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
   o.total_usd::float AS total_usd,
   o.total_ars::float AS total_ars,
   o.payment_method,
   o.created_at, o.archived_at,
-  a.net_settled_at,
+  o.cancelled_by, o.cancel_reason, o.cancelled_at,
+  a.net_settled_at, a.commission_amount_ars::float AS commission_amount_ars, a.paid_to_seller_at,
   s.name AS seller_name, s.code AS seller_code,
   oi.product_name_snapshot AS product_name,
   oi.option_name_snapshot AS option_name,
@@ -424,6 +432,7 @@ export async function archiveOrders(publicIds: string[], adminId: string): Promi
     `UPDATE orders
         SET archived_at = NOW(),
             archived_by_admin_id = $1::uuid,
+            restored_at = NULL,
             updated_at = NOW()
       WHERE public_id = ANY($2::uuid[])
         AND archived_at IS NULL`,
@@ -438,6 +447,7 @@ export async function restoreFromArchive(publicIds: string[]): Promise<number> {
     `UPDATE orders
         SET archived_at = NULL,
             archived_by_admin_id = NULL,
+            restored_at = NOW(),
             updated_at = NOW()
       WHERE public_id = ANY($1::uuid[])
         AND archived_at IS NOT NULL`,
@@ -499,10 +509,12 @@ export async function listSellerArchive(sellerId: number, params: {
   const limit = Math.min(100, Math.max(1, params.limit ?? 20));
   const offset = (page - 1) * limit;
 
+  // Una rendida que el vendedor restauró deja de "vivir" en el archivo — pasa a
+  // Mis Órdenes hasta que la vuelva a archivar (ver listSellerOrders/hideAutoArchived).
   const baseWhere = `a.seller_id = $1
     AND (
       o.status IN ('cancelled', 'refunded', 'expired', 'failed')
-      OR a.net_settled_at IS NOT NULL
+      OR (a.net_settled_at IS NOT NULL AND o.restored_at IS NULL)
       OR o.archived_at IS NOT NULL
     )`;
   const args: unknown[] = [sellerId];
@@ -511,7 +523,7 @@ export async function listSellerArchive(sellerId: number, params: {
   if (params.status === 'cancelled') extra.push(`o.status = 'cancelled'`);
   else if (params.status === 'refunded') extra.push(`o.status = 'refunded'`);
   else if (params.status === 'expired')  extra.push(`o.status IN ('expired', 'failed')`);
-  else if (params.status === 'settled')  extra.push(`a.net_settled_at IS NOT NULL`);
+  else if (params.status === 'settled')  extra.push(`a.net_settled_at IS NOT NULL AND o.restored_at IS NULL`);
 
   if (params.search) {
     const term = `%${params.search.toLowerCase()}%`;
@@ -544,12 +556,45 @@ export async function listSellerTrashedOrders(sellerId: number): Promise<Archive
   return result.orders;
 }
 
-export async function hideOrderFromSellerTrash(_publicId: string, _sellerId: number): Promise<number> {
-  return 0; // no-op — columna eliminada
+// Restaura a "Mis Órdenes" una orden del archivo del vendedor: ya sea archivada
+// explícitamente por el admin (archived_at) o rendida y auto-archivada (net_settled_at).
+// Excluye estados terminales (cancelada/reintegrada/vencida/fallida): esas nunca
+// vuelven a Mis Órdenes porque su resolución no se puede deshacer con un simple restore.
+export async function restoreFromSellerArchive(publicId: string, sellerId: number): Promise<number> {
+  const result = await pool.query(
+    `UPDATE orders o
+        SET archived_at = NULL,
+            archived_by_admin_id = NULL,
+            restored_at = NOW(),
+            updated_at = NOW()
+       FROM order_attributions a
+      WHERE o.id = a.order_id
+        AND o.public_id = $1
+        AND a.seller_id = $2
+        AND (o.archived_at IS NOT NULL OR a.net_settled_at IS NOT NULL)
+        AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')`,
+    [publicId, sellerId],
+  );
+  return result.rowCount ?? 0;
 }
 
-export async function requestOrderRestore(_publicId: string, _sellerId: number): Promise<number> {
-  return 0; // no-op — columna eliminada
+// Vuelve a mandar al archivo una orden que el vendedor había restaurado antes
+// (solo si está actualmente activa y trae la marca de "restaurada").
+export async function rearchiveBySeller(publicId: string, sellerId: number): Promise<number> {
+  const result = await pool.query(
+    `UPDATE orders o
+        SET archived_at = NOW(),
+            restored_at = NULL,
+            updated_at = NOW()
+       FROM order_attributions a
+      WHERE o.id = a.order_id
+        AND o.public_id = $1
+        AND a.seller_id = $2
+        AND o.archived_at IS NULL
+        AND o.restored_at IS NOT NULL`,
+    [publicId, sellerId],
+  );
+  return result.rowCount ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

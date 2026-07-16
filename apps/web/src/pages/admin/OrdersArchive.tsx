@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { adminApi, type ArchivedOrderItem } from '../../lib/adminApi';
 
 const STATUS_FILTERS = [
@@ -34,6 +34,7 @@ function fmtArs(n: number) {
 const PAGE_SIZE = 20;
 
 export default function OrdersArchive() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<ArchivedOrderItem[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -216,38 +217,52 @@ export default function OrdersArchive() {
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Pasajero</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Servicio</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Vendedor</th>
-                  <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-cream/40">Total</th>
+                  <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-cream/40">Total USD</th>
+                  <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-cream/40">Total ARS</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Estado</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Archivada</th>
+                  <th className="px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {orders.map((o, i) => (
                   <tr key={o.public_id}
-                    className={`border-b border-gold/5 hover:bg-gold/5 transition ${i % 2 === 0 ? '' : 'bg-ink-soft/20'} ${selected.has(o.public_id) ? 'bg-gold/5' : ''}`}>
-                    <td className="px-3 py-2.5">
+                    onClick={() => navigate(`/admin/orders/${o.public_id}`)}
+                    className={`border-b border-gold/5 hover:bg-gold/5 transition cursor-pointer ${i % 2 === 0 ? '' : 'bg-ink-soft/20'} ${selected.has(o.public_id) ? 'bg-gold/5' : ''}`}>
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                       <input type="checkbox" checked={selected.has(o.public_id)} onChange={() => toggleSelect(o.public_id)}
                         className="rounded border-gold/30 bg-ink accent-gold" />
                     </td>
                     <td className="px-3 py-2.5">
                       <p className="text-cream font-medium truncate max-w-[160px]">{o.customer_name}</p>
                       <p className="text-cream/40 text-[11px] truncate max-w-[160px]">{o.customer_email}</p>
+                      {o.customer_phone && <p className="text-cream/30 text-[11px] truncate max-w-[160px]">{o.customer_phone}</p>}
                     </td>
                     <td className="px-3 py-2.5">
                       <p className="text-cream/80 truncate max-w-[180px]">{o.option_name ?? '—'}</p>
                       {o.service_date && <p className="text-cream/40 text-[11px]">{fmtDate(o.service_date + 'T00:00:00')}</p>}
+                      {o.status === 'cancelled' && o.cancel_reason && (
+                        <p className="text-cream/30 text-[11px] italic truncate max-w-[180px]" title={o.cancel_reason}>"{o.cancel_reason}"</p>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-cream/60 text-[11px]">
                       {o.seller_name ?? <span className="text-cream/30">—</span>}
                     </td>
+                    <td className="px-3 py-2.5 text-right font-mono text-cream/60 text-xs">${o.total_usd.toFixed(2)}</td>
                     <td className="px-3 py-2.5 text-right font-mono text-cream/80">{fmtArs(o.total_ars)}</td>
                     <td className="px-3 py-2.5">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full border ${STATUS_COLOR[o.status] ?? 'text-cream/50 border-cream/20'}`}>
                         {STATUS_LABEL[o.status] ?? o.status}
                       </span>
+                      {o.payment_method === 'cash' && (
+                        <span className="ml-1 text-[10px] px-2 py-0.5 rounded-full border border-cream/15 text-cream/40">Ef.</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-cream/40 text-[11px] whitespace-nowrap">
                       {o.archived_at ? fmtDate(o.archived_at) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <Link to={`/admin/orders/${o.public_id}`} className="text-xs text-gold-soft hover:text-gold transition">Ver →</Link>
                     </td>
                   </tr>
                 ))}

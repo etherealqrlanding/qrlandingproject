@@ -280,7 +280,7 @@ export default function OrderDetail() {
 
   return (
     <div className="p-8 max-w-5xl">
-      <Link to="/admin/orders" className="text-sm text-gold-soft hover:text-gold">← Volver al listado</Link>
+      <Link to={`/admin/orders?highlight=${publicId}`} className="text-sm text-gold-soft hover:text-gold">← Volver al listado</Link>
 
       <header className="mt-3 mb-8">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Orden</p>

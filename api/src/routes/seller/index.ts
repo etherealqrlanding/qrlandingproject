@@ -14,7 +14,7 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
-import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive } from '../../repos/orders.js';
+import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, rearchiveBySeller } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
@@ -136,7 +136,7 @@ sellerRouter.get('/me', async (req, res, next) => {
 sellerRouter.get('/me/orders', async (req, res, next) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const rows = await listSellerOrders(req.seller!.sellerId, { status });
+    const rows = await listSellerOrders(req.seller!.sellerId, { status, hideAutoArchived: true });
     // El vendedor no ve links de Mercado Pago (ni para vender ni para reenviar).
     const sanitized = rows.map(({ mp_init_point: _mp_init_point, ...rest }) => rest);
     res.json({ data: sanitized });
@@ -876,6 +876,32 @@ sellerRouter.get('/me/orders/archive', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Filtros inválidos', details: parsed.error.flatten() });
     const result = await listSellerArchive(req.seller!.sellerId, parsed.data);
     res.json({ data: result });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/restore — restaura una orden archivada por el admin (solo si es propia)
+sellerRouter.post('/me/orders/:publicId/restore', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const restored = await restoreFromSellerArchive(publicId, req.seller!.sellerId);
+    if (restored === 0) return res.status(404).json({ error: 'No encontrada o no archivada' });
+
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/archive — vuelve a archivar una orden que el vendedor había restaurado
+sellerRouter.post('/me/orders/:publicId/archive', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const archived = await rearchiveBySeller(publicId, req.seller!.sellerId);
+    if (archived === 0) return res.status(404).json({ error: 'No encontrada o no restaurada previamente' });
+
+    res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
 

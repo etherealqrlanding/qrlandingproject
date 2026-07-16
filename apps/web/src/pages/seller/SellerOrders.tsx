@@ -153,6 +153,7 @@ export default function SellerOrders() {
   const [cancelConfirmOrder, setCancelConfirmOrder] = useState<SellerOrder | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [archivingOrder, setArchivingOrder] = useState<string | null>(null);
 
   const reload = async () => {
     const data = await sellerApi.orders(filter || undefined);
@@ -221,6 +222,19 @@ export default function SellerOrders() {
       setCancelError((err as SellerApiError).message);
     } finally {
       setCancelingOrder(null);
+    }
+  };
+
+  const handleArchiveOrder = async (publicId: string) => {
+    setArchivingOrder(publicId);
+    try {
+      await sellerApi.archiveOrder(publicId);
+      await reload();
+      setExpanded(null);
+    } catch (err) {
+      alert((err as SellerApiError).message);
+    } finally {
+      setArchivingOrder(null);
     }
   };
 
@@ -558,7 +572,11 @@ export default function SellerOrders() {
                         {o.has_paid_addon && (
                           <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">↑ Ampliada</span>
                         )}
+                        {o.restored_at && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-emerald-500/30 bg-emerald-950/20 text-emerald-300">↺ Restaurada</span>
+                        )}
                       </div>
+                      <p className="text-xs text-cream/70 truncate">{o.customer_name}</p>
                       <p className="text-xs text-cream/50 truncate">{o.option_name}</p>
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-cream/40">
                         <span>Serv. {fmtDate(o.service_date || o.created_at)}</span>
@@ -699,6 +717,18 @@ export default function SellerOrders() {
                           </div>
                         );
                       })()}
+                      {o.restored_at && (
+                        <div className="mt-3 pt-3 border-t border-gold/10">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleArchiveOrder(o.public_id); }}
+                            disabled={archivingOrder === o.public_id}
+                            className="w-full rounded-lg border border-emerald-500/25 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                          >
+                            {archivingOrder === o.public_id ? 'Archivando...' : '📁 Volver a archivar'}
+                          </button>
+                        </div>
+                      )}
                       {renderAddons(o)}
                       {eventsByOrder[o.public_id] && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
@@ -719,6 +749,7 @@ export default function SellerOrders() {
               <thead>
                 <tr className="border-b border-gold/10 text-cream/50 text-xs uppercase tracking-wider">
                   <th className="text-left px-4 py-3">Fecha servicio</th>
+                  <th className="text-left px-4 py-3">Cliente</th>
                   <th className="text-left px-4 py-3">Show / Opción</th>
                   <th className="text-left px-4 py-3">Pasajeros</th>
                   <th className="text-left px-4 py-3">Estado</th>
@@ -745,6 +776,10 @@ export default function SellerOrders() {
                           <p className="text-[10px] text-cream/35 mt-0.5">{fmtDateTime(o.created_at)}</p>
                         </td>
                         <td className="px-4 py-3">
+                          <p className="text-cream text-sm truncate max-w-[160px]">{o.customer_name}</p>
+                          <p className="text-xs text-cream/40 truncate max-w-[160px]">{o.customer_email}</p>
+                        </td>
+                        <td className="px-4 py-3">
                           <p className="text-cream text-sm">{o.product_name}</p>
                           <p className="text-xs text-cream/50">{o.option_name}</p>
                         </td>
@@ -765,6 +800,9 @@ export default function SellerOrders() {
                             )}
                             {o.has_paid_addon && (
                               <span className="px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">↑ Ampliada</span>
+                            )}
+                            {o.restored_at && (
+                              <span className="px-2 py-0.5 rounded-full text-xs border border-emerald-500/30 bg-emerald-950/20 text-emerald-300">↺ Restaurada</span>
                             )}
                           </div>
                         </td>
@@ -794,7 +832,7 @@ export default function SellerOrders() {
 
                       {isOpen && (
                         <tr key={`${o.order_id}-detail`} className="border-b border-gold/10 bg-ink-soft/20">
-                          <td colSpan={8} className="px-5 py-4">
+                          <td colSpan={9} className="px-5 py-4">
                             <div className="grid sm:grid-cols-3 gap-4">
                               <div className="space-y-1.5">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pasajero</p>
@@ -922,6 +960,18 @@ export default function SellerOrders() {
                                 </div>
                               );
                             })()}
+                            {o.restored_at && (
+                              <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); handleArchiveOrder(o.public_id); }}
+                                  disabled={archivingOrder === o.public_id}
+                                  className="w-full rounded-lg border border-emerald-500/25 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
+                                >
+                                  {archivingOrder === o.public_id ? 'Archivando...' : '📁 Volver a archivar'}
+                                </button>
+                              </div>
+                            )}
                             <div className="max-w-md">{renderAddons(o)}</div>
                             {eventsByOrder[o.public_id] && (
                               <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
