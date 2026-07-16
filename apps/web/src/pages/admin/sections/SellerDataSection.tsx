@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminSeller } from '../../../lib/adminApi';
 import InvitePortalSection from './InvitePortalSection';
+import Checkbox from '../../../components/Checkbox';
 
 interface Props {
   seller: AdminSeller | null;
@@ -159,18 +160,18 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
 
       <div className="space-y-3">
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={form.is_active} onChange={(e) => update('is_active', e.target.checked)} className="accent-gold" />
+          <Checkbox checked={form.is_active} onChange={(checked) => update('is_active', checked)} />
           <span className="text-cream/80">Activo (los QR son válidos y las nuevas ventas se atribuyen)</span>
         </label>
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={form.is_permanent ?? false} onChange={(e) => update('is_permanent', e.target.checked)} className="accent-gold" />
+          <Checkbox checked={form.is_permanent ?? false} onChange={(checked) => update('is_permanent', checked)} />
           <span className="text-cream/80">
             Vendedor permanente
             <span className="ml-2 text-xs text-cream/50">(habilita el cobro en efectivo desde el checkout)</span>
           </span>
         </label>
         <label className="inline-flex items-center gap-2">
-          <input type="checkbox" checked={form.is_house ?? false} onChange={(e) => update('is_house', e.target.checked)} className="accent-gold" />
+          <Checkbox checked={form.is_house ?? false} onChange={(checked) => update('is_house', checked)} />
           <span className="text-cream/80">
             Cuenta propia (agencia)
             <span className="ml-2 text-xs text-cream/50">

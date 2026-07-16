@@ -17,6 +17,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import ModifyReservationModal from '../../components/admin/ModifyReservationModal';
 import PaymentLinkShare from '../../components/PaymentLinkShare';
 import OrderHistory from '../../components/OrderHistory';
+import Checkbox from '../../components/Checkbox';
 
 interface OrderFull {
   id: number;
@@ -744,11 +745,7 @@ export default function OrderDetail() {
               </label>
 
               <label className="flex items-center gap-2">
-                <input
-                  type="checkbox" checked={refundNotify}
-                  onChange={(e) => setRefundNotify(e.target.checked)}
-                  className="accent-gold"
-                />
+                <Checkbox checked={refundNotify} onChange={setRefundNotify} />
                 <span className="text-sm text-cream/80">Notificar por email a cliente, admin y vendedor</span>
               </label>
 

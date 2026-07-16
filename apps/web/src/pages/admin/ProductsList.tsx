@@ -2,6 +2,10 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, type AdminProductSummary, type AdminProductOptionPreview } from '../../lib/adminApi';
 import { useExchangeRate } from '../../lib/useExchangeRate';
+import Checkbox from '../../components/Checkbox';
+import { useReturnHighlight } from '../../hooks/useReturnHighlight';
+
+const LAST_VIEWED_KEY = 'lastViewedProductId';
 
 const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c'];
 
@@ -120,16 +124,24 @@ function ToggleButton({ p, toggling, onToggle }: Readonly<{
 }
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
-function ProductCard({ p, toggling, onToggle, expanded, onToggleExpand, rate }: Readonly<{
+function ProductCard({ p, toggling, onToggle, expanded, onToggleExpand, rate, highlighted, cardRef, onNavigate }: Readonly<{
   p: AdminProductSummary;
   toggling: boolean;
   onToggle: () => void;
   expanded: boolean;
   onToggleExpand: () => void;
   rate: number | null;
+  highlighted?: boolean;
+  cardRef?: (node: HTMLElement | null) => void;
+  onNavigate: () => void;
 }>) {
   return (
-    <div className="rounded-xl border border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60 transition overflow-hidden">
+    <div
+      ref={cardRef}
+      className={`rounded-xl border transition duration-500 overflow-hidden ${
+        highlighted ? 'border-gold bg-gold/10 shadow-[inset_0_0_0_1.5px_rgba(200,168,90,0.55)]' : 'border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60'
+      }`}
+    >
       <div className="px-4 pt-3 pb-2 flex items-start gap-3">
         {/* Thumbnail hero */}
         <div className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-ink-soft/60 border border-gold/10">
@@ -139,7 +151,7 @@ function ProductCard({ p, toggling, onToggle, expanded, onToggleExpand, rate }: 
         </div>
         <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <Link to={`/admin/products/${p.id}`} className="text-cream hover:text-gold font-medium text-sm leading-tight">
+            <Link to={`/admin/products/${p.id}`} onClick={onNavigate} className="text-cream hover:text-gold font-medium text-sm leading-tight">
               {p.name}
             </Link>
             <p className="text-xs text-cream/40 truncate mt-0.5">{p.venue_name}</p>
@@ -162,7 +174,7 @@ function ProductCard({ p, toggling, onToggle, expanded, onToggleExpand, rate }: 
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <ToggleButton p={p} toggling={toggling} onToggle={onToggle} />
-          <Link to={`/admin/products/${p.id}`} className="text-xs text-gold-soft hover:text-gold transition">
+          <Link to={`/admin/products/${p.id}`} onClick={onNavigate} className="text-xs text-gold-soft hover:text-gold transition">
             Editar →
           </Link>
         </div>
@@ -194,6 +206,9 @@ export default function ProductsList() {
   const [toggling, setToggling] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const rate = useExchangeRate();
+  const { isHighlighted, highlightedRef, markVisited } = useReturnHighlight(
+    LAST_VIEWED_KEY, products, (p: AdminProductSummary) => p.id,
+  );
 
   const toggleExpand = (id: number) => {
     setExpanded((prev) => {
@@ -265,6 +280,9 @@ export default function ProductsList() {
               expanded={expanded.has(p.id)}
               onToggleExpand={() => toggleExpand(p.id)}
               rate={rate}
+              highlighted={isHighlighted(p.id)}
+              cardRef={isHighlighted(p.id) ? highlightedRef : undefined}
+              onNavigate={() => markVisited(p.id)}
             />
           ))}
         </div>
@@ -287,7 +305,14 @@ export default function ProductsList() {
             <tbody>
               {filtered.map((p) => (
                 <Fragment key={p.id}>
-                  <tr className="border-t border-gold/5 hover:bg-gold/5 transition">
+                  <tr
+                    ref={isHighlighted(p.id) ? highlightedRef : undefined}
+                    className={`border-t transition duration-500 ${
+                      isHighlighted(p.id)
+                        ? 'bg-gold/10 shadow-[inset_0_0_0_1.5px_rgba(200,168,90,0.55)]'
+                        : 'border-gold/5 hover:bg-gold/5 hover:shadow-[inset_0_0_0_1px_rgba(200,168,90,0.35)]'
+                    }`}
+                  >
                     <td className="py-2 px-3">
                       <div className="w-10 h-10 rounded-lg overflow-hidden bg-ink-soft/60 border border-gold/10 shrink-0">
                         {p.hero_image_url
@@ -296,7 +321,7 @@ export default function ProductsList() {
                       </div>
                     </td>
                     <td className="py-2.5 px-3">
-                      <Link to={`/admin/products/${p.id}`} className="text-cream hover:text-gold text-xs font-medium leading-tight">
+                      <Link to={`/admin/products/${p.id}`} onClick={() => markVisited(p.id)} className="text-cream hover:text-gold text-xs font-medium leading-tight">
                         {p.name}
                       </Link>
                       <p className="text-xs text-cream/40 truncate max-w-[160px]">{p.venue_name}</p>
@@ -322,7 +347,7 @@ export default function ProductsList() {
                       <ToggleButton p={p} toggling={toggling.has(p.id)} onToggle={() => handleToggleVisibility(p)} />
                     </td>
                     <td className="py-2.5 px-3 text-right">
-                      <Link to={`/admin/products/${p.id}`} className="text-gold-soft hover:text-gold text-xs">Editar →</Link>
+                      <Link to={`/admin/products/${p.id}`} onClick={() => markVisited(p.id)} className="text-gold-soft hover:text-gold text-xs">Editar →</Link>
                     </td>
                   </tr>
                   {expanded.has(p.id) && p.options.length > 0 && (
@@ -365,7 +390,7 @@ export default function ProductsList() {
           className="input max-w-sm"
         />
         <label className="flex items-center gap-2 text-sm text-cream/70">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="accent-gold" />
+          <Checkbox checked={showInactive} onChange={setShowInactive} />
           Mostrar inactivos
         </label>
       </div>

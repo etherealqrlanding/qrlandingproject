@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, type AdminSeller } from '../../lib/adminApi';
+import Checkbox from '../../components/Checkbox';
+import { useReturnHighlight } from '../../hooks/useReturnHighlight';
+
+const LAST_VIEWED_KEY = 'lastViewedSellerId';
 
 const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c'];
 
@@ -39,14 +43,21 @@ function SummaryCard({ label, value, hint, highlight }: Readonly<{ label: string
 }
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
-function SellerCard({ s }: Readonly<{ s: AdminSeller }>) {
+function SellerCard({
+  s, highlighted, cardRef, onNavigate,
+}: Readonly<{ s: AdminSeller; highlighted?: boolean; cardRef?: (node: HTMLElement | null) => void; onNavigate: () => void }>) {
   const pending = s.commission_pending_payment_ars ?? 0;
   return (
-    <div className="rounded-xl border border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60 transition overflow-hidden">
+    <div
+      ref={cardRef}
+      className={`rounded-xl border transition duration-500 overflow-hidden ${
+        highlighted ? 'border-gold bg-gold/10 shadow-[inset_0_0_0_1.5px_rgba(200,168,90,0.55)]' : 'border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60'
+      }`}
+    >
       <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Link to={`/admin/sellers/${s.id}`} className="text-cream hover:text-gold font-medium text-sm">
+            <Link to={`/admin/sellers/${s.id}`} onClick={onNavigate} className="text-cream hover:text-gold font-medium text-sm">
               {s.name}
             </Link>
             {s.is_house && (
@@ -89,7 +100,7 @@ function SellerCard({ s }: Readonly<{ s: AdminSeller }>) {
           </div>
           <div className="flex items-center gap-2">
             {s.contact_phone && <WaButton phone={s.contact_phone} name={s.name.split(' ')[0]} />}
-            <Link to={`/admin/sellers/${s.id}`} className="text-xs text-gold-soft hover:text-gold transition shrink-0">
+            <Link to={`/admin/sellers/${s.id}`} onClick={onNavigate} className="text-xs text-gold-soft hover:text-gold transition shrink-0">
               Gestionar →
             </Link>
           </div>
@@ -104,6 +115,9 @@ export default function SellersList() {
   const [filter, setFilter] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isHighlighted, highlightedRef, markVisited } = useReturnHighlight(
+    LAST_VIEWED_KEY, sellers, (s: AdminSeller) => s.id,
+  );
 
   useEffect(() => {
     adminApi.sellers.list()
@@ -161,7 +175,15 @@ export default function SellersList() {
       <>
         {/* ── Mobile: cards ── */}
         <div className="md:hidden space-y-3">
-          {filtered.map((s) => <SellerCard key={s.id} s={s} />)}
+          {filtered.map((s) => (
+            <SellerCard
+              key={s.id}
+              s={s}
+              highlighted={isHighlighted(s.id)}
+              cardRef={isHighlighted(s.id) ? highlightedRef : undefined}
+              onNavigate={() => markVisited(s.id)}
+            />
+          ))}
         </div>
 
         {/* ── Desktop: tabla ── */}
@@ -181,10 +203,18 @@ export default function SellersList() {
             </thead>
             <tbody>
               {filtered.map((s) => (
-                <tr key={s.id} className="border-t border-gold/5 hover:bg-gold/5 transition">
+                <tr
+                  key={s.id}
+                  ref={isHighlighted(s.id) ? highlightedRef : undefined}
+                  className={`border-t transition duration-500 ${
+                    isHighlighted(s.id)
+                      ? 'bg-gold/10 shadow-[inset_0_0_0_1.5px_rgba(200,168,90,0.55)]'
+                      : 'border-gold/5 hover:bg-gold/5 hover:shadow-[inset_0_0_0_1px_rgba(200,168,90,0.35)]'
+                  }`}
+                >
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-1.5">
-                      <Link to={`/admin/sellers/${s.id}`} className="text-cream hover:text-gold text-xs font-medium">{s.name}</Link>
+                      <Link to={`/admin/sellers/${s.id}`} onClick={() => markVisited(s.id)} className="text-cream hover:text-gold text-xs font-medium">{s.name}</Link>
                       {s.is_house && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/40 text-gold bg-gold/10 shrink-0">
                           Cuenta propia
@@ -210,7 +240,7 @@ export default function SellersList() {
                   <td className="py-2.5 px-3 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {s.contact_phone && <WaButton phone={s.contact_phone} name={s.name.split(' ')[0]} />}
-                      <Link to={`/admin/sellers/${s.id}`} className="text-gold-soft hover:text-gold text-xs whitespace-nowrap">Gestionar →</Link>
+                      <Link to={`/admin/sellers/${s.id}`} onClick={() => markVisited(s.id)} className="text-gold-soft hover:text-gold text-xs whitespace-nowrap">Gestionar →</Link>
                     </div>
                   </td>
                 </tr>
@@ -252,12 +282,7 @@ export default function SellersList() {
           className="input max-w-sm"
         />
         <label className="flex items-center gap-2 text-sm text-cream/70">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            className="accent-gold"
-          />
+          <Checkbox checked={showInactive} onChange={setShowInactive} />
           {'Mostrar inactivos'}
         </label>
       </div>

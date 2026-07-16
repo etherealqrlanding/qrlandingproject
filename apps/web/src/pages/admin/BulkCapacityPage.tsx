@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail } from '../../lib/adminApi';
+import Checkbox from '../../components/Checkbox';
 
 function withUpdatedCaps(
   products: AdminProductDetail[],
@@ -308,11 +309,12 @@ export default function BulkCapacityPage() {
                   <div key={`pm-${p.id}`} className="rounded-xl border border-gold/10 overflow-hidden">
                     {/* Cabecera del producto */}
                     <div className="px-4 py-3 bg-ink-soft/30 flex items-center gap-3 border-b border-gold/10">
-                      <input
-                        type="checkbox" checked={allProdSel}
-                        ref={(el) => { if (el) el.indeterminate = someProdSel && !allProdSel; }}
+                      <Checkbox
+                        checked={allProdSel}
+                        indeterminate={someProdSel && !allProdSel}
                         onChange={() => toggleProduct(p)}
-                        className="accent-gold shrink-0" disabled={ids.length === 0}
+                        disabled={ids.length === 0}
+                        aria-label={`Seleccionar todos los tiers de ${p.name}`}
                       />
                       <div className="min-w-0">
                         <p className="text-cream font-semibold text-sm truncate">{p.name}</p>
@@ -334,10 +336,10 @@ export default function BulkCapacityPage() {
                               key={`om-${opt.id}`}
                               className={`px-4 py-3 flex items-center gap-3 transition-colors ${isSel ? 'bg-gold/5' : ''}`}
                             >
-                              <input
-                                type="checkbox" checked={isSel}
+                              <Checkbox
+                                checked={isSel}
                                 onChange={() => toggleOption(opt.id)}
-                                className="accent-gold shrink-0"
+                                aria-label={`Seleccionar ${opt.name_es}`}
                               />
                               <div className="flex-1 min-w-0">
                                 <p className={`text-sm ${opt.is_active ? 'text-cream' : 'text-cream/40'}`}>{opt.name_es}</p>
@@ -372,10 +374,11 @@ export default function BulkCapacityPage() {
                 <thead className="bg-ink-soft/60 text-cream/40 text-xs uppercase tracking-wider">
                   <tr>
                     <th className="py-3 pl-4 pr-2 w-8">
-                      <input
-                        type="checkbox" checked={allSelected}
-                        ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                        onChange={toggleAll} className="accent-gold"
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={someSelected && !allSelected}
+                        onChange={toggleAll}
+                        aria-label="Seleccionar todos los tiers"
                       />
                     </th>
                     <th className="text-left py-3 px-3">Producto / Tier</th>
@@ -391,11 +394,12 @@ export default function BulkCapacityPage() {
                     return [
                       <tr key={`p-${p.id}`} className="border-t border-gold/10 bg-ink-soft/30">
                         <td className="py-2.5 pl-4 pr-2">
-                          <input
-                            type="checkbox" checked={allProdSel}
-                            ref={(el) => { if (el) el.indeterminate = someProdSel && !allProdSel; }}
+                          <Checkbox
+                            checked={allProdSel}
+                            indeterminate={someProdSel && !allProdSel}
                             onChange={() => toggleProduct(p)}
-                            className="accent-gold" disabled={ids.length === 0}
+                            disabled={ids.length === 0}
+                            aria-label={`Seleccionar todos los tiers de ${p.name}`}
                           />
                         </td>
                         <td colSpan={3} className="py-2.5 px-3">
@@ -410,9 +414,9 @@ export default function BulkCapacityPage() {
                         const isCapDirty = draftCaps.has(opt.id) && draftCaps.get(opt.id) !== opt.default_capacity_per_day;
                         const isSel = selected.has(opt.id);
                         return (
-                          <tr key={`o-${opt.id}`} className={`border-t border-gold/5 transition-colors ${isSel ? 'bg-gold/5' : 'hover:bg-white/[0.02]'}`}>
+                          <tr key={`o-${opt.id}`} className={`border-t border-gold/5 transition-all duration-200 ${isSel ? 'bg-gold/5' : 'hover:bg-gold/5 hover:shadow-[inset_0_0_0_1px_rgba(200,168,90,0.35)]'}`}>
                             <td className="py-2 pl-4 pr-2">
-                              <input type="checkbox" checked={isSel} onChange={() => toggleOption(opt.id)} className="accent-gold" />
+                              <Checkbox checked={isSel} onChange={() => toggleOption(opt.id)} aria-label={`Seleccionar ${opt.name_es}`} />
                             </td>
                             <td className="py-2 px-3 pl-9">
                               <span className={opt.is_active ? 'text-cream' : 'text-cream/40'}>{opt.name_es}</span>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminCategory, type AdminProductDetail } from '../../../lib/adminApi';
+import Checkbox from '../../../components/Checkbox';
 
 interface Props {
   product: AdminProductDetail | null;
@@ -216,10 +217,9 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
         </Field>
         <Field label="Estado">
           <label className="flex items-center gap-2 py-2">
-            <input
-              type="checkbox" checked={form.is_active}
-              onChange={(e) => update('is_active', e.target.checked)}
-              className="accent-gold"
+            <Checkbox
+              checked={form.is_active}
+              onChange={(checked) => update('is_active', checked)}
             />
             <span className="text-cream/80">{form.is_active ? 'Activo (visible)' : 'Inactivo (oculto)'}</span>
           </label>

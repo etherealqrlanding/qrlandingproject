@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
+import Checkbox from '../../components/Checkbox';
 
 
 
@@ -57,11 +58,9 @@ function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOr
     >
       <div className="px-4 pt-3 pb-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={selected}
             onChange={onToggle}
-            className="w-4 h-4 rounded border-gold/40 bg-ink accent-gold cursor-pointer shrink-0"
             aria-label={`Seleccionar orden de ${o.customer_name}`}
           />
           <span className="text-[10px] text-cream/40 tabular-nums">{fmtShortDate(o.created_at)}</span>
@@ -324,12 +323,10 @@ export default function OrdersList() {
             <thead className="bg-ink-soft/60 text-cream/60 text-xs uppercase tracking-wider">
               <tr>
                 <th className="py-3 px-3 w-8">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={allPageSelected}
-                    ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                    indeterminate={somePageSelected && !allPageSelected}
                     onChange={toggleSelectAll}
-                    className="w-4 h-4 rounded border-gold/40 bg-ink accent-gold cursor-pointer"
                     aria-label="Seleccionar todas las órdenes de esta página"
                   />
                 </th>
@@ -350,16 +347,14 @@ export default function OrdersList() {
                   className={`border-t border-gold/5 transition cursor-pointer ${
                     o.public_id === highlight
                       ? 'bg-gold/10 border-y-2 border-y-gold/60'
-                      : selected.has(o.public_id) ? 'bg-gold/5' : 'hover:bg-gold/5'
+                      : selected.has(o.public_id) ? 'bg-gold/5' : 'hover:bg-gold/5 hover:shadow-[inset_0_0_0_1px_rgba(200,168,90,0.35)]'
                   }`}
                   onClick={() => toggleSelect(o.public_id)}
                 >
                   <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selected.has(o.public_id)}
                       onChange={() => toggleSelect(o.public_id)}
-                      className="w-4 h-4 rounded border-gold/40 bg-ink accent-gold cursor-pointer"
                       aria-label={`Seleccionar orden de ${o.customer_name}`}
                     />
                   </td>

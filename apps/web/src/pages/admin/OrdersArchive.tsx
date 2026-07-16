@@ -1,6 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { adminApi, type ArchivedOrderItem } from '../../lib/adminApi';
+import Checkbox from '../../components/Checkbox';
+import { useReturnHighlight } from '../../hooks/useReturnHighlight';
+
+const LAST_VIEWED_KEY = 'lastViewedArchivedOrderId';
 
 const STATUS_FILTERS = [
   { value: '', label: 'Todos' },
@@ -46,6 +50,9 @@ export default function OrdersArchive() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const { isHighlighted, highlightedRef, markVisited } = useReturnHighlight(
+    LAST_VIEWED_KEY, orders, (o: ArchivedOrderItem) => o.public_id,
+  );
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async (p = page, s = search, st = status) => {
@@ -210,9 +217,12 @@ export default function OrdersArchive() {
               <thead>
                 <tr className="border-b border-gold/10 bg-ink-soft/40">
                   <th className="px-3 py-2 text-left">
-                    <input type="checkbox" checked={selected.size === orders.length && orders.length > 0}
+                    <Checkbox
+                      checked={selected.size === orders.length && orders.length > 0}
+                      indeterminate={selected.size > 0 && selected.size < orders.length}
                       onChange={toggleAll}
-                      className="rounded border-gold/30 bg-ink accent-gold" />
+                      aria-label="Seleccionar todas las órdenes"
+                    />
                   </th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Pasajero</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Servicio</th>
@@ -227,11 +237,19 @@ export default function OrdersArchive() {
               <tbody>
                 {orders.map((o, i) => (
                   <tr key={o.public_id}
-                    onClick={() => navigate(`/admin/orders/${o.public_id}`)}
-                    className={`border-b border-gold/5 hover:bg-gold/5 transition cursor-pointer ${i % 2 === 0 ? '' : 'bg-ink-soft/20'} ${selected.has(o.public_id) ? 'bg-gold/5' : ''}`}>
+                    ref={isHighlighted(o.public_id) ? highlightedRef : undefined}
+                    onClick={() => { markVisited(o.public_id); navigate(`/admin/orders/${o.public_id}`); }}
+                    className={`border-b transition duration-500 cursor-pointer ${
+                      isHighlighted(o.public_id)
+                        ? 'bg-gold/10 shadow-[inset_0_0_0_1.5px_rgba(200,168,90,0.55)]'
+                        : `border-gold/5 hover:bg-gold/5 hover:shadow-[inset_0_0_0_1px_rgba(200,168,90,0.35)] ${i % 2 === 0 ? '' : 'bg-ink-soft/20'} ${selected.has(o.public_id) ? 'bg-gold/5' : ''}`
+                    }`}>
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      <input type="checkbox" checked={selected.has(o.public_id)} onChange={() => toggleSelect(o.public_id)}
-                        className="rounded border-gold/30 bg-ink accent-gold" />
+                      <Checkbox
+                        checked={selected.has(o.public_id)}
+                        onChange={() => toggleSelect(o.public_id)}
+                        aria-label={`Seleccionar orden de ${o.customer_name}`}
+                      />
                     </td>
                     <td className="px-3 py-2.5">
                       <p className="text-cream font-medium truncate max-w-[160px]">{o.customer_name}</p>

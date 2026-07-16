@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminSeller, type AdminSellerOrder } from '../../../lib/adminApi';
+import Checkbox from '../../../components/Checkbox';
 
 interface Props { seller: AdminSeller; }
 
@@ -167,12 +168,11 @@ export default function SellerOrdersSection({ seller }: Props) {
               <tr>
                 {pendingSettlementOrders.length > 0 && (
                   <th className="text-center py-3 px-3 w-10">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedOrderIds.length === pendingSettlementOrders.length && pendingSettlementOrders.length > 0}
+                      indeterminate={selectedOrderIds.length > 0 && selectedOrderIds.length < pendingSettlementOrders.length}
                       onChange={togglePendingAll}
-                      className="accent-gold"
-                      title="Seleccionar todas las pendientes"
+                      aria-label="Seleccionar todas las pendientes"
                     />
                   </th>
                 )}
@@ -193,16 +193,16 @@ export default function SellerOrdersSection({ seller }: Props) {
                 return (
                   <tr
                     key={o.order_id}
-                    className={`border-t transition ${
+                    className={`border-t transition-all duration-200 ${
                       settledAt
-                        ? 'border-emerald-500/10 bg-emerald-500/[0.06] hover:bg-emerald-500/10'
-                        : 'border-gold/5 hover:bg-gold/5'
+                        ? 'border-emerald-500/10 bg-emerald-500/[0.06] hover:bg-emerald-500/10 hover:shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]'
+                        : 'border-gold/5 hover:bg-gold/5 hover:shadow-[inset_0_0_0_1px_rgba(200,168,90,0.35)]'
                     }`}
                   >
                     {pendingSettlementOrders.length > 0 && (
                       <td className="text-center py-3 px-3">
                         {canSelect && (
-                          <input type="checkbox" checked={selected} onChange={() => toggleOne(o.order_id)} className="accent-gold" />
+                          <Checkbox checked={selected} onChange={() => toggleOne(o.order_id)} aria-label="Seleccionar venta" />
                         )}
                       </td>
                     )}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail } from '../../../lib/adminApi';
 import AvailabilityEditor from './AvailabilityEditor';
+import Checkbox from '../../../components/Checkbox';
 
 interface Props {
   product: AdminProductDetail;
@@ -528,21 +529,17 @@ function OptionFormFields({ option, onChange }: {
 
       <div className="grid sm:grid-cols-4 gap-4">
         <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={option.has_dinner ?? false}
-            onChange={(e) => update('has_dinner', e.target.checked)}
-            className="accent-gold"
+            onChange={(checked) => update('has_dinner', checked)}
           />
           <span className="text-sm text-cream/80">Incluye cena</span>
         </label>
         <div className="space-y-1.5">
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={option.has_transfer ?? false}
-              onChange={(e) => update('has_transfer', e.target.checked)}
-              className="accent-gold"
+              onChange={(checked) => update('has_transfer', checked)}
             />
             <span className="text-sm text-cream/80">Incluye traslado</span>
           </label>
@@ -567,11 +564,9 @@ function OptionFormFields({ option, onChange }: {
           />
         </Field>
         <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={option.is_active ?? true}
-            onChange={(e) => update('is_active', e.target.checked)}
-            className="accent-gold"
+            onChange={(checked) => update('is_active', checked)}
           />
           <span className="text-sm text-cream/80">Activo</span>
         </label>

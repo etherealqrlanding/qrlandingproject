@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import AvailabilityCalendar from '../AvailabilityCalendar';
+import Checkbox from '../Checkbox';
 
 type ReduceBody = { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean };
 type IncreaseBody = { adults: number; children: number; reason?: string; notify_customer?: boolean };
@@ -213,8 +214,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
           {origHasTransfer && (
             <label className={`flex items-center gap-2 text-sm ${isIncreasing ? 'opacity-40' : ''}`}>
-              <input type="checkbox" checked={effectiveTransfer} disabled={isIncreasing}
-                onChange={(e) => setKeepTransfer(e.target.checked)} className="accent-gold" />
+              <Checkbox checked={effectiveTransfer} disabled={isIncreasing} onChange={setKeepTransfer} />
               <span className="text-cream/80">Mantener traslado {isIncreasing && '(no se puede quitar al agregar pax)'}</span>
             </label>
           )}
@@ -272,7 +272,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
           {preview.direction === 'reduce' && (
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-gold" />
+              <Checkbox checked={notify} onChange={setNotify} />
               <span className="text-sm text-cream/80">Notificar por email al cliente</span>
             </label>
           )}
