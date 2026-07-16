@@ -25,7 +25,7 @@ const empty = {
   code: '', name: '',
   contact_email: '', contact_phone: '',
   kind: '', commission_percent: 10,
-  notes: '', is_active: true, is_permanent: false,
+  notes: '', is_active: true, is_permanent: false, is_house: false,
 };
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
@@ -169,6 +169,22 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             <span className="ml-2 text-xs text-cream/50">(habilita el cobro en efectivo desde el checkout)</span>
           </span>
         </label>
+        <label className="inline-flex items-center gap-2">
+          <input type="checkbox" checked={form.is_house ?? false} onChange={(e) => update('is_house', e.target.checked)} className="accent-gold" />
+          <span className="text-cream/80">
+            Cuenta propia (agencia)
+            <span className="ml-2 text-xs text-cream/50">
+              no es un afiliado externo — se excluye del revenue/comisiones del listado de vendedores
+            </span>
+          </span>
+        </label>
+        {form.is_house && (
+          <p className="text-xs text-gold-soft bg-gold/5 border border-gold/15 rounded-md px-3 py-2">
+            💡 Para ventas directas de la agencia (Instagram, WhatsApp, mostrador) sin pagarte comisión a vos mismo,
+            usá <strong>Comisión 0%</strong>. Si solo querés cobrar por Mercado Pago (sin efectivo), dejá
+            <strong> "Vendedor permanente"</strong> sin marcar.
+          </p>
+        )}
       </div>
 
       <div className="flex items-center justify-between pt-4 border-t border-gold/10">

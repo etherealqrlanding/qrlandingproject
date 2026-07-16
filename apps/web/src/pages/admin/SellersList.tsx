@@ -45,9 +45,16 @@ function SellerCard({ s }: Readonly<{ s: AdminSeller }>) {
     <div className="rounded-xl border border-gold/10 bg-ink-soft/40 hover:bg-ink-soft/60 transition overflow-hidden">
       <div className="px-4 pt-3 pb-2 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Link to={`/admin/sellers/${s.id}`} className="text-cream hover:text-gold font-medium text-sm">
-            {s.name}
-          </Link>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Link to={`/admin/sellers/${s.id}`} className="text-cream hover:text-gold font-medium text-sm">
+              {s.name}
+            </Link>
+            {s.is_house && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/40 text-gold bg-gold/10 shrink-0">
+                Cuenta propia
+              </span>
+            )}
+          </div>
           <p className="text-xs text-cream/40 truncate mt-0.5">{s.contact_email ?? '—'}</p>
         </div>
         <span className={`text-xs shrink-0 mt-0.5 ${s.is_active ? 'text-gold' : 'text-cream/40'}`}>
@@ -109,6 +116,9 @@ export default function SellersList() {
     return sellers.reduce(
       (acc, s) => {
         if (!s.is_active && !showInactive) return acc;
+        // Cuentas propias de la agencia no son afiliados: no suman a estos totales,
+        // que representan el programa de vendedores externos.
+        if (s.is_house) return acc;
         acc.revenue += s.revenue_paid_ars ?? 0;
         acc.paid += s.commission_paid_ars ?? 0;
         acc.pending += s.commission_pending_payment_ars ?? 0;
@@ -173,7 +183,14 @@ export default function SellersList() {
               {filtered.map((s) => (
                 <tr key={s.id} className="border-t border-gold/5 hover:bg-gold/5 transition">
                   <td className="py-2.5 px-3">
-                    <Link to={`/admin/sellers/${s.id}`} className="text-cream hover:text-gold text-xs font-medium">{s.name}</Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link to={`/admin/sellers/${s.id}`} className="text-cream hover:text-gold text-xs font-medium">{s.name}</Link>
+                      {s.is_house && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/40 text-gold bg-gold/10 shrink-0">
+                          Cuenta propia
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-cream/40 truncate max-w-[130px]">{s.contact_email ?? '—'}</p>
                   </td>
                   <td className="py-2.5 px-3 font-mono text-xs text-gold-soft whitespace-nowrap">{s.code}</td>
@@ -221,8 +238,8 @@ export default function SellersList() {
 
       {totals && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4 md:mb-8">
-          <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas pagadas por Mercado Pago" />
-          <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Comisiones de ventas por Mercado Pago" />
+          <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por Mercado Pago · afiliados externos" />
+          <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Comisiones de afiliados externos" />
           <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight />
           <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" />
         </div>

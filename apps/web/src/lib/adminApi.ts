@@ -210,6 +210,7 @@ export interface AdminSeller {
   notes: string | null;
   is_active: boolean;
   is_permanent: boolean;
+  is_house: boolean;
   created_at: string;
   supabase_user_id?: string | null;
   orders_total?: number;

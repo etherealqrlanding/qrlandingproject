@@ -23,6 +23,7 @@ const sellerSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   is_active: z.boolean().optional(),
   is_permanent: z.boolean().optional(),
+  is_house: z.boolean().optional(),
 });
 
 adminSellersRouter.get('/', async (_req, res, next) => {

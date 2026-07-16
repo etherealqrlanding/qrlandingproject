@@ -98,9 +98,16 @@ export default function SellerForm() {
 
       <header className="mt-3 mb-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <h1 className="font-display text-4xl text-cream">
-            {isNew ? 'Nuevo vendedor' : seller?.name ?? 'Cargando...'}
-          </h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="font-display text-4xl text-cream">
+              {isNew ? 'Nuevo vendedor' : seller?.name ?? 'Cargando...'}
+            </h1>
+            {seller?.is_house && (
+              <span className="text-xs px-2.5 py-1 rounded-full border border-gold/40 text-gold bg-gold/10">
+                Cuenta propia
+              </span>
+            )}
+          </div>
           {seller?.contact_phone && (
             <a
               href={`https://wa.me/${seller.contact_phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${seller.name.split(' ')[0]}, te contacto desde Tangos y Milongas Tickets.`)}`}

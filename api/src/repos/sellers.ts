@@ -9,6 +9,7 @@ export interface SellerInput {
   commission_percent: number;
   notes?: string | null;
   is_active?: boolean;
+  is_house?: boolean;
 }
 
 export interface SellerWithStats {
@@ -21,6 +22,7 @@ export interface SellerWithStats {
   commission_percent: string;            // numeric viene como string
   notes: string | null;
   is_active: boolean;
+  is_house: boolean;                     // cuenta propia de la agencia (no es afiliado externo)
   created_at: string;
   // stats agregados
   orders_total: number;                  // todas las órdenes atribuidas
@@ -42,7 +44,7 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
     `SELECT
        s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
        s.commission_percent::text AS commission_percent,
-       s.notes, s.is_active, s.created_at,
+       s.notes, s.is_active, s.is_house, s.created_at,
        COALESCE(stats.orders_total, 0)::int AS orders_total,
        COALESCE(stats.orders_paid, 0)::int AS orders_paid,
        COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
@@ -98,14 +100,14 @@ export async function getSeller(id: number) {
 
 export async function createSeller(input: SellerInput): Promise<number> {
   const { rows } = await pool.query<{ id: number }>(
-    `INSERT INTO sellers (code, name, contact_email, contact_phone, kind, commission_percent, notes, is_active)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+    `INSERT INTO sellers (code, name, contact_email, contact_phone, kind, commission_percent, notes, is_active, is_house)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING id`,
     [
       input.code, input.name,
       input.contact_email ?? null, input.contact_phone ?? null,
       input.kind ?? null, input.commission_percent,
-      input.notes ?? null, input.is_active ?? true,
+      input.notes ?? null, input.is_active ?? true, input.is_house ?? false,
     ],
   );
   return rows[0].id;
