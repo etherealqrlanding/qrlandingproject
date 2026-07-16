@@ -147,6 +147,7 @@ export default function Home() {
                       ? t('hero.quick_select.from_price', { price: p.starting_price_usd })
                       : undefined,
                     meta,
+                    thumbnail: p.hero_image,
                   };
                 })}
               />
@@ -180,6 +181,7 @@ export default function Home() {
                     price,
                     tags,
                     meta: description ? truncate(description, 70) : undefined,
+                    thumbnail: selectedHouseDetail?.hero_image,
                   };
                 })}
               />

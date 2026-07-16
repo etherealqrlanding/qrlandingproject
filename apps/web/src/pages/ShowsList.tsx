@@ -1,13 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import type { ProductSummary } from '../types/api';
 import ProductCard from '../components/ProductCard';
 
+// Recuerda la última casa que se abrió desde este listado (una sola lectura, se
+// consume al volver). App.tsx resetea el scroll a top en cada cambio de ruta, así
+// que sin esto se pierde por completo la posición al volver del detalle.
+const LAST_VIEWED_KEY = 'lastViewedShowSlug';
+
 export default function ShowsList() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<ProductSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [highlightedSlug, setHighlightedSlug] = useState<string | null>(null);
+  const highlightedRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -16,6 +23,21 @@ export default function ShowsList() {
       .catch((err: Error) => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
   }, []);
+
+  // Al volver del detalle de una casa, restauramos el scroll a esa card y la
+  // resaltamos un instante para que sea fácil ubicar desde dónde se venía.
+  useEffect(() => {
+    if (!products) return;
+    const slug = sessionStorage.getItem(LAST_VIEWED_KEY);
+    if (!slug || !products.some((p) => p.slug === slug)) return;
+    sessionStorage.removeItem(LAST_VIEWED_KEY);
+    setHighlightedSlug(slug);
+    const raf = requestAnimationFrame(() => {
+      highlightedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const timeout = setTimeout(() => setHighlightedSlug(null), 2200);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timeout); };
+  }, [products]);
 
   return (
     <section className="container-narrow py-16">
@@ -50,7 +72,13 @@ export default function ShowsList() {
       {products && products.length > 0 && (
         <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {products.map((p) => (
-            <ProductCard key={p.id} product={p} />
+            <ProductCard
+              key={p.id}
+              product={p}
+              highlighted={p.slug === highlightedSlug}
+              ref={p.slug === highlightedSlug ? highlightedRef : undefined}
+              onNavigate={() => sessionStorage.setItem(LAST_VIEWED_KEY, p.slug)}
+            />
           ))}
         </div>
       )}

@@ -5,12 +5,37 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    /* Firefox: pulgar dorado translúcido sobre riel oscuro, cascadea a todo scrolleable. */
+    scrollbar-width: thin;
+    scrollbar-color: #c8a85a66 #1a1414;
   }
   body {
     @apply bg-ink text-cream font-sans antialiased;
   }
   h1, h2, h3, h4 {
     @apply font-display;
+  }
+
+  /* Chrome/Safari/Edge: definido una vez, aplica a la página y a todo contenedor
+     con overflow (modales, tablas con scroll horizontal, listas desplegables). */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1a1414;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #c8a85a66;
+    border-radius: 999px;
+    border: 2px solid #1a1414;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #c8a85a99;
+  }
+  ::-webkit-scrollbar-corner {
+    background: #1a1414;
   }
 }
 

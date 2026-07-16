@@ -10,6 +10,8 @@ export interface QuickSelectOption {
   tags?: { icon: ReactNode; label: string }[];
   /** Línea secundaria compacta (servicios de la casa, descripción del servicio). Hace quiebre de línea, no se corta. */
   meta?: string;
+  /** Miniatura a la izquierda de la opción (ej. hero_image de la casa). undefined = sin columna de miniatura. */
+  thumbnail?: string | null;
 }
 
 interface QuickSelectProps {
@@ -52,7 +54,7 @@ export default function QuickSelect({
               <span className={isDisabled ? 'shrink-0 text-cream/20' : 'shrink-0 text-gold'}>
                 {icon}
               </span>
-              <span className="flex-1 truncate font-medium">
+              <span className="flex-1 font-medium text-sm leading-snug">
                 {selected ? selected.label : placeholder}
               </span>
               <svg
@@ -82,11 +84,20 @@ export default function QuickSelect({
             >
               {({ selected: isSelected }) => (
                 <>
+                  {opt.thumbnail !== undefined && (
+                    <span className="shrink-0 h-10 w-10 rounded-md overflow-hidden bg-ink border border-gold/10">
+                      {opt.thumbnail ? (
+                        <img src={opt.thumbnail} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-cream/15">{icon}</span>
+                      )}
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate font-medium">{opt.label}</span>
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-sm leading-snug">{opt.label}</span>
                       {opt.price && (
-                        <span className="shrink-0 text-right text-[11px] font-medium leading-tight text-gold/90">
+                        <span className="shrink-0 text-right text-[11px] font-medium leading-tight text-gold/90 pt-0.5">
                           {opt.price}
                         </span>
                       )}

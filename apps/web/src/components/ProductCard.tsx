@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ProductSummary } from '../types/api';
@@ -6,9 +7,16 @@ import { useExchangeRate } from '../lib/useExchangeRate';
 
 interface Props {
   product: ProductSummary;
+  /** Resalta la card (ej. al volver del detalle, para ubicar desde dónde se venía). */
+  highlighted?: boolean;
+  /** Se dispara al hacer click, antes de navegar — para que el listado recuerde esta card. */
+  onNavigate?: () => void;
 }
 
-export default function ProductCard({ product }: Props) {
+const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
+  { product, highlighted, onNavigate },
+  ref,
+) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
@@ -18,8 +26,14 @@ export default function ProductCard({ product }: Props) {
 
   return (
     <Link
+      ref={ref}
       to={`/shows/${product.slug}`}
-      className="group block rounded-lg overflow-hidden border border-gold/10 bg-ink-soft transition hover:border-gold/40 sm:relative sm:aspect-[4/5]"
+      onClick={onNavigate}
+      className={`group block rounded-lg overflow-hidden border bg-ink-soft transition duration-500 sm:relative sm:aspect-[4/5] ${
+        highlighted
+          ? 'border-gold ring-2 ring-gold ring-offset-2 ring-offset-ink shadow-[0_0_28px_rgba(200,168,90,0.35)]'
+          : 'border-gold/10 hover:border-gold/40'
+      }`}
     >
       {/* Foto: tira arriba en mobile (flujo normal, no se corta nada del texto), overlay completo desde sm+ */}
       <div className="relative aspect-[4/3] sm:absolute sm:inset-0 sm:aspect-auto">
@@ -72,4 +86,6 @@ export default function ProductCard({ product }: Props) {
       </div>
     </Link>
   );
-}
+});
+
+export default ProductCard;
