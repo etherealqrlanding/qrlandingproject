@@ -170,7 +170,6 @@
     "rights": "All rights reserved."
   },
   "ref": {
-    "welcome": "Booking with {{name}}",
     "inactive": "This seller is not currently available"
   },
   "seller_inactive": {
