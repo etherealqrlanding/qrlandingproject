@@ -314,7 +314,7 @@ export const sellerApi = {
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/collect`, {
       method: 'POST',
     }),
-  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string }) =>
+  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string }) =>
     request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reduce-cash`,
       { method: 'POST', body: JSON.stringify(body) },

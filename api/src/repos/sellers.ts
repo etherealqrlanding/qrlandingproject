@@ -1,4 +1,5 @@
 import { pool } from '../db.js';
+import { getArchiveRetentionDays } from '../services/settings.js';
 
 export interface SellerInput {
   code: string;
@@ -260,6 +261,20 @@ export async function listSellerOrders(
   const autoArchivedFilter = opts?.hideAutoArchived
     ? ` AND (a.net_settled_at IS NULL OR o.restored_at IS NOT NULL)`
     : '';
+  // Canceladas/reintegradas/vencidas/fallidas: se ocultan de "Mis Órdenes" recién
+  // después de archive_retention_days (el mismo número configurable que gobierna el
+  // archivado general), no al instante. Antes esto era incondicional e ignoraba esa
+  // configuración por completo. Si el archivado automático está desactivado (null),
+  // se mantiene el comportamiento previo (ocultar de inmediato).
+  const retentionDays = await getArchiveRetentionDays();
+  let terminalStatusFilter = ` AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')`;
+  if (retentionDays != null) {
+    params.push(retentionDays);
+    terminalStatusFilter = ` AND (
+      o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
+      OR COALESCE(o.cancelled_at, o.refunded_at, o.updated_at) >= NOW() - make_interval(days => $${params.length})
+    )`;
+  }
   const { rows } = await pool.query<SellerOrder>(
     `SELECT
        o.id AS order_id, o.public_id, o.status::text AS status,
@@ -290,7 +305,7 @@ export async function listSellerOrders(
        LEFT JOIN order_items oi ON oi.order_id = o.id
       WHERE a.seller_id = $1
         AND o.archived_at IS NULL
-        AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
+        ${terminalStatusFilter}
         ${statusFilter}${settlementFilter}${autoArchivedFilter}
       ORDER BY o.created_at DESC`,
     params,

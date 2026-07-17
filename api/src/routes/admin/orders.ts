@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive } from '../../repos/orders.js';
+import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -11,6 +11,7 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { syncOrderWithMp } from '../checkout.js';
 import { getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
+import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNotification } from '../../repos/notifications.js';
 
 export const adminOrdersRouter = Router();
 
@@ -301,6 +302,10 @@ const modifySchema = z.object({
   transfer_requested: z.boolean(),
   reason: z.string().max(500).nullish(),
   notify_customer: z.boolean().optional().default(true),
+  // Presentes solo cuando la misma acción también reprogramó la fecha (ver
+  // ModifyReservationModal): permiten mandar un único email combinado.
+  reschedule_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  reschedule_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
@@ -414,7 +419,10 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
 
     // 6) Notificar (fire-and-forget)
     if (parsed.data.notify_customer !== false) {
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason).catch((e) =>
+      const dateChange = parsed.data.reschedule_from && parsed.data.reschedule_to
+        ? { prevDate: parsed.data.reschedule_from, newDate: parsed.data.reschedule_to }
+        : null;
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, false, dateChange).catch((e) =>
         console.error('[email] modify notification failed for order', row.order_id, e),
       );
     }
@@ -430,7 +438,10 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
         new_transfer: newTransfer,
       },
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err instanceof ConcurrentModificationError) return res.status(409).json({ error: err.message });
+    next(err);
+  }
 });
 
 // ─── Confirmar cobro en efectivo (admin en nombre del vendedor) ────────────────
@@ -455,10 +466,15 @@ adminOrdersRouter.post('/:publicId/collect-cash', async (req, res, next) => {
       return res.status(409).json({ error: 'La orden ya fue procesada anteriormente.' });
     }
 
-    await pool.query(
-      `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW() WHERE id = $1`,
+    // WHERE status = 'pending' hace la transición atómica: evita que un doble clic (o
+    // el vendedor confirmando el mismo cobro en paralelo) dispare el email dos veces.
+    const { rowCount } = await pool.query(
+      `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW() WHERE id = $1 AND status = 'pending'`,
       [order.id],
     );
+    if (!rowCount) {
+      return res.status(409).json({ error: 'La orden ya fue procesada anteriormente.' });
+    }
     await pool.query(
       `INSERT INTO payment_events (order_id, event_type, payload)
        VALUES ($1, 'cash_collected_by_admin', $2::jsonb)`,
@@ -491,16 +507,19 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
-      service_date: string | Date;
+      service_date: string | Date; service_date_fmt: string;
       seller_id: number | null; net_total_usd: number | null; net_settled_at: string | null;
+      customer_name: string; option_name: string;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
               o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
+              o.customer_name,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested, oi.transfer_hotel,
-              oi.service_date,
+              oi.service_date, to_char(oi.service_date, 'YYYY-MM-DD') AS service_date_fmt,
+              oi.option_name_snapshot AS option_name,
               a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd,
               a.net_settled_at
          FROM orders o
@@ -573,8 +592,27 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       actor: 'admin',
     });
 
+    // Aviso in-app + push en vivo al vendedor: la modificación la hizo el admin, así que
+    // no se entera solo mirando la orden — necesita la misma señal que liquidar/rendir.
+    if (hasAttribution) {
+      createOrderReducedByAdminNotification({
+        sellerId: row.seller_id!,
+        orderId: row.order_id,
+        orderPublicId: publicId,
+        customerName: row.customer_name,
+        optionName: row.option_name,
+        serviceDate: row.service_date_fmt,
+        newAdults: parsed.data.adults,
+        newChildren: parsed.data.children,
+        refundArs: calc.refundArs,
+      }).catch((e) => console.error('[notif] createOrderReducedByAdminNotification failed:', e));
+    }
+
     if (parsed.data.notify_customer !== false) {
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, true).catch((e) =>
+      const dateChange = parsed.data.reschedule_from && parsed.data.reschedule_to
+        ? { prevDate: parsed.data.reschedule_from, newDate: parsed.data.reschedule_to }
+        : null;
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, true, dateChange).catch((e) =>
         console.error('[email] cash reduce notification failed for order', row.order_id, e),
       );
     }
@@ -590,7 +628,10 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
         new_transfer: newTransfer,
       },
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err instanceof ConcurrentModificationError) return res.status(409).json({ error: err.message });
+    next(err);
+  }
 });
 
 // ─── Ampliar reserva en efectivo → crea ampliación PENDIENTE de cobro ─────────
@@ -613,6 +654,23 @@ adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
       orderPublicId: publicId, adults: parsed.data.adults, children: parsed.data.children,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+
+    // Aviso in-app + push en vivo: el vendedor tiene una ampliación nueva para cobrar
+    // que no creó él mismo — necesita enterarse aunque no esté mirando el email.
+    if (result.sellerId != null) {
+      createCashAddonCreatedByAdminNotification({
+        sellerId: result.sellerId,
+        orderId: result.orderId,
+        orderPublicId: publicId,
+        customerName: result.customerName,
+        optionName: result.optionName,
+        serviceDate: result.serviceDate,
+        extraAdults: result.extraAdults,
+        extraChildren: result.extraChildren,
+        chargeArs: result.data.charge_ars,
+      }).catch((e) => console.error('[notif] createCashAddonCreatedByAdminNotification failed:', e));
+    }
+
     res.json({ data: result.data });
   } catch (err) { next(err); }
 });

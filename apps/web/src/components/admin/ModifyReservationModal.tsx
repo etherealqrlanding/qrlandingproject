@@ -2,7 +2,12 @@ import { useMemo, useState } from 'react';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import Checkbox from '../Checkbox';
 
-type ReduceBody = { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean };
+type ReduceBody = {
+  adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean;
+  // Presente solo cuando la misma acción también reprograma la fecha: así el backend
+  // manda un único email combinado en vez de uno por la reducción y otro por la fecha.
+  reschedule_from?: string; reschedule_to?: string;
+};
 type IncreaseBody = { adults: number; children: number; reason?: string; notify_customer?: boolean };
 type RescheduleBody = { new_date: string; reason?: string; notify_customer?: boolean };
 
@@ -108,12 +113,22 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     setError(null);
     setProcessing(true);
     try {
+      // Si además de la fecha también hay una reducción de pax, mandamos UN solo email
+      // (el de la reducción, que incluye la reprogramación) en vez de dos por separado:
+      // acá suprimimos el de reschedule y le pasamos la fecha anterior/nueva al reduce.
+      const combiningWithReduce = hasDateChange && preview.direction === 'reduce';
       if (hasDateChange) {
         if (!handlers.reschedule) { setError('Reprogramación no disponible.'); setProcessing(false); return; }
-        await handlers.reschedule({ new_date: newDate, reason: reason.trim() || undefined, notify_customer: notify });
+        await handlers.reschedule({
+          new_date: newDate, reason: reason.trim() || undefined,
+          notify_customer: combiningWithReduce ? false : notify,
+        });
       }
       if (preview.direction === 'reduce') {
-        const body = { adults, children, transfer_requested: effectiveTransfer, reason: reason.trim() || undefined, notify_customer: notify };
+        const body: ReduceBody = {
+          adults, children, transfer_requested: effectiveTransfer, reason: reason.trim() || undefined, notify_customer: notify,
+          ...(combiningWithReduce ? { reschedule_from: item.service_date, reschedule_to: newDate } : {}),
+        };
         const fn = isMp ? handlers.reduceMp : handlers.reduceCash;
         if (!fn) { setError('Esta operación no está disponible.'); return; }
         await fn(body);

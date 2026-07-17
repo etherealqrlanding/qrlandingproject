@@ -15,6 +15,7 @@ import ProductPage from './pages/ProductPage';
 import About from './pages/About';
 import Faq from './pages/Faq';
 import CheckoutReturn from './pages/CheckoutReturn';
+import VerifyOrder from './pages/VerifyOrder';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import BottomNavPublic from './components/BottomNavPublic';
@@ -178,8 +179,11 @@ function PublicApp() {
   }, [freshTick]);
 
   // Los retornos de pago (/checkout/*) siempre pasan, para no atrapar al que vuelve de MP.
+  // La verificación (/verificar/*) también: la abre la casa de tango desde el QR del
+  // voucher, no tiene por qué tener un código de vendedor guardado.
   const isCheckoutReturn = location.pathname.startsWith('/checkout');
-  if (!isCheckoutReturn) {
+  const isVerifyPage = location.pathname.startsWith('/verificar');
+  if (!isCheckoutReturn && !isVerifyPage) {
     if (maintenance) return <MaintenanceScreen />;
     if (gate === 'checking') return <LoadingScreen />;
     if (gate === 'missing' || gate === 'invalid') {
@@ -202,6 +206,7 @@ function PublicApp() {
           <Route path="/shows/:slug" element={<ProductPage />} />
           <Route path="/nosotros" element={<About />} />
           <Route path="/preguntas-frecuentes" element={<Faq />} />
+          <Route path="/verificar/:publicId" element={<VerifyOrder />} />
           <Route path="/checkout/success" element={<CheckoutReturn variant="success" />} />
           <Route path="/checkout/pending" element={<CheckoutReturn variant="pending" />} />
           <Route path="/checkout/failure" element={<CheckoutReturn variant="failure" />} />

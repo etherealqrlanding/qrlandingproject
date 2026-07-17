@@ -14,7 +14,7 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
-import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, rearchiveBySeller } from '../../repos/orders.js';
+import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
@@ -480,15 +480,20 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
       return res.status(409).json({ error: 'La orden ya fue procesada anteriormente' });
     }
 
-    // Marcar como pagada
-    await pool.query(
+    // Marcar como pagada de forma atómica: el WHERE status = 'pending' evita que un
+    // doble clic (o el admin confirmando el mismo cobro en paralelo) dispare el email
+    // de confirmación dos veces — solo una de las dos requests gana la carrera.
+    const { rowCount } = await pool.query(
       `UPDATE orders
           SET status = 'paid',
               paid_at = NOW(),
               cash_collected_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1 AND status = 'pending'`,
       [order.id],
     );
+    if (!rowCount) {
+      return res.status(409).json({ error: 'La orden ya fue procesada anteriormente' });
+    }
 
     await logPaymentEvent(order.id, 'cash_collected_by_seller', null, { seller_id: req.seller!.sellerId });
 
@@ -579,6 +584,10 @@ const sellerReduceSchema = z.object({
   transfer_requested: z.boolean(),
   notify_customer: z.boolean().optional().default(true),
   reason: z.string().max(500).nullish(),
+  // Presentes solo cuando la misma acción también reprogramó la fecha (ver
+  // ModifyReservationModal): permiten mandar un único email combinado.
+  reschedule_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  reschedule_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => {
@@ -672,13 +681,19 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     });
 
     if (parsed.data.notify_customer !== false) {
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason ?? null, true).catch((e) =>
+      const dateChange = parsed.data.reschedule_from && parsed.data.reschedule_to
+        ? { prevDate: parsed.data.reschedule_from, newDate: parsed.data.reschedule_to }
+        : null;
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason ?? null, true, dateChange).catch((e) =>
         console.error('[email] seller cash reduce notification failed for order', row.order_id, e),
       );
     }
 
     res.json({ data: { ok: true, refund_usd: calc.refundUsd, refund_ars: calc.refundArs, new_total_usd: calc.newSubtotalUsd } });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err instanceof ConcurrentModificationError) return res.status(409).json({ error: err.message });
+    next(err);
+  }
 });
 
 // POST /api/seller/me/orders/:publicId/add-mp — deshabilitado: el vendedor no opera
@@ -751,16 +766,21 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
     const cancelCheck = checkOperationWindow(await getCancelWindow(), row.service_date);
     if (cancelCheck.blocked) return res.status(409).json({ error: cancelCheck.message });
 
-    await pool.query(
+    // WHERE status IN (...) hace la transición atómica: evita que un doble clic dispare
+    // el email de cancelación (y su aviso de "coordiná la devolución") dos veces.
+    const { rowCount } = await pool.query(
       `UPDATE orders
           SET status = 'cancelled',
               cancelled_by = 'seller',
               cancel_reason = $2,
               cancelled_at = NOW(),
               updated_at = NOW()
-        WHERE id = $1`,
+        WHERE id = $1 AND status IN ('pending', 'paid')`,
       [row.order_id, reason],
     );
+    if (!rowCount) {
+      return res.status(409).json({ error: 'La reserva ya fue procesada anteriormente' });
+    }
     await logPaymentEvent(row.order_id, 'order_cancelled', null, {
       actor: 'seller', seller_id: req.seller!.sellerId, reason,
     });
@@ -892,14 +912,16 @@ sellerRouter.post('/me/orders/:publicId/restore', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/seller/me/orders/:publicId/archive — vuelve a archivar una orden que el vendedor había restaurado
+// POST /api/seller/me/orders/:publicId/archive — archiva a mano una orden que el
+// vendedor había restaurado, o una terminal (cancelada/reintegrada/vencida/fallida)
+// que todavía no se archivó sola (ver archiveBySeller).
 sellerRouter.post('/me/orders/:publicId/archive', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
 
-    const archived = await rearchiveBySeller(publicId, req.seller!.sellerId);
-    if (archived === 0) return res.status(404).json({ error: 'No encontrada o no restaurada previamente' });
+    const archived = await archiveBySeller(publicId, req.seller!.sellerId);
+    if (archived === 0) return res.status(404).json({ error: 'No encontrada o no se puede archivar en este estado' });
 
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }

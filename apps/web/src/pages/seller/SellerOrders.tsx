@@ -59,6 +59,20 @@ function derivedStatus(o: SellerOrder): { key: DerivedKey; label: string; cls: s
   return { key, label: DERIVED_LABEL[key], cls: STATUS_CLASS[key] };
 }
 
+const TERMINAL_STATUSES = ['cancelled', 'refunded', 'expired', 'failed'];
+
+// El vendedor puede archivar a mano: (a) algo que había restaurado y quiere volver a
+// mandar al archivo, o (b) una orden ya cancelada/reintegrada/vencida/fallida que
+// todavía sigue en "Mis Órdenes" porque no pasaron los días configurados de archivado
+// automático — no tiene por qué esperar esa ventana si ya no la necesita a la vista.
+function canArchiveManually(o: SellerOrder): boolean {
+  return Boolean(o.restored_at) || TERMINAL_STATUSES.includes(o.status);
+}
+function archiveButtonLabel(o: SellerOrder, archiving: boolean): string {
+  if (archiving) return 'Archivando...';
+  return o.restored_at ? '📁 Volver a archivar' : '📁 Archivar ahora';
+}
+
 const PAYMENT_LABEL: Record<string, string> = {
   mercadopago: 'Mercado Pago',
   cash: 'Efectivo',
@@ -717,7 +731,7 @@ export default function SellerOrders() {
                           </div>
                         );
                       })()}
-                      {o.restored_at && (
+                      {canArchiveManually(o) && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <button
                             type="button"
@@ -725,7 +739,7 @@ export default function SellerOrders() {
                             disabled={archivingOrder === o.public_id}
                             className="w-full rounded-lg border border-emerald-500/25 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
                           >
-                            {archivingOrder === o.public_id ? 'Archivando...' : '📁 Volver a archivar'}
+                            {archiveButtonLabel(o, archivingOrder === o.public_id)}
                           </button>
                         </div>
                       )}
@@ -960,7 +974,7 @@ export default function SellerOrders() {
                                 </div>
                               );
                             })()}
-                            {o.restored_at && (
+                            {canArchiveManually(o) && (
                               <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
                                 <button
                                   type="button"
@@ -968,7 +982,7 @@ export default function SellerOrders() {
                                   disabled={archivingOrder === o.public_id}
                                   className="w-full rounded-lg border border-emerald-500/25 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-500/10 transition-colors disabled:opacity-50"
                                 >
-                                  {archivingOrder === o.public_id ? 'Archivando...' : '📁 Volver a archivar'}
+                                  {archiveButtonLabel(o, archivingOrder === o.public_id)}
                                 </button>
                               </div>
                             )}

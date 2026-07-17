@@ -83,6 +83,19 @@ export interface SellerPublicInfo {
   is_permanent: boolean;
 }
 
+export interface OrderVerification {
+  public_id: string;
+  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' | 'expired';
+  customer_name: string;
+  product_name: string;
+  option_name: string;
+  service_date: string;
+  adults: number;
+  children: number;
+  transfer_requested: boolean;
+  updated_at: string;
+}
+
 export interface AvailabilityDay {
   date: string;
   status: 'available' | 'low' | 'full' | 'closed';
@@ -142,6 +155,8 @@ export const api = {
       ),
     sellerInfo: (code: string) =>
       request<SellerPublicInfo>(`/api/checkout/seller-info?code=${encodeURIComponent(code)}`, { cache: 'no-store' }),
+    verify: (publicId: string) =>
+      request<OrderVerification>(`/api/checkout/orders/${encodeURIComponent(publicId)}/verify`, { cache: 'no-store' }),
   },
 };
 

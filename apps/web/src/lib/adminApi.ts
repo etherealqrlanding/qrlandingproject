@@ -527,12 +527,12 @@ export const adminApi = {
       ),
     // Modificar reserva — reducir (reintegro MP o devolución en efectivo) / agregar
     // (cobro en efectivo o link incremental de MP).
-    modifyMp: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean }) =>
+    modifyMp: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean; reschedule_from?: string; reschedule_to?: string }) =>
       request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
         `/api/admin/orders/${encodeURIComponent(publicId)}/modify`,
         { method: 'POST', body: JSON.stringify(body) },
       ),
-    reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean }) =>
+    reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean; reschedule_from?: string; reschedule_to?: string }) =>
       request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
         `/api/admin/orders/${encodeURIComponent(publicId)}/reduce-cash`,
         { method: 'POST', body: JSON.stringify(body) },

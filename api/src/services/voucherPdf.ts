@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { pool } from '../db.js';
+import { config } from '../config.js';
 import { ORDER_EMAIL_SELECT, toOrderData, type OrderEmailData } from './email.js';
 
 const GOLD = '#a8843f'; // versión oscura del dorado de marca, legible en fondo blanco/impreso
@@ -42,7 +43,13 @@ export async function generateVoucherPdf(orderId: number): Promise<Buffer | null
   if (!data) return null;
   const order: OrderEmailData = toOrderData(data);
 
-  const qrPng = await QRCode.toBuffer(order.public_id, { margin: 1, width: 200 });
+  // El QR apunta a la página pública de verificación (no al texto plano de la
+  // referencia): así, si la casa de tango tiene señal, escanearlo siempre muestra
+  // la composición ACTUAL de la reserva — sin importar qué voucher o email viejo
+  // esté mostrando el pasajero.
+  const verifyUrl = `${config.WEB_ORIGIN.replace(/\/$/, '')}/verificar/${order.public_id}`;
+  const qrPng = await QRCode.toBuffer(verifyUrl, { margin: 1, width: 200 });
+  const generatedAt = new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 
   const doc = new PDFDocument({ size: 'A4', margin: 50 });
   const bufferPromise = collectPdfBuffer(doc);
@@ -74,13 +81,18 @@ export async function generateVoucherPdf(orderId: number): Promise<Buffer | null
   row(doc, 'Pasajero', order.customer_name);
   row(doc, 'Estado', 'Pagado');
   row(doc, 'Referencia', order.public_id);
+  row(doc, 'Generado el', generatedAt);
+
+  doc.moveDown(0.3);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(GOLD)
+    .text('Este voucher refleja el estado más reciente de la reserva. Si tenés un email o PDF anterior, este lo reemplaza.', LABEL_X, doc.y, { width: 495 });
 
   doc.moveDown(1);
   const qrTop = doc.y;
   const qrSize = 110;
   doc.image(qrPng, LABEL_X, qrTop, { width: qrSize });
   doc.font('Helvetica').fontSize(9).fillColor(MUTED)
-    .text('Código de referencia para verificar en el momento', VALUE_X, qrTop + qrSize / 2 - 10, { width: VALUE_WIDTH });
+    .text('Escaneá el código para ver el estado actual de la reserva en vivo (recomendado si hay dudas).', VALUE_X, qrTop + qrSize / 2 - 14, { width: VALUE_WIDTH });
   doc.x = LABEL_X;
   doc.y = qrTop + qrSize + 20;
 

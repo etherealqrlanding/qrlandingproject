@@ -9,6 +9,13 @@ const schema = z.object({
   // transición a un dominio propio: el front se sirve en el dominio nuevo pero
   // WEB_ORIGIN (usado para redirects/links) puede seguir apuntando al anterior.
   CORS_EXTRA_ORIGINS: z.string().optional(),
+  // URL pública donde esta MISMA API responde (no el front). Se usa para armar links
+  // que el navegador debe abrir directo contra el backend (ej. el PDF del voucher),
+  // a diferencia de WEB_ORIGIN que es para páginas del front. En local, front (5173)
+  // y API (4000) son servidores separados sin proxy entre sí, así que no pueden
+  // compartir el mismo origin — en producción, si están detrás del mismo dominio con
+  // proxy a /api, se puede setear igual a WEB_ORIGIN.
+  API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
   DATABASE_URL: z.string().min(1),
   COOKIE_SECRET: z.string().min(8),
   // Mercado Pago

@@ -124,17 +124,22 @@ function supportBlock(): string {
 // vigente de la reserva (confirmación, modificación, ampliación, reprogramación),
 // para que el cliente sepa que ESE email (el más reciente) es lo que presenta en la casa.
 function ticketBadge(): string {
-  return `<p style="text-align:center;margin:0 0 20px;font-size:12px;letter-spacing:0.5px;color:#c8a85a;text-transform:uppercase">🎫 Este email es tu entrada — mostralo en la puerta de la casa de tango</p>`;
+  return `<p style="text-align:center;margin:0 0 4px;font-size:12px;letter-spacing:0.5px;color:#c8a85a;text-transform:uppercase">🎫 Este email es tu entrada — mostralo en la puerta de la casa de tango</p>
+  <p style="text-align:center;margin:0 0 20px;font-size:11px;color:rgba(245,239,230,0.5)">Si recibiste más de un email para esta reserva, vale solo el más reciente — los anteriores quedan sin efecto.</p>`;
 }
 
 // Botón de descarga del voucher en PDF — para guardarlo en el celular y no depender
 // de conexión al presentarlo en la casa de tango. El endpoint exige la orden "paid",
 // así que este bloque solo se agrega en emails que reflejan una reserva vigente.
 function voucherButtonBlock(publicId: string): string {
-  const url = `${config.WEB_ORIGIN}/api/checkout/orders/${publicId}/voucher.pdf`;
+  const url = `${config.API_PUBLIC_URL}/api/checkout/orders/${publicId}/voucher.pdf`;
+  const verifyUrl = `${config.WEB_ORIGIN}/verificar/${publicId}`;
   return `<div style="text-align:center;margin:4px 0 24px">
     <a href="${url}" style="display:inline-block;background:transparent;border:1.5px solid #c8a85a;color:#e0c787;text-decoration:none;padding:11px 22px;border-radius:8px;font-weight:600;font-size:13px">⬇ Descargar voucher PDF</a>
     <p style="margin:8px 0 0;font-size:11px;color:rgba(245,239,230,0.4)">Guardalo en tu celular — te sirve como entrada aunque no tengas señal.</p>
+    <p style="margin:10px 0 0;font-size:11px;color:rgba(245,239,230,0.4)">
+      ¿La casa tiene wifi? <a href="${verifyUrl}" style="color:#e0c787">Verificá el estado actual de la reserva acá</a>.
+    </p>
   </div>`;
 }
 
@@ -329,7 +334,7 @@ export const ORDER_EMAIL_SELECT = `
        o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
        o.exchange_rate_used::float AS exchange_rate_used,
-       o.mp_payment_id,
+       o.mp_payment_id, o.payment_method, o.cash_collected_at,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
@@ -784,6 +789,10 @@ export async function sendOrderModifiedNotifications(
   refundedArs: number,
   reason?: string | null,
   viaCash = false,
+  // Si la misma acción también reprogramó la fecha, se incluye acá en vez de mandar
+  // un segundo email aparte (sendOrderRescheduledNotifications queda sin usar en ese
+  // caso — ver ModifyReservationModal, que suprime esa notificación cuando hay reduce).
+  dateChange?: { prevDate: string; newDate: string } | null,
 ): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
@@ -796,6 +805,9 @@ export async function sendOrderModifiedNotifications(
   const refundLine = viaCash
     ? `<p><strong style="color:#c8a85a">El vendedor te devuelve ARS ${arsStr}</strong> en efectivo.</p>`
     : `<p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>`;
+  const dateChangeLine = dateChange
+    ? `<p style="color:rgba(245,239,230,0.8)">También reprogramamos tu fecha de servicio: de <strong style="color:#e0c787">${dateChange.prevDate}</strong> a <strong style="color:#e0c787">${dateChange.newDate}</strong>.</p>`
+    : '';
 
   // 1) Cliente
   const customerHtml = `
@@ -806,6 +818,7 @@ export async function sendOrderModifiedNotifications(
   ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, modificamos tu reserva según lo acordado${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   ${refundLine}
+  ${dateChangeLine}
   <p style="color:rgba(245,239,230,0.7)">Así queda tu reserva actualizada:</p>
   ${reservationCard(orderData, { showContact: true })}
   ${voucherButtonBlock(orderData.public_id)}
@@ -826,6 +839,7 @@ export async function sendOrderModifiedNotifications(
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.transfer_requested ? ' · c/traslado' : ''}</strong></div>
+    ${dateChange ? `<div style="${baseStyles.row}"><span>Fecha reprogramada</span><strong>${dateChange.prevDate} → ${dateChange.newDate}</strong></div>` : ''}
     <div style="${baseStyles.row}"><span>Reintegrado</span><strong style="color:#c8a85a">ARS ${arsStr}</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
@@ -1024,6 +1038,13 @@ export async function sendSellerCancelledNotifications(
   const orderData = toOrderData(data);
   const sellerLabel = data.seller_name ? escapeHtml(data.seller_name) : 'el vendedor';
   const reasonLine = reason ? `<p style="color:rgba(245,239,230,0.7)">Motivo indicado: ${escapeHtml(reason)}</p>` : '';
+  // Esta función solo se usa para cancelaciones de reservas en EFECTIVO (el vendedor no
+  // puede cancelar Mercado Pago). Si nunca se llegó a cobrar, no hay nada que devolver —
+  // decirle al pasajero que "coordine la devolución" en ese caso sería confuso.
+  const wasCollected = data.cash_collected_at != null;
+  const refundLine = wasCollected
+    ? `<p><strong style="color:#c8a85a">Para gestionar la devolución del dinero, contactá directamente a ${sellerLabel}.</strong> Si necesitás ayuda o no lográs comunicarte, escribinos por WhatsApp y te asistimos.</p>`
+    : `<p>Como todavía no se había realizado ningún cobro, no tenés que hacer ningún trámite de devolución.</p>`;
 
   // 1) Cliente — le decimos explícitamente que coordine la devolución con el vendedor
   const customerHtml = `
@@ -1032,7 +1053,7 @@ export async function sendSellerCancelledNotifications(
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
   <p>Hola ${escapeHtml(orderData.customer_name)}, ${sellerLabel} canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
-  <p><strong style="color:#c8a85a">Para gestionar la devolución del dinero, contactá directamente a ${sellerLabel}.</strong> Si necesitás ayuda o no lográs comunicarte, escribinos por WhatsApp y te asistimos.</p>
+  ${refundLine}
   ${reservationCard(orderData, { showAmounts: true, showContact: true })}
   ${reasonLine}
   <p>Si querés reservar otra fecha u otra experiencia, respondé este email o escribinos por WhatsApp y te ayudamos a coordinar.</p>
@@ -1053,7 +1074,9 @@ export async function sendSellerCancelledNotifications(
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
   <h1 style="${baseStyles.title}">Cancelación registrada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, confirmamos que cancelaste la siguiente reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
-  <p>El pasajero recibió un email indicándole que coordine la devolución del dinero directamente con vos.</p>
+  <p>${wasCollected
+    ? 'El pasajero recibió un email indicándole que coordine la devolución del dinero directamente con vos.'
+    : 'Como todavía no se había cobrado nada, el pasajero fue notificado de que no tiene que hacer ningún trámite.'}</p>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Pasajero</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Email pasajero</span><span>${escapeHtml(orderData.customer_email)}</span></div>
@@ -1098,7 +1121,9 @@ export async function sendSellerCancelledNotifications(
     <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong>${arsOf(data.commission_usd ?? 0, orderData.exchange_rate_used)}</strong></div>
   </div>` : ''}
   ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
-  <p style="color:rgba(245,239,230,0.55);font-size:13px;">⚠ El cliente fue notificado para coordinar la devolución del dinero directamente con el vendedor.</p>
+  <p style="color:rgba(245,239,230,0.55);font-size:13px;">${wasCollected
+    ? '⚠ El cliente fue notificado para coordinar la devolución del dinero directamente con el vendedor.'
+    : 'ℹ La reserva no había sido cobrada — el cliente fue notificado de que no hay ningún trámite de devolución pendiente.'}</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
     await send(
@@ -1122,6 +1147,17 @@ export async function sendAdminCancelledNotifications(
 
   const orderData = toOrderData(data);
   const reasonLine = reason ? `<p style="color:rgba(245,239,230,0.7)">Motivo: ${escapeHtml(reason)}</p>` : '';
+  // Este cambio de estado es manual y NO dispara un reintegro real en Mercado Pago (para
+  // eso existe el botón "Reintegrar" dedicado, que usa /refund y manda otro email). Así
+  // que para MP nunca hay que prometer un reintegro automático acá. Para efectivo, el
+  // mensaje depende de si efectivamente se había cobrado algo.
+  const isCash = data.payment_method === 'cash';
+  const wasCollected = data.cash_collected_at != null;
+  const refundLine = isCash
+    ? (wasCollected
+        ? '<strong style="color:#c8a85a">El vendedor se pondrá en contacto para coordinar la devolución del dinero.</strong>'
+        : 'Como todavía no se había realizado ningún cobro, no tenés que hacer ningún trámite de devolución.')
+    : 'Esta cancelación no generó un reintegro automático. Si corresponde una devolución, nuestro equipo se va a contactar para coordinarla.';
 
   // 1) Cliente
   const customerHtml = `
@@ -1130,7 +1166,7 @@ export async function sendAdminCancelledNotifications(
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
   <p>Hola ${escapeHtml(orderData.customer_name)}, el equipo de Tangos y Milongas Tickets canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
-  <p><strong style="color:#c8a85a">Si pagaste por Mercado Pago, el reintegro se procesará automáticamente. Si pagaste en efectivo, el vendedor se pondrá en contacto para coordinar la devolución.</strong></p>
+  <p>${refundLine}</p>
   ${reservationCard(orderData, { showAmounts: true, showContact: true })}
   ${reasonLine}
   <p>Si querés reservar otra fecha u otra experiencia, respondé este email o escribinos por WhatsApp.</p>

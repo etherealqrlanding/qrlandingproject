@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { checkAvailabilityTxLocked } from './availability.js';
+import { getArchiveRetentionDays } from '../services/settings.js';
 
 export interface CreateOrderInput {
   customer: {
@@ -41,6 +42,19 @@ export interface CreateOrderInput {
 export interface CreatedOrder {
   id: number;
   public_id: string;
+}
+
+/**
+ * Se lanza cuando applyOrderReduction detecta que la composición de pax cambió entre
+ * que se leyó la orden y que se escribió el resultado (dos modificaciones concurrentes
+ * sobre la misma reserva). El caller debe responder 409 y pedir reintentar con datos
+ * frescos, en vez de pisar silenciosamente el cambio del otro request.
+ */
+export class ConcurrentModificationError extends Error {
+  constructor() {
+    super('La reserva fue modificada por otra acción justo antes. Volvé a intentarlo.');
+    this.name = 'ConcurrentModificationError';
+  }
 }
 
 export async function createPendingOrder(input: CreateOrderInput): Promise<CreatedOrder> {
@@ -222,16 +236,21 @@ export async function applyOrderReduction(input: OrderReductionInput): Promise<v
   try {
     await client.query('BEGIN');
 
-    await client.query(
+    // AND adults = $7 AND children = $8 es un chequeo de concurrencia optimista: si
+    // otra modificación ya cambió la composición desde que esta request la leyó, el
+    // UPDATE afecta 0 filas en vez de pisar silenciosamente el resultado del otro.
+    const { rowCount } = await client.query(
       `UPDATE order_items
           SET adults = $1, children = $2,
               subtotal_usd = $3,
               transfer_requested = $4,
               transfer_hotel = $5
-        WHERE id = $6`,
+        WHERE id = $6 AND adults = $7 AND children = $8`,
       [input.newAdults, input.newChildren, input.newSubtotalUsd,
-       input.newTransferRequested, input.newTransferHotel, input.itemId],
+       input.newTransferRequested, input.newTransferHotel, input.itemId,
+       input.origAdults, input.origChildren],
     );
+    if (!rowCount) throw new ConcurrentModificationError();
 
     await client.query(
       `UPDATE orders
@@ -511,13 +530,26 @@ export async function listSellerArchive(sellerId: number, params: {
 
   // Una rendida que el vendedor restauró deja de "vivir" en el archivo — pasa a
   // Mis Órdenes hasta que la vuelva a archivar (ver listSellerOrders/hideAutoArchived).
+  const args: unknown[] = [sellerId];
+  // Canceladas/reintegradas/vencidas/fallidas: espejo exacto de listSellerOrders — solo
+  // caen acá después de archive_retention_days, para que la orden no aparezca a la vez
+  // en "Mis Órdenes" y en "Archivo" mientras está dentro de la ventana. Con el archivado
+  // automático desactivado (null), mantiene el comportamiento previo (aparecen al instante).
+  const retentionDays = await getArchiveRetentionDays();
+  let terminalStatusCondition = `o.status IN ('cancelled', 'refunded', 'expired', 'failed')`;
+  if (retentionDays != null) {
+    args.push(retentionDays);
+    terminalStatusCondition = `(
+      o.status IN ('cancelled', 'refunded', 'expired', 'failed')
+      AND COALESCE(o.cancelled_at, o.refunded_at, o.updated_at) < NOW() - make_interval(days => $${args.length})
+    )`;
+  }
   const baseWhere = `a.seller_id = $1
     AND (
-      o.status IN ('cancelled', 'refunded', 'expired', 'failed')
+      ${terminalStatusCondition}
       OR (a.net_settled_at IS NOT NULL AND o.restored_at IS NULL)
       OR o.archived_at IS NOT NULL
     )`;
-  const args: unknown[] = [sellerId];
   const extra: string[] = [];
 
   if (params.status === 'cancelled') extra.push(`o.status = 'cancelled'`);
@@ -578,9 +610,12 @@ export async function restoreFromSellerArchive(publicId: string, sellerId: numbe
   return result.rowCount ?? 0;
 }
 
-// Vuelve a mandar al archivo una orden que el vendedor había restaurado antes
-// (solo si está actualmente activa y trae la marca de "restaurada").
-export async function rearchiveBySeller(publicId: string, sellerId: number): Promise<number> {
+// Archiva manualmente una orden desde "Mis Órdenes" del vendedor. Cubre dos casos:
+//  (a) una rendida que el vendedor había restaurado y quiere volver a archivar, y
+//  (b) una orden en estado terminal (cancelada/reintegrada/vencida/fallida) que
+//      todavía sigue en "Mis Órdenes" porque no pasaron los días configurados de
+//      archive_retention_days — el vendedor no tiene por qué esperar esa ventana.
+export async function archiveBySeller(publicId: string, sellerId: number): Promise<number> {
   const result = await pool.query(
     `UPDATE orders o
         SET archived_at = NOW(),
@@ -591,13 +626,51 @@ export async function rearchiveBySeller(publicId: string, sellerId: number): Pro
         AND o.public_id = $1
         AND a.seller_id = $2
         AND o.archived_at IS NULL
-        AND o.restored_at IS NOT NULL`,
+        AND (
+          o.restored_at IS NOT NULL
+          OR o.status IN ('cancelled', 'refunded', 'expired', 'failed')
+        )`,
     [publicId, sellerId],
   );
   return result.rowCount ?? 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+export interface OrderVerificationInfo {
+  public_id: string;
+  status: string;
+  customer_name: string;
+  product_name: string;
+  option_name: string;
+  service_date: string;
+  adults: number;
+  children: number;
+  transfer_requested: boolean;
+  updated_at: string;
+}
+
+// Estado EN VIVO de una reserva, para la página pública de verificación (QR del
+// voucher). A diferencia de un email o un PDF ya generado, esto siempre refleja la
+// composición actual (post modificaciones): así no importa qué versión vieja del
+// comprobante muestre el pasajero en la puerta, escanear el QR dice la verdad.
+export async function getOrderVerificationInfo(publicId: string): Promise<OrderVerificationInfo | null> {
+  const { rows } = await pool.query<OrderVerificationInfo>(
+    `SELECT o.public_id, o.status::text AS status, o.customer_name,
+            oi.product_name_snapshot AS product_name,
+            oi.option_name_snapshot AS option_name,
+            to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+            oi.adults, oi.children, oi.transfer_requested,
+            o.updated_at
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+      WHERE o.public_id = $1
+      ORDER BY oi.id
+      LIMIT 1`,
+    [publicId],
+  );
+  return rows[0] ?? null;
+}
 
 export async function findOrderByPublicId(publicId: string): Promise<{
   id: number;

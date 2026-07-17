@@ -147,7 +147,19 @@ export async function createAddonForOrder(params: {
 }
 
 export type CashAddonResult =
-  | { ok: true; data: { addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number } }
+  | {
+      ok: true;
+      // Contexto para notificar al vendedor cuando quien crea la ampliación es el
+      // admin (no expuesto en la respuesta HTTP, solo para uso interno del caller).
+      sellerId: number | null;
+      orderId: number;
+      customerName: string;
+      optionName: string;
+      serviceDate: string;
+      extraAdults: number;
+      extraChildren: number;
+      data: { addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number };
+    }
   | { ok: false; httpStatus: number; error: string };
 
 /**
@@ -168,11 +180,13 @@ export async function createCashAddonForOrder(params: {
     unit_price_adult_usd: number; unit_price_child_usd: number | null;
     subtotal_usd: number; transfer_requested: boolean;
     seller_id: number | null; net_settled_at: string | null;
+    customer_name: string; option_name: string;
   }>(
     `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
-            o.exchange_rate_used::float AS exchange_rate_used,
+            o.exchange_rate_used::float AS exchange_rate_used, o.customer_name,
             oi.id AS item_id, oi.option_id,
             to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+            oi.option_name_snapshot AS option_name,
             po.default_capacity_per_day,
             oi.adults, oi.children,
             oi.unit_price_adult_usd::float AS unit_price_adult_usd,
@@ -238,6 +252,13 @@ export async function createCashAddonForOrder(params: {
 
   return {
     ok: true,
+    sellerId: row.seller_id,
+    orderId: row.order_id,
+    customerName: row.customer_name,
+    optionName: row.option_name,
+    serviceDate: row.service_date,
+    extraAdults: calc.extraAdults,
+    extraChildren: calc.extraChildren,
     data: {
       addon_public_id: addon.public_id,
       charge_usd: calc.chargeUsd,

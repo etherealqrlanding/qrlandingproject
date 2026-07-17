@@ -204,6 +204,59 @@ export async function createNetSettledNotification(
   });
 }
 
+// Notifica al vendedor cuando el ADMIN reduce pasajeros de una orden suya en efectivo.
+// El vendedor no lo hizo él mismo, así que necesita enterarse aunque no haya refrescado
+// el portal — mismo canal (in-app + push en vivo) que ya usan liquidación y rendición.
+export async function createOrderReducedByAdminNotification(input: {
+  sellerId: number;
+  orderId: number;
+  orderPublicId: string;
+  customerName: string;
+  optionName: string;
+  serviceDate: string;
+  newAdults: number;
+  newChildren: number;
+  refundArs: number;
+}): Promise<void> {
+  await createNotification({
+    seller_id: input.sellerId,
+    type: 'order_modified_by_admin',
+    title: '✎ El equipo modificó una reserva tuya',
+    body: `Redujimos pasajeros en la reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}). Devolvimos ${fmtArs(input.refundArs)} al pasajero en tu nombre. Ahora queda en ${input.newAdults + input.newChildren} pax.`,
+    metadata: {
+      order_id: input.orderId, order_public_id: input.orderPublicId,
+      refund_ars: input.refundArs, new_adults: input.newAdults, new_children: input.newChildren,
+    },
+  });
+}
+
+// Notifica al vendedor cuando el ADMIN crea una ampliación en efectivo pendiente de
+// cobro sobre una orden suya: el vendedor tiene que ir a cobrarla, así que es la
+// notificación más urgente de las dos (requiere una acción, no solo enterarse).
+export async function createCashAddonCreatedByAdminNotification(input: {
+  sellerId: number;
+  orderId: number;
+  orderPublicId: string;
+  customerName: string;
+  optionName: string;
+  serviceDate: string;
+  extraAdults: number;
+  extraChildren: number;
+  chargeArs: number;
+}): Promise<void> {
+  const extraPax = input.extraAdults + input.extraChildren;
+  await createNotification({
+    seller_id: input.sellerId,
+    type: 'cash_addon_created_by_admin',
+    title: '💵 Ampliación pendiente de cobro',
+    body: `Sumamos ${extraPax} pax a la reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}). Coordiná el cobro de ${fmtArs(input.chargeArs)} y marcala como cobrada desde "Mis ventas".`,
+    metadata: {
+      order_id: input.orderId, order_public_id: input.orderPublicId,
+      charge_ars: input.chargeArs, extra_adults: input.extraAdults, extra_children: input.extraChildren,
+    },
+  });
+}
+
 // Crea notificación cuando el admin marca comisiones como liquidadas.
 export async function createCommissionPaidNotification(
   sellerId: number,

@@ -16,6 +16,7 @@ import {
   updateOrderFromPayment,
   logPaymentEvent,
   findOrderByPublicId,
+  getOrderVerificationInfo,
 } from '../repos/orders.js';
 import { sendOrderPaidNotifications, sendCashOrderNotifications, sendOrderIncreasedNotifications } from '../services/email.js';
 import { createOrderPaidNotification, createCashBookingNotification } from '../repos/notifications.js';
@@ -663,6 +664,20 @@ checkoutRouter.get('/orders/:publicId', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ─── GET /api/checkout/orders/:publicId/verify ────────────
+// Estado EN VIVO de una reserva, para la página pública que abre el QR del voucher.
+// Público (capability URL, mismo modelo que el voucher) — sin importar qué email o
+// PDF viejo muestre el pasajero, esto siempre refleja la composición actual.
+checkoutRouter.get('/orders/:publicId/verify', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const info = await getOrderVerificationInfo(publicId);
+    if (!info) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: info });
+  } catch (err) { next(err); }
 });
 
 // ─── GET /api/checkout/orders/:publicId/voucher.pdf ───────
