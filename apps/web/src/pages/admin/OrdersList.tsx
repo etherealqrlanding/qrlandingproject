@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
 import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
@@ -32,6 +32,73 @@ function fmtServiceDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+// "Total" de la tabla: Mercado Pago SIEMPRE cobra en pesos (no hay forma de que un
+// pago por MP en Argentina sea en dólares), así que se muestra en ARS — mostrarlo en
+// USD era solo la referencia interna, no lo que realmente se movió. Para efectivo no
+// cobramos nada directamente — lo que importa es el NETO que el vendedor nos tiene
+// que rendir, en la moneda en la que lo cobró (dólares si ya se cobró en dólares, pesos
+// en cualquier otro caso). Mismo criterio que ya usa el detalle de la orden y el portal
+// del vendedor.
+function orderTotalDisplay(o: AdminOrderListItem): string {
+  if (o.payment_method !== 'cash') return `ARS ${Math.round(o.total_ars).toLocaleString('es-AR')}`;
+  if (o.net_total_usd != null && o.cash_collected_currency === 'USD') {
+    return `USD ${o.net_total_usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  const netArs = o.net_total_usd != null ? o.net_total_usd * o.exchange_rate_used : o.total_ars;
+  return `ARS ${Math.round(netArs).toLocaleString('es-AR')}`;
+}
+
+function DetailRow({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-xs">
+      <span className="text-cream/40 shrink-0">{label}</span>
+      <span className="text-cream/80 text-right">{children}</span>
+    </div>
+  );
+}
+
+// Ícono de expandir/contraer, chevron que rota — mismo gesto en mobile y desktop.
+function ExpandToggle({ open, onClick }: Readonly<{ open: boolean; onClick: () => void }>) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      aria-label={open ? 'Ocultar detalle' : 'Ver detalle'}
+      aria-expanded={open}
+      className="text-gold-soft hover:text-gold text-xs shrink-0 inline-flex items-center gap-1"
+    >
+      <span className={`inline-block transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>▶</span>
+    </button>
+  );
+}
+
+// Detalle inline de la orden — solo lectura. Las acciones (reintegrar, modificar,
+// confirmar cobro, etc.) siguen viviendo únicamente en el detalle completo ("Ver →");
+// esto es para monitorear sin salir del listado.
+const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo' };
+
+function OrderExtraDetails({ o }: Readonly<{ o: AdminOrderListItem }>) {
+  return (
+    <div className="space-y-1.5">
+      {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
+      {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
+      {(o.adults != null) && (
+        <DetailRow label="Pasajeros">{o.adults} ad.{o.children ? ` · ${o.children} men.` : ''}</DetailRow>
+      )}
+      <DetailRow label="Medio de pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
+      {o.payment_method !== 'cash' && o.mp_payment_status && (
+        <DetailRow label="Estado MP">{o.mp_payment_status}</DetailRow>
+      )}
+      {o.payment_method !== 'cash' && o.mp_payment_id && (
+        <DetailRow label="Payment ID"><span className="font-mono">{o.mp_payment_id}</span></DetailRow>
+      )}
+      <DetailRow label="Creada">{fmtShortDateTime(o.created_at)}</DetailRow>
+      {o.paid_at && <DetailRow label="Pagada">{fmtShortDateTime(o.paid_at)}</DetailRow>}
+      <DetailRow label="Referencia"><span className="font-mono">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: Readonly<{ status: string }>) {
   const color = {
     paid: 'text-gold border-gold/40 bg-gold/10',
@@ -58,7 +125,10 @@ function SummaryCard({ label, value, sub, highlight }: Readonly<{ label: string;
 }
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
-function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOrderListItem; selected: boolean; onToggle: () => void; highlighted?: boolean }>) {
+function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpand }: Readonly<{
+  o: AdminOrderListItem; selected: boolean; onToggle: () => void; highlighted?: boolean;
+  expanded: boolean; onToggleExpand: () => void;
+}>) {
   return (
     <div
       id={`order-row-mobile-${o.public_id}`}
@@ -82,7 +152,7 @@ function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOr
             </span>
           )}
         </div>
-        <p className="text-gold font-mono font-medium text-sm whitespace-nowrap shrink-0">USD {o.total_usd}</p>
+        <p className="text-gold font-mono font-medium text-sm whitespace-nowrap shrink-0">{orderTotalDisplay(o)}</p>
       </div>
 
       <div className="px-4 pb-3 border-b border-gold/10">
@@ -115,13 +185,21 @@ function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOr
             )}
           </div>
           <div className="flex items-center gap-3 shrink-0">
-            {o.payment_method !== 'cash' && o.commission_amount_usd != null && (
-              <span className="text-[10px] text-gold font-mono">Com. {o.commission_amount_usd}</span>
+            {o.payment_method !== 'cash' && o.commission_amount_ars != null && (
+              <span className="text-[10px] text-gold font-mono">Com. ARS {Math.round(o.commission_amount_ars).toLocaleString('es-AR')}</span>
             )}
             <Link to={`/admin/orders/${o.public_id}`} className="text-xs text-gold-soft hover:text-gold transition">Ver →</Link>
+            <ExpandToggle open={expanded} onClick={onToggleExpand} />
           </div>
         </div>
       </div>
+
+      {expanded && (
+        <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20">
+          <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
+          <OrderExtraDetails o={o} />
+        </div>
+      )}
     </div>
   );
 }
@@ -209,6 +287,10 @@ export default function OrdersList() {
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Acordeón: qué orden está desplegada mostrando más detalle inline (solo lectura —
+  // las acciones siguen viviendo en el detalle completo vía "Ver →").
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+
   const reload = (currentFilters = filters) => {
     setOrders(null);
     setError(null);
@@ -258,10 +340,11 @@ export default function OrdersList() {
       acc.count++;
       if (o.status === 'paid') {
         acc.paidCount++;
-        // Facturación/comisiones: solo MP. En efectivo no trazamos venta ni comisión.
+        // Facturación/comisiones: solo MP (siempre en pesos — no hay pago por MP en
+        // otra moneda). En efectivo no trazamos venta ni comisión.
         if (o.payment_method !== 'cash') {
-          acc.revenue += o.total_usd ?? 0;
-          acc.commission += o.commission_amount_usd ?? 0;
+          acc.revenue += o.total_ars ?? 0;
+          acc.commission += o.commission_amount_ars ?? 0;
         }
       }
       return acc;
@@ -335,6 +418,8 @@ export default function OrdersList() {
               selected={selected.has(o.public_id)}
               onToggle={() => toggleSelect(o.public_id)}
               highlighted={o.public_id === highlight}
+              expanded={expandedRow === o.public_id}
+              onToggleExpand={() => setExpandedRow(expandedRow === o.public_id ? null : o.public_id)}
             />
           ))}
         </div>
@@ -357,14 +442,15 @@ export default function OrdersList() {
                 <th className="text-left py-3 px-3">Servicio</th>
                 <th className="text-left py-3 px-3">Vendedor</th>
                 <th className="text-center py-3 px-3">Estado</th>
-                <th className="text-right py-3 px-3">Total</th>
+                <th className="text-right py-3 px-3">Total / Neto</th>
                 <th className="text-right py-3 px-3">Comisión</th>
                 <th className="py-3 px-3" />
               </tr>
             </thead>
             <tbody>
               {paginated.map((o) => (
-                <tr key={o.id}
+                <Fragment key={o.id}>
+                <tr
                   id={`order-row-desktop-${o.public_id}`}
                   className={`border-t border-gold/5 transition cursor-pointer ${
                     o.public_id === highlight
@@ -414,17 +500,34 @@ export default function OrdersList() {
                     )}
                   </td>
                   <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs whitespace-nowrap">
-                    USD {o.total_usd}
+                    {orderTotalDisplay(o)}
                   </td>
                   <td className="py-2.5 px-3 text-right text-gold tabular-nums text-xs whitespace-nowrap">
-                    {o.payment_method !== 'cash' && o.commission_amount_usd != null
-                      ? `USD ${o.commission_amount_usd}`
+                    {o.payment_method !== 'cash' && o.commission_amount_ars != null
+                      ? `ARS ${Math.round(o.commission_amount_ars).toLocaleString('es-AR')}`
                       : <span className="text-cream/30">—</span>}
                   </td>
                   <td className="py-2.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-xs">Ver →</Link>
+                    <div className="flex items-center justify-end gap-3">
+                      <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-xs">Ver →</Link>
+                      <ExpandToggle
+                        open={expandedRow === o.public_id}
+                        onClick={() => setExpandedRow(expandedRow === o.public_id ? null : o.public_id)}
+                      />
+                    </div>
                   </td>
                 </tr>
+                {expandedRow === o.public_id && (
+                  <tr className="border-t border-gold/5 bg-ink-soft/20">
+                    <td colSpan={9} className="px-6 py-3">
+                      <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
+                      <div className="max-w-sm">
+                        <OrderExtraDetails o={o} />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -458,8 +561,8 @@ export default function OrdersList() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 md:mb-6">
           <SummaryCard label="Total" value={`${summary.count}`} sub="órdenes en este listado" />
           <SummaryCard label="Pagadas" value={`${summary.paidCount}`} sub="confirmadas, MP o efectivo" />
-          <SummaryCard label="Facturación MP" value={`$${summary.revenue.toFixed(0)}`} sub="cobrado por Mercado Pago (no incluye efectivo)" />
-          <SummaryCard label="Comisiones" value={`$${summary.commission.toFixed(0)}`} sub="a liquidar, solo ventas por MP" highlight />
+          <SummaryCard label="Facturación MP" value={`ARS ${Math.round(summary.revenue).toLocaleString('es-AR')}`} sub="cobrado por Mercado Pago (no incluye efectivo)" />
+          <SummaryCard label="Comisiones" value={`ARS ${Math.round(summary.commission).toLocaleString('es-AR')}`} sub="a liquidar, solo ventas por MP" highlight />
         </div>
       )}
 

@@ -257,10 +257,13 @@ export interface AdminOrderListItem {
   status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded' | 'expired';
   customer_name: string;
   customer_email: string;
+  customer_phone: string | null;
   customer_nationality: string | null;
   total_usd: number;
   total_ars: number;
+  exchange_rate_used: number;
   ref_code: string | null;
+  mp_payment_id: string | null;
   mp_payment_status: string | null;
   product_name: string | null;
   option_name: string | null;
@@ -271,6 +274,8 @@ export interface AdminOrderListItem {
   seller_code: string | null;
   seller_name: string | null;
   commission_amount_usd: number | null;
+  commission_amount_ars: number | null;
+  net_total_usd: number | null;
   paid_to_seller_at: string | null;
   payment_method: 'mercadopago' | 'cash';
   created_at: string;

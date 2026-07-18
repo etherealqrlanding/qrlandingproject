@@ -68,9 +68,10 @@ adminOrdersRouter.get('/', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT
          o.id, o.public_id, o.status::text AS status,
-         o.customer_name, o.customer_email, o.customer_nationality,
+         o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
          o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
-         o.ref_code, o.mp_payment_status, o.payment_method,
+         o.exchange_rate_used::float AS exchange_rate_used,
+         o.ref_code, o.mp_payment_id, o.mp_payment_status, o.payment_method,
          o.created_at, o.paid_at, o.admin_viewed_at, o.cash_collected_currency,
          oi.product_name_snapshot AS product_name,
          oi.option_name_snapshot AS option_name,
@@ -78,6 +79,8 @@ adminOrdersRouter.get('/', async (req, res, next) => {
          oi.adults, oi.children,
          a.seller_id, s.code AS seller_code, s.name AS seller_name,
          a.commission_amount_usd::float AS commission_amount_usd,
+         a.commission_amount_ars::float AS commission_amount_ars,
+         a.net_total_usd_snapshot::float AS net_total_usd,
          a.paid_to_seller_at
          FROM orders o
          LEFT JOIN order_items oi ON oi.order_id = o.id
