@@ -76,6 +76,26 @@ export default function SellerOrdersSection({ seller }: Props) {
     }, { totalCommission: 0, paid: 0, pending: 0, netToCollect: 0 });
   }, [orders]);
 
+  // Total de lo tildado, en vivo — así el admin va viendo cuánto va a liquidar antes
+  // de confirmar, sumado por separado (MP = comisión, efectivo = neto) porque son
+  // conceptos distintos aunque las dos se muestren en pesos.
+  const selectedTotal = useMemo(() => {
+    if (!orders) return { mpArs: 0, cashArs: 0, mpCount: 0, cashCount: 0 };
+    const byId = new Map(orders.map((o) => [o.order_id, o]));
+    return selectedOrderIds.reduce((acc, id) => {
+      const o = byId.get(id);
+      if (!o) return acc;
+      if (o.payment_method === 'cash') {
+        acc.cashArs += (o.net_total_usd ?? 0) * o.exchange_rate_used;
+        acc.cashCount++;
+      } else {
+        acc.mpArs += o.commission_amount_ars ?? 0;
+        acc.mpCount++;
+      }
+      return acc;
+    }, { mpArs: 0, cashArs: 0, mpCount: 0, cashCount: 0 });
+  }, [selectedOrderIds, orders]);
+
   const togglePendingAll = () => {
     if (selectedOrderIds.length === pendingSettlementOrders.length) {
       setSelectedOrderIds([]);
@@ -95,10 +115,11 @@ export default function SellerOrdersSection({ seller }: Props) {
     const byId = new Map(orders.map((o) => [o.order_id, o]));
     const mpIds = selectedOrderIds.filter((id) => byId.get(id)?.payment_method !== 'cash');
     const cashIds = selectedOrderIds.filter((id) => byId.get(id)?.payment_method === 'cash');
+    const totalArs = Math.round(selectedTotal.mpArs + selectedTotal.cashArs).toLocaleString('es-AR');
     if (!confirm(
-      `Liquidar ${selectedOrderIds.length} venta(s)?\n` +
-      `• ${mpIds.length} por Mercado Pago: marcamos la comisión como pagada al vendedor.\n` +
-      `• ${cashIds.length} en efectivo: marcamos el neto como rendido por el vendedor.`,
+      `Liquidar ${selectedOrderIds.length} venta(s) por un total de ARS ${totalArs}?\n` +
+      `• ${mpIds.length} por Mercado Pago (ARS ${Math.round(selectedTotal.mpArs).toLocaleString('es-AR')}): marcamos la comisión como pagada al vendedor.\n` +
+      `• ${cashIds.length} en efectivo (ARS ${Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}): marcamos el neto como rendido por el vendedor.`,
     )) return;
     try {
       setProcessing(true);
@@ -118,10 +139,10 @@ export default function SellerOrdersSection({ seller }: Props) {
     <div className="space-y-6">
       {summary && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card label="Comisión total (MP)" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} />
-          <Card label="Ya pagada (MP)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} />
-          <Card label="A pagar (MP)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} highlight />
-          <Card label="A cobrar neto (efectivo)" value={`ARS ${Math.round(summary.netToCollect).toLocaleString('es-AR')}`} />
+          <Card label="Comisión total (MP)" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} sub="todas las ventas pagadas por Mercado Pago" />
+          <Card label="Ya pagada (MP)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} sub="comisión ya liquidada al vendedor" />
+          <Card label="A pagar (MP)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} sub="comisión pendiente de liquidar" highlight />
+          <Card label="A cobrar neto (efectivo)" value={`ARS ${Math.round(summary.netToCollect).toLocaleString('es-AR')}`} sub="lo que el vendedor todavía nos tiene que rendir" />
         </div>
       )}
 
@@ -141,11 +162,24 @@ export default function SellerOrdersSection({ seller }: Props) {
           </select>
         </div>
         {selectedOrderIds.length > 0 && (
-          <button type="button" onClick={handleSettle} disabled={processing}
-            className="btn-primary text-sm disabled:opacity-50"
-          >
-            {processing ? 'Procesando...' : `Liquidar ${selectedOrderIds.length} venta${selectedOrderIds.length !== 1 ? 's' : ''}`}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-sm text-cream/70">
+              <span className="text-gold font-mono font-semibold">
+                ARS {Math.round(selectedTotal.mpArs + selectedTotal.cashArs).toLocaleString('es-AR')}
+              </span>
+              {' '}total a liquidar
+              {selectedTotal.mpCount > 0 && selectedTotal.cashCount > 0 && (
+                <span className="block text-[11px] text-cream/40">
+                  MP: ARS {Math.round(selectedTotal.mpArs).toLocaleString('es-AR')} · Efectivo: ARS {Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}
+                </span>
+              )}
+            </div>
+            <button type="button" onClick={handleSettle} disabled={processing}
+              className="btn-primary text-sm disabled:opacity-50"
+            >
+              {processing ? 'Procesando...' : `Liquidar ${selectedOrderIds.length} venta${selectedOrderIds.length !== 1 ? 's' : ''}`}
+            </button>
+          </div>
         )}
       </div>
 
@@ -271,11 +305,12 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full border ${color}`}>{label}</span>;
 }
 
-function Card({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function Card({ label, value, sub, highlight }: { label: string; value: string; sub?: string; highlight?: boolean }) {
   return (
     <div className={`rounded-lg border p-4 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
       <p className="text-xs uppercase tracking-widest text-gold-soft">{label}</p>
       <p className={`mt-1 font-display text-2xl ${highlight ? 'text-gold' : 'text-cream'}`}>{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-cream/40">{sub}</p>}
     </div>
   );
 }
