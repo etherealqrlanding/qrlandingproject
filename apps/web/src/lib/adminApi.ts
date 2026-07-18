@@ -274,6 +274,7 @@ export interface AdminOrderListItem {
   payment_method: 'mercadopago' | 'cash';
   created_at: string;
   paid_at: string | null;
+  admin_viewed_at: string | null;
 }
 
 export interface ArchivedOrderItem {
@@ -358,6 +359,29 @@ export interface PendingAddon {
   charge_ars: number;
   mp_init_point: string | null;
   created_at: string;
+}
+
+// Devuelve la URL del stream SSE con el token actual como query param (EventSource
+// no puede mandar headers custom, así que el token viaja así, igual que el vendedor).
+export async function getAdminNotificationStreamUrl(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return null;
+    return `${API_URL}/api/admin/notifications/stream?token=${encodeURIComponent(token)}`;
+  } catch {
+    return null;
+  }
+}
+
+export interface AdminNewOrderPaidEvent {
+  order_id: number;
+  public_id: string;
+  customer_name: string;
+  option_name: string | null;
+  total_ars: number;
+  payment_method: 'mercadopago' | 'cash';
+  seller_name: string | null;
 }
 
 export const adminApi = {

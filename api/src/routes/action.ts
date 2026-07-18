@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db.js';
 import { logPaymentEvent } from '../repos/orders.js';
+import { notifyAdminsNewOrderPaid } from '../repos/notifications.js';
 import { sendCashCollectedNotifications, sendSellerCancelledNotifications } from '../services/email.js';
 import { getCancelWindow, checkOperationWindow } from '../services/settings.js';
 
@@ -110,6 +111,9 @@ actionRouter.post('/:token', async (req, res, next) => {
       await logPaymentEvent(row.order_id, 'cash_collected_by_seller', null, {
         seller_id: row.seller_id, via: 'email_token',
       });
+      notifyAdminsNewOrderPaid(row.order_id).catch((e) =>
+        console.error('[notif] notifyAdminsNewOrderPaid failed:', e),
+      );
       sendCashCollectedNotifications(row.order_id, 'seller').catch((e) =>
         console.error('[action-token] collect email failed:', e),
       );

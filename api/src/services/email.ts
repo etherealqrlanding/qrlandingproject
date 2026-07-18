@@ -36,6 +36,29 @@ export interface SendResult {
   error?: string;
 }
 
+// Genera una alternativa en texto plano a partir del HTML. Los emails multipart
+// (html + text) evitan una señal clásica de spam: correos 100% HTML sin fallback
+// de texto, algo que Outlook y filtros corporativos penalizan en el scoring.
+function htmlToText(html: string): string {
+  return html
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h1|h2|h3|li|tr)>/gi, '\n')
+    .replace(/<li>/gi, '- ')
+    .replace(/<a\s+[^>]*href=["']([^"']*)["'][^>]*>(.*?)<\/a>/gis, '$2 ($1)')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*\n+/g, '\n\n')
+    .split('\n').map((l) => l.trim()).join('\n')
+    .trim();
+}
+
 /**
  * Envía un email por el transporte activo. Nunca lanza: devuelve { sent, error } para que
  * quien llama decida si avisar al usuario. Loguea siempre el fallo.
@@ -49,12 +72,14 @@ async function send(to: string | string[], subject: string, html: string): Promi
     return { sent: false, transport, error: 'No hay transporte de email configurado.' };
   }
 
+  const text = htmlToText(html);
+
   try {
     if (transport === 'smtp') {
-      await smtpTransport!.sendMail({ from: config.EMAIL_FROM, to: recipients, subject, html });
+      await smtpTransport!.sendMail({ from: config.EMAIL_FROM, to: recipients, subject, html, text });
       return { sent: true, transport };
     }
-    const { error } = await resend!.emails.send({ from: config.EMAIL_FROM, to: recipients, subject, html });
+    const { error } = await resend!.emails.send({ from: config.EMAIL_FROM, to: recipients, subject, html, text });
     if (error) {
       console.error('[email] Resend error:', error);
       return { sent: false, transport, error: error.message ?? String(error) };

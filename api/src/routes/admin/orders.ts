@@ -53,7 +53,7 @@ adminOrdersRouter.get('/', async (req, res, next) => {
          o.customer_name, o.customer_email, o.customer_nationality,
          o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
          o.ref_code, o.mp_payment_status, o.payment_method,
-         o.created_at, o.paid_at,
+         o.created_at, o.paid_at, o.admin_viewed_at,
          oi.product_name_snapshot AS product_name,
          oi.option_name_snapshot AS option_name,
          to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
@@ -149,6 +149,14 @@ adminOrdersRouter.get('/:publicId', async (req, res, next) => {
     );
     const order = orderRows[0];
     if (!order) return res.status(404).json({ error: 'Not found' });
+
+    // Primera vez que se abre esta orden: marcamos admin_viewed_at para que deje de
+    // aparecer como "Nueva" en el listado. No bloqueamos la respuesta por esto.
+    if (!order.admin_viewed_at) {
+      order.admin_viewed_at = new Date().toISOString();
+      pool.query(`UPDATE orders SET admin_viewed_at = NOW() WHERE id = $1 AND admin_viewed_at IS NULL`, [order.id])
+        .catch((e) => console.error('[admin_viewed_at] update failed:', e));
+    }
 
     const [items, events] = await Promise.all([
       pool.query(

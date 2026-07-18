@@ -16,7 +16,7 @@ import { createPreference } from '../../services/mercadopago.js';
 import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
 import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
-import { listNotifications, markAllRead, getUnreadCount, deleteNotification } from '../../repos/notifications.js';
+import { listNotifications, markAllRead, getUnreadCount, deleteNotification, notifyAdminsNewOrderPaid } from '../../repos/notifications.js';
 import { checkSingleDateAvailability } from '../../repos/availability.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 
@@ -496,6 +496,12 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
     }
 
     await logPaymentEvent(order.id, 'cash_collected_by_seller', null, { seller_id: req.seller!.sellerId });
+
+    // Aviso en vivo al panel de órdenes del admin — el vendedor confirmó el cobro,
+    // no el admin, así que le sirve enterarse sin recargar.
+    notifyAdminsNewOrderPaid(order.id).catch((e) =>
+      console.error('[notif] notifyAdminsNewOrderPaid failed:', e),
+    );
 
     // Enviar emails a todas las partes (cliente + admin + vendedor)
     sendCashCollectedNotifications(order.id).catch((e) =>

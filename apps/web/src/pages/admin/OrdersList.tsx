@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
+import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
 import Checkbox from '../../components/Checkbox';
 
 
@@ -20,6 +21,12 @@ const STATUS_OPTIONS = [
 
 function fmtShortDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+}
+function fmtShortDateTime(iso: string) {
+  return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 function fmtServiceDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -63,8 +70,11 @@ function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOr
             onChange={onToggle}
             aria-label={`Seleccionar orden de ${o.customer_name}`}
           />
-          <span className="text-[10px] text-cream/40 tabular-nums">{fmtShortDate(o.created_at)}</span>
+          <span className="text-[10px] text-cream/40 tabular-nums">{fmtShortDateTime(o.created_at)}</span>
           <StatusBadge status={o.status} />
+          {!o.admin_viewed_at && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold">🆕 Nueva</span>
+          )}
           {o.payment_method === 'cash' && (
             <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">Efectivo</span>
           )}
@@ -210,6 +220,15 @@ export default function OrdersList() {
     setSelected(new Set());
     setConfirming(false);
     reload();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  // Push en vivo (AdminLayout): si entró una orden nueva pagada mientras el admin ya
+  // está mirando esta pantalla, se refresca sola — sin esperar a que recargue a mano.
+  useEffect(() => {
+    const handler = () => reload();
+    window.addEventListener(NEW_ORDER_PAID_EVENT, handler);
+    return () => window.removeEventListener(NEW_ORDER_PAID_EVENT, handler);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
@@ -359,7 +378,8 @@ export default function OrdersList() {
                     />
                   </td>
                   <td className="py-2.5 px-3 text-cream/60 text-xs tabular-nums whitespace-nowrap">
-                    {fmtShortDate(o.created_at)}
+                    <p>{fmtShortDate(o.created_at)}</p>
+                    <p className="text-[10px] text-cream/35">{fmtTime(o.created_at)}</p>
                   </td>
                   <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                     <Link to={`/admin/orders/${o.public_id}`} className="text-cream hover:text-gold text-xs font-medium">
@@ -383,6 +403,9 @@ export default function OrdersList() {
                     <StatusBadge status={o.status} />
                     {o.payment_method === 'cash' && (
                       <span className="ml-1 text-xs px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">Ef.</span>
+                    )}
+                    {!o.admin_viewed_at && (
+                      <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold">🆕 Nueva</span>
                     )}
                   </td>
                   <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs whitespace-nowrap">

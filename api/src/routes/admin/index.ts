@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { requireAdmin } from '../../middleware/requireAdmin.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
+import { addAdminConnection, removeAdminConnection } from '../../services/sseNotifier.js';
 import { adminProductsRouter } from './products.js';
 import { adminSellersRouter } from './sellers.js';
 import { adminOrdersRouter } from './orders.js';
@@ -13,7 +14,43 @@ export const adminRouter = Router();
 
 const STORAGE_BUCKET = 'product-images';
 
-// Todas las rutas /api/admin/* exigen JWT válido + admin_user activo.
+// GET /api/admin/notifications/stream — push en vivo (SSE) para el panel de órdenes.
+// Va ANTES de requireAdmin porque EventSource no puede mandar headers custom: el
+// token viaja por query param y se valida acá mismo (mismo patrón que el vendedor).
+adminRouter.get('/notifications/stream', async (req, res, next) => {
+  try {
+    const token = typeof req.query.token === 'string' ? req.query.token.trim() : null;
+    if (!token) return res.status(401).json({ error: 'Missing token' });
+
+    const { data: userData, error } = await supabaseAdmin.auth.getUser(token);
+    if (error || !userData?.user) return res.status(401).end();
+
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM admin_users WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+      [userData.user.id],
+    );
+    if (!rows[0]) return res.status(403).end();
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const heartbeat = setInterval(() => {
+      try { res.write(': heartbeat\n\n'); } catch { /* cliente desconectado */ }
+    }, 25_000);
+
+    addAdminConnection(res);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      removeAdminConnection(res);
+    });
+  } catch (err) { next(err); }
+});
+
+// Todas las demás rutas /api/admin/* exigen JWT válido + admin_user activo.
 adminRouter.use(requireAdmin);
 
 // GET /api/admin/me — datos del admin logueado + counters básicos

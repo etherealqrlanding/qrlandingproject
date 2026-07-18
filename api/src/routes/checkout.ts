@@ -19,7 +19,7 @@ import {
   getOrderVerificationInfo,
 } from '../repos/orders.js';
 import { sendOrderPaidNotifications, sendCashOrderNotifications, sendOrderIncreasedNotifications } from '../services/email.js';
-import { createOrderPaidNotification, createCashBookingNotification } from '../repos/notifications.js';
+import { createOrderPaidNotification, createCashBookingNotification, notifyAdminsNewOrderPaid } from '../repos/notifications.js';
 import { checkSingleDateAvailability } from '../repos/availability.js';
 import { findAddonByPublicId, applyAddonPayment } from '../repos/addons.js';
 import { checkoutLimiter } from '../middleware/rateLimit.js';
@@ -506,6 +506,9 @@ async function applyPaymentToOrder(
       );
       createOrderPaidNotification(updated.id).catch((err) =>
         console.error('[notif] createOrderPaidNotification failed for order', updated.id, err),
+      );
+      notifyAdminsNewOrderPaid(updated.id).catch((err) =>
+        console.error('[notif] notifyAdminsNewOrderPaid failed for order', updated.id, err),
       );
     }
     return { applied: true, status: newStatus, orderId: updated.id };

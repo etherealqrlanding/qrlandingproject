@@ -1,5 +1,5 @@
 import { pool } from '../db.js';
-import { notifySeller } from '../services/sseNotifier.js';
+import { notifySeller, notifyAdmins } from '../services/sseNotifier.js';
 
 export interface SellerNotification {
   id: number;
@@ -72,6 +72,42 @@ export async function deleteNotification(id: number, sellerId: number): Promise<
 
 function fmtArs(n: number): string {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+
+// Push en vivo (sin persistir) a los admins con el panel de órdenes abierto, cuando
+// una orden pasa a 'paid' — por Mercado Pago o porque un vendedor confirmó el cobro
+// en efectivo. A diferencia de las notificaciones del vendedor, esto no se guarda en
+// una tabla: es solo para el toast + refresco en vivo de la lista de órdenes.
+export async function notifyAdminsNewOrderPaid(orderId: number): Promise<void> {
+  const { rows } = await pool.query<{
+    public_id: string; customer_name: string; option_name: string | null;
+    total_ars: number; payment_method: string; seller_name: string | null;
+  }>(
+    `SELECT o.public_id, o.customer_name,
+            oi.option_name_snapshot AS option_name,
+            o.total_ars::float AS total_ars, o.payment_method,
+            s.name AS seller_name
+       FROM orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN order_attributions a ON a.order_id = o.id
+       LEFT JOIN sellers s ON s.id = a.seller_id
+      WHERE o.id = $1
+      ORDER BY oi.id
+      LIMIT 1`,
+    [orderId],
+  );
+  const row = rows[0];
+  if (!row) return;
+
+  notifyAdmins('new_order_paid', {
+    order_id: orderId,
+    public_id: row.public_id,
+    customer_name: row.customer_name,
+    option_name: row.option_name,
+    total_ars: row.total_ars,
+    payment_method: row.payment_method,
+    seller_name: row.seller_name,
+  });
 }
 
 // Crea notificación para el vendedor atribuido cuando una orden pasa a 'paid'.
