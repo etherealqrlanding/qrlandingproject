@@ -38,6 +38,18 @@ const schema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
+}).superRefine((data, ctx) => {
+  // En producción, sin este secreto la verificación de firma del webhook de MP queda
+  // deshabilitada para siempre y en silencio (ver checkout.ts) — mejor que el server
+  // ni arranque a que quede así sin que nadie se entere.
+  const isPlaceholder = data.MP_WEBHOOK_SECRET === 'change-me-when-configured-in-mp-panel';
+  if (data.NODE_ENV === 'production' && (!data.MP_WEBHOOK_SECRET || isPlaceholder)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MP_WEBHOOK_SECRET'],
+      message: 'MP_WEBHOOK_SECRET es obligatorio en producción (configuralo con el secreto real del panel de Mercado Pago) para poder verificar la firma del webhook.',
+    });
+  }
 });
 
 const parsed = schema.safeParse(process.env);

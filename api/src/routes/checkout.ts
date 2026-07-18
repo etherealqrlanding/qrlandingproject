@@ -22,7 +22,7 @@ import { sendOrderPaidNotifications, sendCashOrderNotifications, sendOrderIncrea
 import { createOrderPaidNotification, createCashBookingNotification, notifyAdminsNewOrderPaid } from '../repos/notifications.js';
 import { checkSingleDateAvailability } from '../repos/availability.js';
 import { findAddonByPublicId, applyAddonPayment } from '../repos/addons.js';
-import { checkoutLimiter } from '../middleware/rateLimit.js';
+import { checkoutLimiter, webhookLimiter } from '../middleware/rateLimit.js';
 import { generateVoucherPdf } from '../services/voucherPdf.js';
 
 export const checkoutRouter = Router();
@@ -557,21 +557,27 @@ export async function syncAddonWithMp(publicId: string): Promise<{ found: boolea
 // ─── POST /api/checkout/webhook ──────────────────────────
 // MP envía notificaciones cuando cambia el estado de un pago.
 // Firma: header x-signature con HMAC-SHA256(`id:${data.id};request-id:${x-request-id};ts:${ts}`, secret)
-checkoutRouter.post('/webhook', async (req: Request, res: Response, next: NextFunction) => {
+checkoutRouter.post('/webhook', webhookLimiter, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const eventType = (req.body?.type ?? req.query?.type) as string | undefined;
     const dataId = (req.body?.data?.id ?? req.query?.['data.id']) as string | undefined;
 
     // Verificación de firma solo si MP envía el header x-signature (nuevo formato webhook).
-    // IPN legacy (topic=payment, sin x-signature) se acepta sin firma.
+    // IPN legacy (topic=payment, sin x-signature) se acepta sin firma — MP todavía manda
+    // notificaciones en ese formato en algunos casos. Igual queda registrado quién llegó
+    // sin firmar (webhook_unsigned abajo) para poder notar si se está abusando de esto;
+    // la defensa real contra datos falsos es que el pago se re-consulta siempre a la API
+    // de MP por su id, nunca se confía en el body de la request.
     const signatureHeader = req.header('x-signature');
-    if (signatureHeader && config.MP_WEBHOOK_SECRET && config.MP_WEBHOOK_SECRET !== 'change-me-when-configured-in-mp-panel') {
+    if (signatureHeader && config.MP_WEBHOOK_SECRET) {
       const requestId = req.header('x-request-id') ?? '';
       const isValid = verifyMpSignature(signatureHeader, requestId, dataId ?? '', config.MP_WEBHOOK_SECRET);
       if (!isValid) {
         await logPaymentEvent(null, 'webhook_invalid_signature', dataId ?? null, req.body);
         return res.status(401).json({ error: 'Invalid signature' });
       }
+    } else if (config.MP_WEBHOOK_SECRET) {
+      await logPaymentEvent(null, 'webhook_unsigned', dataId ?? null, { eventType });
     }
 
     await logPaymentEvent(null, `webhook_${eventType ?? 'unknown'}`, dataId ?? null, req.body);

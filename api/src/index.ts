@@ -48,6 +48,14 @@ app.use(
   }),
 );
 app.use(express.json());
+
+// El SSE de admin/vendedor recibe el JWT de sesión por query string (?token=...) porque
+// EventSource no puede mandar headers custom — es el mismo Bearer token que se usa para
+// el resto de la API. Sin esto, morgan lo escribiría entero en los logs de acceso cada
+// vez que alguien abre el panel, dejándolo disponible para cualquiera con acceso a esos
+// logs. Se redacta acá, a nivel del token :url, para cubrir cualquier ruta futura que
+// reciba algo sensible por query string, no solo el SSE de hoy.
+morgan.token('url', (req: express.Request) => (req.originalUrl ?? req.url ?? '').replace(/([?&]token=)[^&]+/i, '$1[REDACTED]'));
 app.use(morgan(config.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.use('/health', healthRouter);
