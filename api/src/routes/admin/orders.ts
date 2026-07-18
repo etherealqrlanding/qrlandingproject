@@ -15,6 +15,8 @@ import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNot
 
 export const adminOrdersRouter = Router();
 
+const collectCashCurrencySchema = z.object({ currency: z.enum(['ARS', 'USD']).default('ARS') });
+
 const listQuery = z.object({
   status: z.enum(['pending', 'paid', 'failed', 'cancelled', 'refunded', 'expired']).optional(),
   ref: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional(),
@@ -53,7 +55,7 @@ adminOrdersRouter.get('/', async (req, res, next) => {
          o.customer_name, o.customer_email, o.customer_nationality,
          o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
          o.ref_code, o.mp_payment_status, o.payment_method,
-         o.created_at, o.paid_at, o.admin_viewed_at,
+         o.created_at, o.paid_at, o.admin_viewed_at, o.cash_collected_currency,
          oi.product_name_snapshot AS product_name,
          oi.option_name_snapshot AS option_name,
          to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
@@ -459,6 +461,9 @@ adminOrdersRouter.post('/:publicId/collect-cash', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const parsedCurrency = collectCashCurrencySchema.safeParse(req.body ?? {});
+    if (!parsedCurrency.success) return res.status(400).json({ error: 'Moneda inválida' });
+    const { currency } = parsedCurrency.data;
 
     const { rows } = await pool.query<{ id: number; status: string; payment_method: string }>(
       `SELECT id, status::text AS status, payment_method
@@ -477,8 +482,8 @@ adminOrdersRouter.post('/:publicId/collect-cash', async (req, res, next) => {
     // WHERE status = 'pending' hace la transición atómica: evita que un doble clic (o
     // el vendedor confirmando el mismo cobro en paralelo) dispare el email dos veces.
     const { rowCount } = await pool.query(
-      `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW() WHERE id = $1 AND status = 'pending'`,
-      [order.id],
+      `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW(), cash_collected_currency = $2 WHERE id = $1 AND status = 'pending'`,
+      [order.id, currency],
     );
     if (!rowCount) {
       return res.status(409).json({ error: 'La orden ya fue procesada anteriormente.' });
@@ -486,7 +491,7 @@ adminOrdersRouter.post('/:publicId/collect-cash', async (req, res, next) => {
     await pool.query(
       `INSERT INTO payment_events (order_id, event_type, payload)
        VALUES ($1, 'cash_collected_by_admin', $2::jsonb)`,
-      [order.id, JSON.stringify({ actor: 'admin' })],
+      [order.id, JSON.stringify({ actor: 'admin', currency })],
     );
 
     sendCashCollectedNotifications(order.id, 'admin').catch((e) =>

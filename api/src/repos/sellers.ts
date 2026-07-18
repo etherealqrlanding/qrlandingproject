@@ -294,7 +294,7 @@ export async function listSellerOrders(
        a.commission_amount_ars::float AS commission_amount_ars,
        a.net_total_usd_snapshot::float AS net_total_usd,
        a.commission_percent_snapshot::float AS commission_percent_snapshot,
-       a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.created_at,
+       a.paid_to_seller_at, a.net_settled_at, o.cash_collected_at, o.cash_collected_currency, o.created_at,
        o.utm_source, o.payment_method, o.mp_init_point, o.restored_at,
        COALESCE(o.refunded_amount_ars, 0) > 0 AS was_reduced,
        EXISTS (

@@ -42,6 +42,7 @@ export default function ActionPage() {
   const [preview, setPreview] = useState<ActionPreview | null>(null);
   const [errorCode, setErrorCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
 
   useEffect(() => {
     if (!token) { setPhase('error'); setErrorCode('token_not_found'); return; }
@@ -68,7 +69,8 @@ export default function ActionPage() {
     try {
       const res = await fetch(`${API_URL}/api/action/${token}`, {
         method: 'POST',
-        headers: { 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: preview.action === 'collect' ? JSON.stringify({ currency }) : undefined,
       });
       const body = await res.json();
       if (!res.ok) {
@@ -145,9 +147,36 @@ export default function ActionPage() {
 
             <div className="px-6 pb-6 pt-2">
               {isCollect ? (
-                <p className="text-xs text-cream/40 mb-4 leading-relaxed">
-                  Al confirmar, se registrará el cobro y se enviará la confirmación al pasajero automáticamente.
-                </p>
+                <>
+                  <p className="text-xs text-cream/50 mb-2">¿En qué moneda cobraste?</p>
+                  <div className="flex gap-2 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => setCurrency('ARS')}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                        currency === 'ARS'
+                          ? 'border-gold bg-gold/10 text-gold'
+                          : 'border-gold/15 text-cream/50 hover:border-gold/30'
+                      }`}
+                    >
+                      Pesos (ARS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrency('USD')}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                        currency === 'USD'
+                          ? 'border-gold bg-gold/10 text-gold'
+                          : 'border-gold/15 text-cream/50 hover:border-gold/30'
+                      }`}
+                    >
+                      Dólares (USD)
+                    </button>
+                  </div>
+                  <p className="text-xs text-cream/40 mb-4 leading-relaxed">
+                    Al confirmar, se registrará el cobro y se enviará la confirmación al pasajero automáticamente.
+                  </p>
+                </>
               ) : (
                 <p className="text-xs text-cream/40 mb-4 leading-relaxed">
                   Al cancelar, se notificará al pasajero y al administrador. Esta acción no se puede deshacer desde aquí.

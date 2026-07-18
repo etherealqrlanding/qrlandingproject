@@ -169,6 +169,7 @@ export interface SellerOrder {
   paid_to_seller_at: string | null;
   net_settled_at: string | null;
   cash_collected_at: string | null;
+  cash_collected_currency: 'ARS' | 'USD' | null;
   created_at: string;
   utm_source: string | null;
   payment_method: string;
@@ -310,9 +311,10 @@ export const sellerApi = {
         body: JSON.stringify(input),
       }),
   },
-  collectCash: (publicId: string) =>
+  collectCash: (publicId: string, currency: 'ARS' | 'USD') =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/collect`, {
       method: 'POST',
+      body: JSON.stringify({ currency }),
     }),
   reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string }) =>
     request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(

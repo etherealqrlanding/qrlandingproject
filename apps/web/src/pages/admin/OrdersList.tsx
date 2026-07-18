@@ -76,7 +76,9 @@ function OrderCard({ o, selected, onToggle, highlighted }: Readonly<{ o: AdminOr
             <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold">🆕 Nueva</span>
           )}
           {o.payment_method === 'cash' && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">Efectivo</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">
+              Efectivo{o.cash_collected_currency ? ` · ${o.cash_collected_currency}` : ''}
+            </span>
           )}
         </div>
         <p className="text-gold font-mono font-medium text-sm whitespace-nowrap shrink-0">USD {o.total_usd}</p>
@@ -402,7 +404,9 @@ export default function OrdersList() {
                   <td className="py-2.5 px-3 text-center">
                     <StatusBadge status={o.status} />
                     {o.payment_method === 'cash' && (
-                      <span className="ml-1 text-xs px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">Ef.</span>
+                      <span className="ml-1 text-xs px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">
+                        Ef.{o.cash_collected_currency ? ` ${o.cash_collected_currency}` : ''}
+                      </span>
                     )}
                     {!o.admin_viewed_at && (
                       <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold">🆕 Nueva</span>

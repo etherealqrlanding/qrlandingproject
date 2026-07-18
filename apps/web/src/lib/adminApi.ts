@@ -246,6 +246,7 @@ export interface AdminSellerOrder {
   paid_to_seller_at: string | null;
   net_settled_at: string | null;
   cash_collected_at: string | null;
+  cash_collected_currency: 'ARS' | 'USD' | null;
   payment_method: 'mercadopago' | 'cash';
   created_at: string;
 }
@@ -275,6 +276,7 @@ export interface AdminOrderListItem {
   created_at: string;
   paid_at: string | null;
   admin_viewed_at: string | null;
+  cash_collected_currency: 'ARS' | 'USD' | null;
 }
 
 export interface ArchivedOrderItem {
@@ -583,8 +585,11 @@ export const adminApi = {
       ),
     addons: (publicId: string) =>
       request<PendingAddon[]>(`/api/admin/orders/${encodeURIComponent(publicId)}/addons`),
-    collectCash: (publicId: string) =>
-      request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}/collect-cash`, { method: 'POST' }),
+    collectCash: (publicId: string, currency: 'ARS' | 'USD') =>
+      request<{ ok: true }>(`/api/admin/orders/${encodeURIComponent(publicId)}/collect-cash`, {
+        method: 'POST',
+        body: JSON.stringify({ currency }),
+      }),
     collectAddon: (addonPublicId: string) =>
       request<{ ok: true; charge_usd: number; charge_ars: number }>(
         `/api/admin/orders/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST' }),

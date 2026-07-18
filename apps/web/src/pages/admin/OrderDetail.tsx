@@ -37,6 +37,7 @@ interface OrderFull {
   mp_payment_method: string | null;
   mp_init_point: string | null;
   payment_method: 'mercadopago' | 'cash';
+  cash_collected_currency: 'ARS' | 'USD' | null;
   internal_notes: string | null;
   paid_at: string | null;
   created_at: string;
@@ -115,12 +116,13 @@ export default function OrderDetail() {
     }
   };
 
-  const handleCollectCash = async () => {
+  const handleCollectCash = async (currency: 'ARS' | 'USD') => {
     if (!order || !publicId) return;
-    if (!confirm(`¿Confirmar que se cobró en efectivo la orden de ${order.customer_name}?\n\nSugerido: ARS ${order.total_ars.toLocaleString('es-AR')} (el monto lo define el vendedor)\n\nQuedará registrado como cobrado por el admin.`)) return;
+    const currencyLabel = currency === 'USD' ? 'dólares' : 'pesos';
+    if (!confirm(`¿Confirmar que se cobró en efectivo (en ${currencyLabel}) la orden de ${order.customer_name}?\n\nSugerido: ARS ${order.total_ars.toLocaleString('es-AR')} (el monto lo define el vendedor)\n\nQuedará registrado como cobrado por el admin.`)) return;
     try {
       setCollectingCash(true);
-      await adminApi.orders.collectCash(publicId);
+      await adminApi.orders.collectCash(publicId, currency);
       await load();
     } catch (err) {
       alert(`Error al confirmar cobro: ${(err as AdminApiError).message}`);
@@ -327,14 +329,24 @@ export default function OrderDetail() {
               Sugerido: <strong className="text-cream">ARS {order.total_ars.toLocaleString('es-AR')}</strong> <span className="text-cream/50">(el monto lo define el vendedor)</span>.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleCollectCash}
-            disabled={collectingCash}
-            className="btn-primary shrink-0 bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500/40 px-6 py-3 text-base disabled:opacity-50"
-          >
-            {collectingCash ? 'Guardando...' : '✓ Confirmar cobro (admin)'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleCollectCash('ARS')}
+              disabled={collectingCash}
+              className="btn-primary bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500/40 px-5 py-3 text-sm disabled:opacity-50"
+            >
+              {collectingCash ? 'Guardando...' : '✓ Cobrado en pesos'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCollectCash('USD')}
+              disabled={collectingCash}
+              className="btn-primary bg-emerald-600 hover:bg-emerald-500 focus:ring-emerald-500/40 px-5 py-3 text-sm disabled:opacity-50"
+            >
+              {collectingCash ? 'Guardando...' : '✓ Cobrado en dólares'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -483,10 +495,15 @@ export default function OrderDetail() {
                 <>
                   {/* Efectivo: no trazamos cuánto cobró el vendedor; solo nos rinde el neto */}
                   <div className="mt-3 space-y-1.5">
-                    <Row label="Nos rinde (neto)" highlight>{fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))}</Row>
+                    <Row label="Nos rinde (neto)" highlight>{cashNetDisplay(order)}</Row>
+                    {order.cash_collected_currency && (
+                      <Row label="Moneda cobrada">
+                        {order.cash_collected_currency === 'USD' ? 'Dólares (USD)' : 'Pesos (ARS)'}
+                      </Row>
+                    )}
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ El vendedor le cobra al pasajero el monto que define (no lo registramos) y <strong>nos rinde el neto ({fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used))})</strong>.
+                    ➜ El vendedor le cobra al pasajero el monto que define (no lo registramos) y <strong>nos rinde el neto ({cashNetDisplay(order)})</strong>.
                   </p>
                   <div className="mt-2">
                     <Row label="Neto cobrado">
@@ -786,6 +803,19 @@ export default function OrderDetail() {
 // Comisiones y deducciones se muestran en pesos (el negocio opera en ARS).
 function fmtArs(n: number): string {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+
+function fmtUsd(n: number): string {
+  return `USD ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Si el vendedor ya cobró en dólares, el neto se muestra directo en USD (sin
+// convertir) — es lo que el vendedor tiene físicamente en mano.
+function cashNetDisplay(order: OrderFull): string {
+  if (order.cash_collected_currency === 'USD' && order.net_total_usd != null) {
+    return fmtUsd(order.net_total_usd);
+  }
+  return fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used));
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

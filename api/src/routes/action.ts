@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { pool } from '../db.js';
 import { logPaymentEvent } from '../repos/orders.js';
 import { notifyAdminsNewOrderPaid } from '../repos/notifications.js';
@@ -6,6 +7,8 @@ import { sendCashCollectedNotifications, sendSellerCancelledNotifications } from
 import { getCancelWindow, checkOperationWindow } from '../services/settings.js';
 
 export const actionRouter = Router();
+
+const collectCurrencySchema = z.object({ currency: z.enum(['ARS', 'USD']).default('ARS') });
 
 const TOKEN_RE = /^[0-9a-f-]{32,40}$/i;
 
@@ -103,13 +106,15 @@ actionRouter.post('/:token', async (req, res, next) => {
       if (row.status !== 'pending') {
         return res.status(409).json({ error: 'order_not_actionable', current_status: row.status });
       }
+      const parsedCurrency = collectCurrencySchema.safeParse(req.body ?? {});
+      const currency = parsedCurrency.success ? parsedCurrency.data.currency : 'ARS';
 
       await pool.query(
-        `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW() WHERE id = $1`,
-        [row.order_id],
+        `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW(), cash_collected_currency = $2 WHERE id = $1`,
+        [row.order_id, currency],
       );
       await logPaymentEvent(row.order_id, 'cash_collected_by_seller', null, {
-        seller_id: row.seller_id, via: 'email_token',
+        seller_id: row.seller_id, via: 'email_token', currency,
       });
       notifyAdminsNewOrderPaid(row.order_id).catch((e) =>
         console.error('[notif] notifyAdminsNewOrderPaid failed:', e),

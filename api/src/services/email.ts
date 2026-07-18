@@ -121,6 +121,8 @@ export interface OrderEmailData {
   address?: string | null;
   seller_name?: string | null;
   seller_email?: string | null;
+  cash_collected_currency?: 'ARS' | 'USD' | null;
+  net_total_usd?: number | null;
 }
 
 const baseStyles = {
@@ -178,6 +180,9 @@ function emailRow(label: string, value: string, accent = false): string {
 function fmtArs(n: number): string {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 }
+function fmtUsd(n: number): string {
+  return `USD ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 function arsOf(usd: number | null | undefined, rate: number): string {
   return fmtArs((usd ?? 0) * rate);
 }
@@ -188,6 +193,16 @@ function arsOf(usd: number | null | undefined, rate: number): string {
 function cashNetArs(raw: Record<string, unknown>, d: OrderEmailData): number {
   const commissionArs = (raw.commission_ars as number | null) ?? 0;
   return Math.max(0, Math.round(d.total_ars - commissionArs));
+}
+
+// Igual que cashNetArs, pero si el vendedor cobró en dólares, el neto se muestra
+// directamente en USD (net_total_usd_snapshot, ya congelado) en vez de convertirlo
+// a pesos — el vendedor tiene los dólares en mano, no hace falta ninguna conversión.
+function cashNetDisplay(raw: Record<string, unknown>, d: OrderEmailData): string {
+  if (d.cash_collected_currency === 'USD' && d.net_total_usd != null) {
+    return fmtUsd(d.net_total_usd);
+  }
+  return fmtArs(cashNetArs(raw, d));
 }
 
 // Bloque de detalle COMPLETO de la reserva, reutilizado en todos los emails al cliente
@@ -359,7 +374,7 @@ export const ORDER_EMAIL_SELECT = `
        o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
        o.exchange_rate_used::float AS exchange_rate_used,
-       o.mp_payment_id, o.payment_method, o.cash_collected_at,
+       o.mp_payment_id, o.payment_method, o.cash_collected_at, o.cash_collected_currency,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
@@ -372,7 +387,8 @@ export const ORDER_EMAIL_SELECT = `
        s.id AS seller_id, s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
        a.commission_amount_usd::float AS commission_usd,
        a.commission_amount_ars::float AS commission_ars,
-       a.commission_percent_snapshot::float AS commission_percent
+       a.commission_percent_snapshot::float AS commission_percent,
+       a.net_total_usd_snapshot::float AS net_total_usd
      FROM orders o
      LEFT JOIN order_items oi ON oi.order_id = o.id
      LEFT JOIN product_options opt ON opt.id = oi.option_id
@@ -409,6 +425,8 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
     address: (data.address_es as string) ?? null,
     seller_name: (data.seller_name as string) ?? null,
     seller_email: (data.seller_email as string) ?? null,
+    cash_collected_currency: (data.cash_collected_currency as 'ARS' | 'USD') ?? null,
+    net_total_usd: (data.net_total_usd as number) ?? null,
   };
 }
 
@@ -640,7 +658,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     <p style="${baseStyles.eyebrow}">Vendedor</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${fmtArs(cashNetArs(data, baseData))}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${cashNetDisplay(data, baseData)}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">${actorNote}</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
@@ -664,7 +682,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(baseData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha del servicio</span><strong>${baseData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pasajeros</span><strong>${baseData.adults} ad · ${baseData.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(cashNetArs(data, baseData))}</strong></div>
+    <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a;font-size:18px">${cashNetDisplay(data, baseData)}</strong></div>
   </div>
   <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">El monto que le cobraste al pasajero lo definiste vos; lo que nos rendís es el neto.</p>
   ${supportBlock()}

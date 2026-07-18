@@ -450,11 +450,16 @@ sellerRouter.get('/me/commissions/:date/orders', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const collectCashSchema = z.object({ currency: z.enum(['ARS', 'USD']).default('ARS') });
+
 // POST /api/seller/me/orders/:publicId/collect — vendedor confirma que recibió el dinero en efectivo
 sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     if (!publicId) return res.status(400).json({ error: 'publicId requerido' });
+    const parsedCurrency = collectCashSchema.safeParse(req.body ?? {});
+    if (!parsedCurrency.success) return res.status(400).json({ error: 'Moneda inválida' });
+    const { currency } = parsedCurrency.data;
 
     // Verificar que la orden pertenece a este vendedor, es cash y está pendiente
     const { rows } = await pool.query<{
@@ -487,15 +492,16 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
       `UPDATE orders
           SET status = 'paid',
               paid_at = NOW(),
-              cash_collected_at = NOW()
+              cash_collected_at = NOW(),
+              cash_collected_currency = $2
         WHERE id = $1 AND status = 'pending'`,
-      [order.id],
+      [order.id, currency],
     );
     if (!rowCount) {
       return res.status(409).json({ error: 'La orden ya fue procesada anteriormente' });
     }
 
-    await logPaymentEvent(order.id, 'cash_collected_by_seller', null, { seller_id: req.seller!.sellerId });
+    await logPaymentEvent(order.id, 'cash_collected_by_seller', null, { seller_id: req.seller!.sellerId, currency });
 
     // Aviso en vivo al panel de órdenes del admin — el vendedor confirmó el cobro,
     // no el admin, así que le sirve enterarse sin recargar.

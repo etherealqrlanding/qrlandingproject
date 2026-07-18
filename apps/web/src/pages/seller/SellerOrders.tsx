@@ -83,6 +83,10 @@ function fmtArs(ars: number) {
   return `ARS ${Math.round(ars).toLocaleString('es-AR')}`;
 }
 
+function fmtUsd(usd: number) {
+  return `USD ${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 // Comisión efectiva en ARS: usa el valor guardado si existe; si no (órdenes sin precio neto
 // configurado), recalcula desde commission_percent_snapshot × total_ars.
 function effectiveCommissionArs(o: SellerOrder): number {
@@ -91,6 +95,13 @@ function effectiveCommissionArs(o: SellerOrder): number {
     return Math.round(o.total_ars * o.commission_percent_snapshot / 100);
   }
   return 0;
+}
+
+// Neto a rendir formateado: si ya se cobró en USD, se muestra directo en dólares
+// (sin convertir) porque el vendedor tiene los dólares en mano; si no, en ARS.
+function netDisplay(o: SellerOrder): string {
+  if (o.cash_collected_currency === 'USD' && o.net_total_usd != null) return fmtUsd(o.net_total_usd);
+  return fmtArs(effectiveNetArs(o));
 }
 
 // Neto efectivo en ARS: usa net_total_usd × tasa si existe; si no, total − comisión estimada.
@@ -156,6 +167,7 @@ export default function SellerOrders() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [collecting, setCollecting] = useState<string | null>(null);
   const [confirmPublicId, setConfirmPublicId] = useState<string | null>(null);
+  const [collectCurrency, setCollectCurrency] = useState<'ARS' | 'USD'>('ARS');
   const [collectError, setCollectError] = useState<string | null>(null);
   const [modifyOrder, setModifyOrder] = useState<SellerOrder | null>(null);
   const [eventsByOrder, setEventsByOrder] = useState<Record<string, OrderEvent[]>>({});
@@ -312,7 +324,7 @@ export default function SellerOrders() {
     setCollecting(publicId);
     setCollectError(null);
     try {
-      await sellerApi.collectCash(publicId);
+      await sellerApi.collectCash(publicId, collectCurrency);
       setConfirmPublicId(null);
       // Refrescar la lista
       const data = await sellerApi.orders(filter || undefined);
@@ -418,7 +430,38 @@ export default function SellerOrders() {
               </div>
               <div className="flex justify-between">
                 <span className="text-cream/50">Neto a rendir</span>
-                <span className="text-gold font-mono font-semibold">{fmtArs(effectiveNetArs(pendingOrder))}</span>
+                <span className="text-gold font-mono font-semibold">
+                  {collectCurrency === 'USD' && pendingOrder.net_total_usd != null
+                    ? fmtUsd(pendingOrder.net_total_usd)
+                    : fmtArs(effectiveNetArs(pendingOrder))}
+                </span>
+              </div>
+            </div>
+            <div className="mb-5">
+              <p className="text-xs text-cream/50 mb-2">¿En qué moneda cobraste?</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCollectCurrency('ARS')}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    collectCurrency === 'ARS'
+                      ? 'border-gold bg-gold/10 text-gold'
+                      : 'border-gold/15 text-cream/50 hover:border-gold/30'
+                  }`}
+                >
+                  Pesos (ARS)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCollectCurrency('USD')}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                    collectCurrency === 'USD'
+                      ? 'border-gold bg-gold/10 text-gold'
+                      : 'border-gold/15 text-cream/50 hover:border-gold/30'
+                  }`}
+                >
+                  Dólares (USD)
+                </button>
               </div>
             </div>
             <p className="text-xs text-cream/40 mb-5">
@@ -604,7 +647,7 @@ export default function SellerOrders() {
                       {o.payment_method === 'cash' ? (
                         (o.status === 'paid' || o.status === 'pending') && (
                           <>
-                            <p className="text-cream font-mono text-sm">{fmtArs(effectiveNetArs(o))}</p>
+                            <p className="text-cream font-mono text-sm">{netDisplay(o)}</p>
                             <p className="text-[10px] text-cream/40 -mt-0.5">neto a rendir</p>
                           </>
                         )
@@ -652,7 +695,7 @@ export default function SellerOrders() {
                       {o.payment_method === 'cash' ? (
                         <>
                           {(o.status === 'paid' || o.status === 'pending') && (
-                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs(effectiveNetArs(o))}</span></DetailRow>
+                            <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{netDisplay(o)}</span></DetailRow>
                           )}
                           <DetailRow label="Neto rendido">
                             {o.net_settled_at
@@ -682,7 +725,7 @@ export default function SellerOrders() {
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setConfirmPublicId(o.public_id); }}
+                            onClick={(e) => { e.stopPropagation(); setConfirmPublicId(o.public_id); setCollectCurrency('ARS'); }}
                             className="w-full rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
                           >
                             ✓ Confirmar cobro en efectivo
@@ -828,7 +871,7 @@ export default function SellerOrders() {
                         <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-xs">
                           {(o.status === 'paid' || o.status === 'pending')
                             ? (o.payment_method === 'cash'
-                                ? <span className="text-cream/80">{fmtArs(effectiveNetArs(o))}</span>
+                                ? <span className="text-cream/80">{netDisplay(o)}</span>
                                 : <span className="text-gold">{fmtArs(effectiveCommissionArs(o))}</span>)
                             : <span className="text-cream/30">—</span>}
                         </td>
@@ -888,7 +931,7 @@ export default function SellerOrders() {
                                 {o.payment_method === 'cash' ? (
                                   <>
                                     {(o.status === 'paid' || o.status === 'pending') && (
-                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{fmtArs(effectiveNetArs(o))}</span></DetailRow>
+                                      <DetailRow label="Neto a rendir"><span className="text-cream font-mono">{netDisplay(o)}</span></DetailRow>
                                     )}
                                     <DetailRow label="Neto rendido">
                                       {o.net_settled_at
@@ -921,7 +964,7 @@ export default function SellerOrders() {
                               <div className="mt-4 pt-4 border-t border-gold/10">
                                 <button
                                   type="button"
-                                  onClick={(e) => { e.stopPropagation(); setConfirmPublicId(o.public_id); }}
+                                  onClick={(e) => { e.stopPropagation(); setConfirmPublicId(o.public_id); setCollectCurrency('ARS'); }}
                                   className="w-full rounded-lg bg-gold px-4 py-3 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
                                 >
                                   ✓ Confirmar cobro en efectivo
