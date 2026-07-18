@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import type { PoolClient } from 'pg';
 import { pool } from '../../db.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications } from '../../services/email.js';
@@ -14,6 +15,21 @@ import { checkSingleDateAvailability } from '../../repos/availability.js';
 import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNotification } from '../../repos/notifications.js';
 
 export const adminOrdersRouter = Router();
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+// Error de validación con status HTTP propio — se lanza durante /refund y /modify
+// (que sostienen una transacción abierta mientras llaman a Mercado Pago) para que el
+// catch central sea el ÚNICO lugar que hace ROLLBACK, en vez de repetirlo en cada
+// early-return y arriesgarse a dejar una transacción colgada en alguna rama.
+class RouteValidationError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'RouteValidationError';
+    this.status = status;
+  }
+}
 
 const collectCashCurrencySchema = z.object({ currency: z.enum(['ARS', 'USD']).default('ARS') });
 
@@ -193,45 +209,56 @@ const refundSchema = z.object({
 });
 
 adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
+  const publicId = req.params.publicId;
+  if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+  const parsed = refundSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+  // Refund transaccional: el lock de fila (FOR UPDATE) se toma ANTES de llamar a MP y
+  // se sostiene hasta después de persistir el resultado, para que ninguna otra
+  // modificación concurrente quede pisando datos a mitad de un reintegro real (ver
+  // auditoría pre-prod — antes el refund en MP se disparaba sin ningún lock).
+  const client: PoolClient = await pool.connect();
+  let refundResponse: Awaited<ReturnType<typeof refundPayment>> | undefined;
+  let refundAlreadyIssued = false;
   try {
-    const publicId = req.params.publicId;
-    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    await client.query('BEGIN');
 
-    const parsed = refundSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
-
-    // 1) Cargar la orden y validar que se pueda reintegrar
-    const { rows: orderRows } = await pool.query<{
+    const { rows: orderRows } = await client.query<{
       id: number; status: string; mp_payment_id: string | null;
       total_usd: number; total_ars: number; exchange_rate_used: number;
-      service_date: string | Date;
+      service_date: string | Date; commission_percent: number | null;
     }>(
       `SELECT o.id, o.status::text AS status, o.mp_payment_id,
               o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
               o.exchange_rate_used::float AS exchange_rate_used,
-              oi.service_date
+              oi.service_date,
+              a.commission_percent_snapshot::float AS commission_percent
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id
+         LEFT JOIN order_attributions a ON a.order_id = o.id
         WHERE o.public_id = $1
-        ORDER BY oi.id LIMIT 1`,
+        ORDER BY oi.id LIMIT 1
+        FOR UPDATE OF o, oi`,
       [publicId],
     );
     const order = orderRows[0];
-    if (!order) return res.status(404).json({ error: 'Not found' });
+    if (!order) throw new RouteValidationError(404, 'Not found');
 
     const cancelCheck = checkOperationWindow(await getCancelWindow(), order.service_date);
-    if (cancelCheck.blocked) return res.status(409).json({ error: cancelCheck.message });
+    if (cancelCheck.blocked) throw new RouteValidationError(409, cancelCheck.message ?? 'Fuera de la ventana permitida.');
 
     if (order.status === 'refunded') {
-      return res.status(409).json({ error: 'Esta orden ya fue reintegrada' });
+      throw new RouteValidationError(409, 'Esta orden ya fue reintegrada');
     }
     if (order.status !== 'paid') {
-      return res.status(400).json({ error: `Solo se pueden reintegrar órdenes pagadas. Estado actual: ${order.status}` });
+      throw new RouteValidationError(400, `Solo se pueden reintegrar órdenes pagadas. Estado actual: ${order.status}`);
     }
     if (!order.mp_payment_id) {
-      return res.status(400).json({
-        error: 'La orden no tiene un payment_id de Mercado Pago (el webhook no llegó a confirmarla todavía). Si el cobro fue por fuera de MP, marcala como "cancelled" desde el detalle.',
-      });
+      throw new RouteValidationError(400,
+        'La orden no tiene un payment_id de Mercado Pago (el webhook no llegó a confirmarla todavía). Si el cobro fue por fuera de MP, marcala como "cancelled" desde el detalle.',
+      );
     }
 
     // Refund parcial: validar y convertir USD → ARS con el rate de la orden
@@ -240,19 +267,21 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
     const isPartial = parsed.data.amount_usd != null && parsed.data.amount_usd < order.total_usd;
     if (parsed.data.amount_usd != null) {
       if (parsed.data.amount_usd > order.total_usd) {
-        return res.status(400).json({ error: `El monto a reintegrar (USD ${parsed.data.amount_usd}) supera el total de la orden (USD ${order.total_usd}).` });
+        throw new RouteValidationError(400, `El monto a reintegrar (USD ${parsed.data.amount_usd}) supera el total de la orden (USD ${order.total_usd}).`);
       }
       amountUsdToRefund = parsed.data.amount_usd;
       amountArs = Math.round(parsed.data.amount_usd * order.exchange_rate_used * 100) / 100;
     }
 
-    // 2) Disparar el refund en MP con idempotency key determinística.
-    //    Así, si se reintenta (doble clic, timeout, reproceso), MP NO reintegra dos veces.
+    // 2) Disparar el refund en MP con idempotency key determinística (todavía con el
+    //    lock sostenido). Así, si se reintenta (doble clic, timeout, reproceso), MP NO
+    //    reintegra dos veces.
     const idempotencyKey = `refund:${order.id}:${isPartial ? amountArs : 'full'}`;
-    let refundResponse;
     try {
       refundResponse = await refundPayment(order.mp_payment_id, amountArs, idempotencyKey);
+      refundAlreadyIssued = true;
     } catch (err) {
+      await client.query('ROLLBACK');
       const message = (err as Error).message ?? 'Refund failed';
       await logPaymentEvent(order.id, 'refund_failed', order.mp_payment_id, {
         error: message, reason: parsed.data.reason, amount_usd: amountUsdToRefund,
@@ -262,25 +291,50 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
 
     // 3) Actualizar la orden:
     //    - Refund total → status = 'refunded'
-    //    - Refund parcial → orden sigue 'paid' (cliente sí recibió servicio parcial o ajuste)
+    //    - Refund parcial → orden sigue 'paid', pero el total y la comisión del
+    //      vendedor bajan proporcionalmente (antes quedaban intactos, ver auditoría).
     const newStatus = isPartial ? 'paid' : 'refunded';
     const noteLine = `[${new Date().toISOString()}] ${isPartial ? `Refund parcial USD ${amountUsdToRefund}` : 'Refund total procesado'}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
-    await pool.query(
+
+    const newTotalUsd = isPartial ? round2(order.total_usd - (amountUsdToRefund ?? 0)) : null;
+    const newTotalArs = isPartial ? round2(order.total_ars - (amountArs ?? 0)) : null;
+    const newCommissionUsd = (isPartial && order.commission_percent != null)
+      ? round2((newTotalUsd ?? 0) * order.commission_percent / 100) : null;
+    const newCommissionArs = newCommissionUsd != null ? round2(newCommissionUsd * order.exchange_rate_used) : null;
+
+    await client.query(
       `UPDATE orders
           SET status = $1::order_status,
               internal_notes = COALESCE(internal_notes || E'\\n', '') || $2,
               refunded_at = CASE WHEN $1::order_status = 'refunded' THEN NOW() ELSE refunded_at END,
+              total_usd = COALESCE($4, total_usd),
+              total_ars = COALESCE($5, total_ars),
+              refunded_amount_usd = refunded_amount_usd + COALESCE($6, 0),
+              refunded_amount_ars = refunded_amount_ars + COALESCE($7, 0),
               updated_at = NOW()
         WHERE id = $3`,
-      [newStatus, noteLine, order.id],
+      [newStatus, noteLine, order.id, newTotalUsd, newTotalArs, isPartial ? (amountUsdToRefund ?? 0) : 0, isPartial ? (amountArs ?? 0) : 0],
     );
 
-    await logPaymentEvent(order.id, isPartial ? 'refund_partial_processed' : 'refund_processed', order.mp_payment_id, {
-      reason: parsed.data.reason ?? null,
-      refund_id: refundResponse?.id ?? null,
-      amount_ars: refundResponse?.amount ?? amountArs ?? null,
-      amount_usd: amountUsdToRefund ?? order.total_usd,
-    });
+    if (newCommissionUsd != null) {
+      await client.query(
+        `UPDATE order_attributions SET commission_amount_usd = $1, commission_amount_ars = $2 WHERE order_id = $3`,
+        [newCommissionUsd, newCommissionArs, order.id],
+      );
+    }
+
+    await client.query(
+      `INSERT INTO payment_events (order_id, event_type, mp_resource_id, payload)
+       VALUES ($1, $2, $3, $4::jsonb)`,
+      [order.id, isPartial ? 'refund_partial_processed' : 'refund_processed', order.mp_payment_id, JSON.stringify({
+        reason: parsed.data.reason ?? null,
+        refund_id: refundResponse?.id ?? null,
+        amount_ars: refundResponse?.amount ?? amountArs ?? null,
+        amount_usd: amountUsdToRefund ?? order.total_usd,
+      })],
+    );
+
+    await client.query('COMMIT');
 
     // 4) Notificar (fire-and-forget) — incluye cliente + admin + vendedor si hubo atribución
     if (parsed.data.notify_customer !== false) {
@@ -299,7 +353,27 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
         new_status: newStatus,
       },
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => { /* la conexión puede haber quedado inservible */ });
+    if (err instanceof RouteValidationError) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    if (refundAlreadyIssued) {
+      // El reintegro YA se ejecutó en Mercado Pago — no hay forma de deshacerlo. Si
+      // el guardado local falló igual (con el lock ya tomado, debería ser rarísimo),
+      // esto tiene que quedar imposible de pasar por alto en vez de perderse en silencio.
+      console.error(
+        `[CRITICAL] Refund procesado en MP para la orden ${publicId} (refund_id=${refundResponse?.id ?? '?'}, ` +
+        `monto=${refundResponse?.amount ?? '?'}) pero el guardado local falló. Requiere reconciliación manual.`, err,
+      );
+      return res.status(500).json({
+        error: 'El reintegro se procesó en Mercado Pago pero no se pudo guardar en el sistema. Contactá a soporte técnico con el número de esta orden para reconciliar manualmente.',
+      });
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 // ─── Modificar reserva reduciendo pax/traslado + reintegro parcial (MP) ───────
@@ -319,15 +393,24 @@ const modifySchema = z.object({
 });
 
 adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
+  const publicId = req.params.publicId;
+  if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+  const parsed = modifySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+  // Igual que /refund: lock de fila sostenido desde antes de leer los datos hasta
+  // después de persistir el resultado, así el refund en MP y la reducción quedan
+  // atómicos entre sí — antes el chequeo de concurrencia de applyOrderReduction podía
+  // fallar DESPUÉS de que el dinero ya se hubiera reintegrado (ver auditoría pre-prod).
+  const client: PoolClient = await pool.connect();
+  let refundAlreadyIssued = false;
+  let refundArsIssued: number | undefined;
   try {
-    const publicId = req.params.publicId;
-    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    await client.query('BEGIN');
 
-    const parsed = modifySchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
-
-    // 1) Cargar orden + item + atribución (todo lo congelado que necesita el cálculo)
-    const { rows } = await pool.query<{
+    // 1) Cargar orden + item + atribución CON LOCK (todo lo congelado que necesita el cálculo)
+    const { rows } = await client.query<{
       order_id: number; status: string; payment_method: string; mp_payment_id: string | null;
       total_usd: number; total_ars: number; exchange_rate_used: number;
       item_id: number; adults: number; children: number;
@@ -351,24 +434,25 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
          LEFT JOIN order_attributions a ON a.order_id = o.id
         WHERE o.public_id = $1
         ORDER BY oi.id
-        LIMIT 1`,
+        LIMIT 1
+        FOR UPDATE OF o, oi`,
       [publicId],
     );
     const row = rows[0];
-    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (!row) throw new RouteValidationError(404, 'Not found');
 
     const modifyCheck = checkOperationWindow(await getModifyWindow(), row.service_date);
-    if (modifyCheck.blocked) return res.status(409).json({ error: modifyCheck.message });
+    if (modifyCheck.blocked) throw new RouteValidationError(409, modifyCheck.message ?? 'Fuera de la ventana permitida.');
 
     // 2) Validaciones de estado
     if (row.status !== 'paid') {
-      return res.status(400).json({ error: `Solo se pueden modificar reservas pagadas. Estado actual: ${row.status}` });
+      throw new RouteValidationError(400, `Solo se pueden modificar reservas pagadas. Estado actual: ${row.status}`);
     }
     if (row.payment_method !== 'mercadopago') {
-      return res.status(400).json({ error: 'Esta reserva es en efectivo. La devolución en efectivo se gestiona desde su vía correspondiente.' });
+      throw new RouteValidationError(400, 'Esta reserva es en efectivo. La devolución en efectivo se gestiona desde su vía correspondiente.');
     }
     if (!row.mp_payment_id) {
-      return res.status(400).json({ error: 'La orden no tiene un pago de Mercado Pago confirmado. Sincronizala con MP primero.' });
+      throw new RouteValidationError(400, 'La orden no tiene un pago de Mercado Pago confirmado. Sincronizala con MP primero.');
     }
 
     // 3) Calcular la reducción (validación + montos) sobre datos congelados
@@ -388,15 +472,18 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       children: parsed.data.children,
       transferRequested: parsed.data.transfer_requested,
     });
-    if (!calc.ok) return res.status(400).json({ error: calc.error });
+    if (!calc.ok) throw new RouteValidationError(400, calc.error ?? 'No se pudo calcular la reducción.');
 
-    // 4) Refund en MP ANTES de tocar la DB. Idempotency key atada a la composición DESTINO:
-    //    reintentar el mismo cambio devuelve el mismo refund; reducciones sucesivas (que
-    //    apuntan a composiciones distintas) nunca colisionan.
+    // 4) Refund en MP (todavía con el lock sostenido). Idempotency key atada a la
+    //    composición DESTINO: reintentar el mismo cambio devuelve el mismo refund;
+    //    reducciones sucesivas (que apuntan a composiciones distintas) nunca colisionan.
     const idempotencyKey = `refund:${row.order_id}:to:${parsed.data.adults}a${parsed.data.children}n${parsed.data.transfer_requested ? 'T' : 'F'}`;
     try {
       await refundPayment(row.mp_payment_id, calc.refundArs, idempotencyKey);
+      refundAlreadyIssued = true;
+      refundArsIssued = calc.refundArs;
     } catch (err) {
+      await client.query('ROLLBACK');
       const message = (err as Error).message ?? 'Refund failed';
       await logPaymentEvent(row.order_id, 'modify_refund_failed', row.mp_payment_id, {
         error: message, target: parsed.data, refund_ars: calc.refundArs,
@@ -404,7 +491,8 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       return res.status(502).json({ error: `Mercado Pago rechazó el reintegro: ${message}` });
     }
 
-    // 5) Persistir la reducción (item + totales + comisión + registro de reintegro)
+    // 5) Persistir la reducción en la MISMA transacción (mismo client, mismo lock) —
+    //    applyOrderReduction ya no abre/cierra su propia transacción cuando se le pasa un client.
     const newTransfer = parsed.data.transfer_requested;
     const noteLine = `[${new Date().toISOString()}] Modificación: ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Reintegro USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
     await applyOrderReduction({
@@ -425,7 +513,9 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       newNetTotalUsd: null,
       noteLine,
       actor: 'admin',
-    });
+    }, client);
+
+    await client.query('COMMIT');
 
     // 6) Notificar (fire-and-forget)
     if (parsed.data.notify_customer !== false) {
@@ -449,8 +539,28 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       },
     });
   } catch (err) {
-    if (err instanceof ConcurrentModificationError) return res.status(409).json({ error: err.message });
+    await client.query('ROLLBACK').catch(() => { /* la conexión puede haber quedado inservible */ });
+    if (err instanceof RouteValidationError) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    // Con el lock sostenido desde antes de leer los datos, este chequeo de
+    // concurrencia debería ser inalcanzable en la práctica — queda como red de
+    // seguridad. Si de todos modos ocurre DESPUÉS de un refund exitoso, el dinero
+    // ya se movió y no se puede deshacer: hay que dejarlo bien visible.
+    if (err instanceof ConcurrentModificationError && !refundAlreadyIssued) {
+      return res.status(409).json({ error: err.message });
+    }
+    if (refundAlreadyIssued) {
+      console.error(
+        `[CRITICAL] Refund de ARS ${refundArsIssued} procesado en MP para la orden ${publicId} pero la modificación no se pudo guardar. Requiere reconciliación manual.`, err,
+      );
+      return res.status(500).json({
+        error: 'El reintegro se procesó en Mercado Pago pero no se pudo guardar la modificación. Contactá a soporte técnico con el número de esta orden para reconciliar manualmente.',
+      });
+    }
     next(err);
+  } finally {
+    client.release();
   }
 });
 

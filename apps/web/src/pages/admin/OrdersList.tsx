@@ -47,11 +47,12 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
   return <span className={`text-[10px] px-2 py-0.5 rounded-full border ${color}`}>{label}</span>;
 }
 
-function SummaryCard({ label, value, highlight }: Readonly<{ label: string; value: string; highlight?: boolean }>) {
+function SummaryCard({ label, value, sub, highlight }: Readonly<{ label: string; value: string; sub?: string; highlight?: boolean }>) {
   return (
     <div className={`rounded-lg border p-3 md:p-4 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
       <p className="text-[10px] uppercase tracking-widest text-gold-soft">{label}</p>
       <p className={`mt-0.5 font-display text-xl md:text-2xl ${highlight ? 'text-gold' : 'text-cream'}`}>{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-cream/40 hidden sm:block">{sub}</p>}
     </div>
   );
 }
@@ -455,10 +456,10 @@ export default function OrdersList() {
 
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 md:mb-6">
-          <SummaryCard label="Total" value={`${summary.count}`} />
-          <SummaryCard label="Pagadas" value={`${summary.paidCount}`} />
-          <SummaryCard label="Revenue" value={`$${summary.revenue.toFixed(0)}`} />
-          <SummaryCard label="Comisiones" value={`$${summary.commission.toFixed(0)}`} highlight />
+          <SummaryCard label="Total" value={`${summary.count}`} sub="órdenes en este listado" />
+          <SummaryCard label="Pagadas" value={`${summary.paidCount}`} sub="confirmadas, MP o efectivo" />
+          <SummaryCard label="Facturación MP" value={`$${summary.revenue.toFixed(0)}`} sub="cobrado por Mercado Pago (no incluye efectivo)" />
+          <SummaryCard label="Comisiones" value={`$${summary.commission.toFixed(0)}`} sub="a liquidar, solo ventas por MP" highlight />
         </div>
       )}
 

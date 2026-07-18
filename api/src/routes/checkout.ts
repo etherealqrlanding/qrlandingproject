@@ -472,8 +472,10 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
 });
 
 // Aplica un pago de MP a su orden: actualiza estado + payment_id y, si pasa a
-// 'paid' por primera vez, dispara las notificaciones. Idempotente: chequea el
-// estado previo, así no re-envía emails si la orden ya estaba pagada.
+// 'paid' por primera vez, dispara las notificaciones. Idempotente y atómico —
+// updateOrderFromPayment toma el lock de fila y aplica la guarda de estado terminal
+// en un solo UPDATE, así dos entregas del webhook (o un webhook tardío que llega
+// después de un refund manual) nunca pisan un estado ya resuelto.
 async function applyPaymentToOrder(
   payment: { id?: number | string; status?: string; payment_method_id?: string; external_reference?: string | null },
   eventDataId?: string | null,
@@ -482,39 +484,41 @@ async function applyPaymentToOrder(
   if (!externalRef) return { applied: false };
   const newStatus = mapMpStatusToOrderStatus(payment.status);
   const paymentIdStr = payment.id != null ? String(payment.id) : null;
-  const client = await pool.connect();
-  try {
-    const prior = await client.query<{ status: string }>(
-      `SELECT status::text AS status FROM orders WHERE public_id = $1 LIMIT 1`, [externalRef],
-    );
-    const wasPaid = prior.rows[0]?.status === 'paid';
-    const updated = await updateOrderFromPayment(client, externalRef, {
-      status: newStatus,
-      mp_payment_id: paymentIdStr,
-      mp_payment_status: payment.status ?? null,
-      mp_payment_method: payment.payment_method_id ?? null,
-      paid_at: newStatus === 'paid' ? new Date() : null,
+
+  const updated = await updateOrderFromPayment(externalRef, {
+    status: newStatus,
+    mp_payment_id: paymentIdStr,
+    mp_payment_status: payment.status ?? null,
+    mp_payment_method: payment.payment_method_id ?? null,
+    paid_at: newStatus === 'paid' ? new Date() : null,
+  });
+  if (!updated) return { applied: false };
+
+  if (updated.status !== newStatus) {
+    // La guarda ignoró el intento de revertir un estado terminal — queda registrado
+    // para que sea visible en el histórico, pero no se toca nada más ni se notifica.
+    await logPaymentEvent(updated.id, 'webhook_ignored_terminal_state', eventDataId ?? paymentIdStr, {
+      payment_id: payment.id, status: payment.status, current_status: updated.status, attempted_status: newStatus,
     });
-    if (!updated) return { applied: false };
-    await logPaymentEvent(updated.id, `order_${newStatus}`, eventDataId ?? paymentIdStr, {
-      payment_id: payment.id, status: payment.status,
-    });
-    // Notificar solo en la transición a 'paid' (primera vez) → nunca duplica emails.
-    if (newStatus === 'paid' && !wasPaid) {
-      sendOrderPaidNotifications(updated.id).catch((err) =>
-        console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
-      );
-      createOrderPaidNotification(updated.id).catch((err) =>
-        console.error('[notif] createOrderPaidNotification failed for order', updated.id, err),
-      );
-      notifyAdminsNewOrderPaid(updated.id).catch((err) =>
-        console.error('[notif] notifyAdminsNewOrderPaid failed for order', updated.id, err),
-      );
-    }
-    return { applied: true, status: newStatus, orderId: updated.id };
-  } finally {
-    client.release();
+    return { applied: false, status: updated.status, orderId: updated.id };
   }
+
+  await logPaymentEvent(updated.id, `order_${updated.status}`, eventDataId ?? paymentIdStr, {
+    payment_id: payment.id, status: payment.status,
+  });
+  // Notificar solo en la transición a 'paid' (primera vez) → nunca duplica emails.
+  if (updated.status === 'paid' && updated.priorStatus !== 'paid') {
+    sendOrderPaidNotifications(updated.id).catch((err) =>
+      console.error('[email] sendOrderPaidNotifications failed for order', updated.id, err),
+    );
+    createOrderPaidNotification(updated.id).catch((err) =>
+      console.error('[notif] createOrderPaidNotification failed for order', updated.id, err),
+    );
+    notifyAdminsNewOrderPaid(updated.id).catch((err) =>
+      console.error('[notif] notifyAdminsNewOrderPaid failed for order', updated.id, err),
+    );
+  }
+  return { applied: true, status: updated.status, orderId: updated.id };
 }
 
 // Respaldo del webhook: consulta MP por la referencia (public_id) de la orden y la

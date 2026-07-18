@@ -169,8 +169,15 @@ export async function setOrderPreferenceId(orderId: number, preferenceId: string
   );
 }
 
+/**
+ * Aplica un cambio de estado proveniente de MP (webhook o sync) de forma atómica:
+ * la CTE toma el lock de fila (FOR UPDATE) y la guarda de la misma UPDATE evita que
+ * un evento tardío o duplicado revierta un estado terminal (refunded/cancelled, que
+ * ya implica un movimiento real de fondos resuelto) de vuelta a 'paid'/'failed'. Un
+ * solo statement SQL es atómico en Postgres, no hace falta BEGIN/COMMIT manual acá.
+ * Devuelve también el estado PREVIO para que el caller decida si notificar.
+ */
 export async function updateOrderFromPayment(
-  client: PoolClient,
   publicId: string,
   fields: {
     status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded';
@@ -179,17 +186,25 @@ export async function updateOrderFromPayment(
     mp_payment_method?: string | null;
     paid_at?: Date | null;
   },
-): Promise<{ id: number; status: string } | null> {
-  const { rows } = await client.query<{ id: number; status: string }>(
-    `UPDATE orders
-        SET status = $1,
-            mp_payment_id = COALESCE($2, mp_payment_id),
-            mp_payment_status = COALESCE($3, mp_payment_status),
-            mp_payment_method = COALESCE($4, mp_payment_method),
-            paid_at = COALESCE($5, paid_at),
+): Promise<{ id: number; status: string; priorStatus: string } | null> {
+  const { rows } = await pool.query<{ id: number; status: string; prior_status: string }>(
+    `WITH prior AS (
+       SELECT id, status::text AS status FROM orders WHERE public_id = $6 FOR UPDATE
+     )
+     UPDATE orders o
+        SET status = (CASE
+                        WHEN prior.status IN ('refunded','cancelled') AND $1::text NOT IN ('refunded','cancelled')
+                        THEN prior.status
+                        ELSE $1::text
+                      END)::order_status,
+            mp_payment_id = COALESCE($2, o.mp_payment_id),
+            mp_payment_status = COALESCE($3, o.mp_payment_status),
+            mp_payment_method = COALESCE($4, o.mp_payment_method),
+            paid_at = COALESCE($5, o.paid_at),
             updated_at = NOW()
-      WHERE public_id = $6
-      RETURNING id, status::text AS status`,
+       FROM prior
+      WHERE o.id = prior.id
+      RETURNING o.id AS id, o.status::text AS status, prior.status AS prior_status`,
     [
       fields.status,
       fields.mp_payment_id ?? null,
@@ -199,7 +214,8 @@ export async function updateOrderFromPayment(
       publicId,
     ],
   );
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? { id: row.id, status: row.status, priorStatus: row.prior_status } : null;
 }
 
 export interface OrderReductionInput {
@@ -230,11 +246,19 @@ export interface OrderReductionInput {
  * atribuida. Al bajar los pax en order_items, el cupo se libera automáticamente (la
  * disponibilidad se calcula desde ahí). NO llama a Mercado Pago: el refund real (o la
  * devolución en efectivo) se resuelve antes en la capa de ruta.
+ *
+ * Si se pasa `externalClient`, lo usa directo y NO abre/cierra su propia transacción
+ * (el caller la maneja) — así el caso de MP puede sostener el mismo lock de fila desde
+ * antes de llamar a Mercado Pago hasta después de persistir el resultado, sin la ventana
+ * donde el refund ya se ejecutó pero la reducción todavía no se guardó. Sin ese parámetro
+ * se comporta exactamente igual que antes (usado por las reducciones en efectivo, que no
+ * llaman a ningún gateway externo y no tienen ese riesgo).
  */
-export async function applyOrderReduction(input: OrderReductionInput): Promise<void> {
-  const client = await pool.connect();
+export async function applyOrderReduction(input: OrderReductionInput, externalClient?: PoolClient): Promise<void> {
+  const client = externalClient ?? await pool.connect();
+  const ownsTransaction = !externalClient;
   try {
-    await client.query('BEGIN');
+    if (ownsTransaction) await client.query('BEGIN');
 
     // AND adults = $7 AND children = $8 es un chequeo de concurrencia optimista: si
     // otra modificación ya cambió la composición desde que esta request la leyó, el
@@ -288,12 +312,12 @@ export async function applyOrderReduction(input: OrderReductionInput): Promise<v
       })],
     );
 
-    await client.query('COMMIT');
+    if (ownsTransaction) await client.query('COMMIT');
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (ownsTransaction) await client.query('ROLLBACK');
     throw err;
   } finally {
-    client.release();
+    if (ownsTransaction) client.release();
   }
 }
 
