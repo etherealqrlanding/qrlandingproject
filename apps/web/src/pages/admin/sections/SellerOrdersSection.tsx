@@ -196,7 +196,92 @@ export default function SellerOrdersSection({ seller }: Props) {
       )}
 
       {orders && orders.length > 0 && (
-        <div className="rounded-lg border border-gold/10 overflow-hidden">
+        <>
+          {/* ── Mobile: tarjetas — esta pantalla se usa para liquidar desde el celular ── */}
+          <div className="md:hidden space-y-2">
+            {pendingSettlementOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={togglePendingAll}
+                className="w-full text-left text-xs text-gold-soft hover:text-gold px-1 py-1"
+              >
+                {selectedOrderIds.length === pendingSettlementOrders.length
+                  ? '☑ Destildar todas las pendientes'
+                  : `☐ Tildar las ${pendingSettlementOrders.length} pendiente${pendingSettlementOrders.length !== 1 ? 's' : ''}`}
+              </button>
+            )}
+            {orders.map((o) => {
+              const canSelect = isPendingSettlement(o);
+              const selected = selectedOrderIds.includes(o.order_id);
+              const settledAt = o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at;
+              const amount = o.payment_method === 'cash'
+                ? Math.round((o.net_total_usd ?? 0) * o.exchange_rate_used)
+                : Math.round(o.commission_amount_ars ?? 0);
+              return (
+                <div
+                  key={o.order_id}
+                  onClick={() => canSelect && toggleOne(o.order_id)}
+                  className={`rounded-xl border p-3 transition ${canSelect ? 'cursor-pointer active:scale-[0.99]' : ''} ${
+                    selected
+                      ? 'border-gold/50 bg-gold/10'
+                      : settledAt
+                        ? 'border-emerald-500/20 bg-emerald-500/[0.06]'
+                        : 'border-gold/10 bg-ink-soft/40'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {canSelect && (
+                      <div onClick={(e) => e.stopPropagation()} className="pt-0.5 shrink-0">
+                        <Checkbox checked={selected} onChange={() => toggleOne(o.order_id)} aria-label="Seleccionar venta" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <Link
+                          to={`/admin/orders/${o.public_id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-cream hover:text-gold text-sm font-medium truncate"
+                        >
+                          {o.customer_name}
+                        </Link>
+                        <StatusBadge status={o.status} />
+                      </div>
+                      <p className="text-xs text-cream/40 truncate">{o.customer_email}</p>
+                      <p className="text-xs text-cream/70 mt-1">{o.option_name}</p>
+                      <p className="text-[11px] text-cream/40">{o.product_name} · {o.service_date}</p>
+
+                      <div className="flex items-end justify-between gap-2 mt-2 pt-2 border-t border-gold/10">
+                        <div>
+                          {o.payment_method !== 'cash' && (
+                            <p className="text-[10px] text-cream/40">Venta ARS {Math.round(o.total_ars).toLocaleString('es-AR')}</p>
+                          )}
+                          <p className="text-gold font-mono text-sm font-semibold">
+                            ARS {amount.toLocaleString('es-AR')}
+                            <span className="ml-1 text-[10px] font-normal text-cream/40">
+                              {o.payment_method === 'cash' ? 'neto a cobrar' : 'comisión'}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {settledAt ? (
+                            <span className="inline-flex flex-col items-end text-[10px] text-emerald-400">
+                              ✓ {new Date(settledAt).toLocaleDateString()}
+                              <span className="text-emerald-400/70">{o.payment_method === 'cash' ? 'neto rendido' : 'comisión pagada'}</span>
+                            </span>
+                          ) : o.status === 'paid' ? (
+                            <span className="text-[10px] text-bordeaux-light">{o.payment_method === 'cash' ? 'Neto pendiente' : 'Pago pendiente'}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Desktop: tabla ── */}
+          <div className="hidden md:block rounded-lg border border-gold/10 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-ink-soft/60 text-cream/60 text-xs uppercase tracking-wider">
               <tr>
@@ -286,7 +371,8 @@ export default function SellerOrdersSection({ seller }: Props) {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
