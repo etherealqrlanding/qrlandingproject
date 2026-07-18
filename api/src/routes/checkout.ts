@@ -503,9 +503,14 @@ async function applyPaymentToOrder(
     return { applied: false, status: updated.status, orderId: updated.id };
   }
 
-  await logPaymentEvent(updated.id, `order_${updated.status}`, eventDataId ?? paymentIdStr, {
-    payment_id: payment.id, status: payment.status,
-  });
+  // Solo se loguea en el histórico cuando el estado REALMENTE cambió — MP puede
+  // reenviar la misma notificación varias veces (reintentos de webhook) y antes cada
+  // una agregaba un evento idéntico al histórico de la orden, aunque no cambiara nada.
+  if (updated.status !== updated.priorStatus) {
+    await logPaymentEvent(updated.id, `order_${updated.status}`, eventDataId ?? paymentIdStr, {
+      payment_id: payment.id, status: payment.status,
+    });
+  }
   // Notificar solo en la transición a 'paid' (primera vez) → nunca duplica emails.
   if (updated.status === 'paid' && updated.priorStatus !== 'paid') {
     sendOrderPaidNotifications(updated.id).catch((err) =>
