@@ -233,6 +233,10 @@ export interface AdminSellerOrder {
   status: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string | null;
+  customer_nationality: string | null;
+  adults: number;
+  children: number;
   total_usd: number;
   total_ars: number;
   exchange_rate_used: number;

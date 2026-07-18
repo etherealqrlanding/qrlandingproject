@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminSeller, type AdminSellerOrder } from '../../../lib/adminApi';
 import Checkbox from '../../../components/Checkbox';
@@ -27,6 +27,10 @@ export default function SellerOrdersSection({ seller }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
   const [processing, setProcessing] = useState(false);
+
+  // Acordeón: detalle de la orden para reconocerla al momento de liquidar (solo
+  // lectura — igual que en el listado general de órdenes del admin).
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
 
   const load = async () => {
     try {
@@ -244,7 +248,13 @@ export default function SellerOrdersSection({ seller }: Props) {
                         >
                           {o.customer_name}
                         </Link>
-                        <StatusBadge status={o.status} />
+                        <div className="flex items-center gap-2 shrink-0">
+                          <StatusBadge status={o.status} />
+                          <ExpandToggle
+                            open={expandedOrderId === o.order_id}
+                            onClick={() => setExpandedOrderId(expandedOrderId === o.order_id ? null : o.order_id)}
+                          />
+                        </div>
                       </div>
                       <p className="text-xs text-cream/40 truncate">{o.customer_email}</p>
                       <p className="text-xs text-cream/70 mt-1">{o.option_name}</p>
@@ -273,6 +283,12 @@ export default function SellerOrdersSection({ seller }: Props) {
                           ) : null}
                         </div>
                       </div>
+
+                      {expandedOrderId === o.order_id && (
+                        <div onClick={(e) => e.stopPropagation()} className="mt-2 pt-2 border-t border-gold/10">
+                          <SettleOrderExtraDetails o={o} />
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -302,6 +318,7 @@ export default function SellerOrdersSection({ seller }: Props) {
                 <th className="text-right py-3 px-4">Venta</th>
                 <th className="text-right py-3 px-4">Comisión / Neto</th>
                 <th className="text-center py-3 px-4">Liquidación</th>
+                <th className="py-3 px-3" />
               </tr>
             </thead>
             <tbody>
@@ -310,8 +327,8 @@ export default function SellerOrdersSection({ seller }: Props) {
                 const selected = selectedOrderIds.includes(o.order_id);
                 const settledAt = o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at;
                 return (
+                  <Fragment key={o.order_id}>
                   <tr
-                    key={o.order_id}
                     className={`border-t transition-all duration-200 ${
                       settledAt
                         ? 'border-emerald-500/10 bg-emerald-500/[0.06] hover:bg-emerald-500/10 hover:shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]'
@@ -366,7 +383,24 @@ export default function SellerOrdersSection({ seller }: Props) {
                         <span className="text-xs text-cream/30">—</span>
                       )}
                     </td>
+                    <td className="py-3 px-3 text-right">
+                      <ExpandToggle
+                        open={expandedOrderId === o.order_id}
+                        onClick={() => setExpandedOrderId(expandedOrderId === o.order_id ? null : o.order_id)}
+                      />
+                    </td>
                   </tr>
+                  {expandedOrderId === o.order_id && (
+                    <tr className="border-t border-gold/5 bg-ink-soft/20">
+                      <td colSpan={9} className="px-6 py-3">
+                        <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
+                        <div className="max-w-sm">
+                          <SettleOrderExtraDetails o={o} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -397,6 +431,49 @@ function Card({ label, value, sub, highlight }: { label: string; value: string; 
       <p className="text-xs uppercase tracking-widest text-gold-soft">{label}</p>
       <p className={`mt-1 font-display text-2xl ${highlight ? 'text-gold' : 'text-cream'}`}>{value}</p>
       {sub && <p className="mt-0.5 text-[11px] text-cream/40">{sub}</p>}
+    </div>
+  );
+}
+
+function DetailRow({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-xs">
+      <span className="text-cream/40 shrink-0">{label}</span>
+      <span className="text-cream/80 text-right">{children}</span>
+    </div>
+  );
+}
+
+function ExpandToggle({ open, onClick }: Readonly<{ open: boolean; onClick: () => void }>) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      aria-label={open ? 'Ocultar detalle' : 'Ver detalle'}
+      aria-expanded={open}
+      className="text-gold-soft hover:text-gold text-xs shrink-0 inline-flex items-center gap-1"
+    >
+      <span className={`inline-block transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>▶</span>
+    </button>
+  );
+}
+
+const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo' };
+
+// Detalle para reconocer la orden al momento de liquidar — solo lectura, no repite
+// lo que ya se ve en la fila/tarjeta (cliente, servicio, monto, estado).
+function SettleOrderExtraDetails({ o }: Readonly<{ o: AdminSellerOrder }>) {
+  return (
+    <div className="space-y-1.5">
+      {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
+      {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
+      <DetailRow label="Pasajeros">{o.adults} ad.{o.children ? ` · ${o.children} men.` : ''}</DetailRow>
+      <DetailRow label="Medio de pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
+      {o.payment_method === 'cash' && o.cash_collected_currency && (
+        <DetailRow label="Cobrado en">{o.cash_collected_currency === 'USD' ? 'Dólares (USD)' : 'Pesos (ARS)'}</DetailRow>
+      )}
+      <DetailRow label="Compra">{new Date(o.created_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</DetailRow>
+      <DetailRow label="Referencia"><span className="font-mono">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
     </div>
   );
 }
