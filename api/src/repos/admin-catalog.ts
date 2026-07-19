@@ -15,6 +15,7 @@ export interface AdminProductInput {
   address_en?: string | null;
   schedule_summary_es?: string | null;
   schedule_summary_en?: string | null;
+  video_url?: string | null;
   starting_price_usd?: number | null;
   is_active?: boolean;
   display_order?: number;
@@ -98,8 +99,9 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        long_description_es, long_description_en,
        address_es, address_en,
        schedule_summary_es, schedule_summary_en,
+       video_url,
        starting_price_usd, is_active, display_order
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -107,6 +109,7 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.long_description_es ?? null, input.long_description_en ?? null,
       input.address_es ?? null, input.address_en ?? null,
       input.schedule_summary_es ?? null, input.schedule_summary_en ?? null,
+      input.video_url ?? null,
       input.starting_price_usd ?? null,
       input.is_active ?? true,
       input.display_order ?? 0,

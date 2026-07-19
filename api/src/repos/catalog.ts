@@ -64,6 +64,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
        p.long_description_es, p.long_description_en,
        p.address_es, p.address_en,
        p.schedule_summary_es, p.schedule_summary_en,
+       p.video_url,
        p.starting_price_usd::float AS starting_price_usd
        FROM products p
        JOIN categories c ON c.id = p.category_id

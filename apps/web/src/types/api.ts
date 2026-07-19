@@ -63,6 +63,7 @@ export interface ProductDetail extends ProductSummary {
   address_en: string | null;
   schedule_summary_es: string | null;
   schedule_summary_en: string | null;
+  video_url: string | null;
   images: ProductImage[];
   options: ProductOption[];
 }

@@ -10,6 +10,25 @@ import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
+// Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
+// Devuelve null si no se pudo reconocer el formato (el video simplemente no se muestra).
+function youtubeEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    let id: string | null = null;
+    if (u.hostname.includes('youtu.be')) {
+      id = u.pathname.slice(1);
+    } else if (u.hostname.includes('youtube.com')) {
+      if (u.pathname === '/watch') id = u.searchParams.get('v');
+      else if (u.pathname.startsWith('/embed/')) id = u.pathname.split('/')[2];
+      else if (u.pathname.startsWith('/shorts/')) id = u.pathname.split('/')[2];
+    }
+    return id ? `https://www.youtube.com/embed/${id}` : null;
+  } catch {
+    return null;
+  }
+}
+
 const PixIcon = (
   <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0" aria-hidden>
     <path d="M10 2L18 10L10 18L2 10Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
@@ -101,6 +120,7 @@ export default function ProductPage() {
   const longDescription = localized(product, 'long_description', lang);
   const schedule = localized(product, 'schedule_summary', lang);
   const address = localized(product, 'address', lang);
+  const videoEmbedUrl = product.video_url ? youtubeEmbedUrl(product.video_url) : null;
   const selectedOption = product.options.find((o) => o.id === selectedOptionId) ?? null;
 
   return (
@@ -131,13 +151,46 @@ export default function ProductPage() {
             </section>
           )}
 
+          {videoEmbedUrl && (
+            <section className={longDescription ? 'mt-10' : ''}>
+              <h2 className="font-display text-2xl text-cream">{t('product.video')}</h2>
+              <div className="mt-4 rounded-lg overflow-hidden border border-gold/15 aspect-video">
+                <iframe
+                  title={`Video de ${product.venue_name}`}
+                  src={videoEmbedUrl}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </section>
+          )}
+
           {schedule && (
             <section className="mt-10">
               <h2 className="font-display text-2xl text-cream">{t('product.schedule')}</h2>
               <p className="mt-3 text-cream/70">{schedule}</p>
-              {address && (
-                <p className="mt-2 text-sm text-cream/50">📍 {address}</p>
-              )}
+            </section>
+          )}
+
+          {address && (
+            <section className="mt-10">
+              <h2 className="font-display text-2xl text-cream">{t('product.location')}</h2>
+              <p className="mt-3 text-sm text-cream/70">📍 {address}</p>
+              <div className="mt-4 rounded-lg overflow-hidden border border-gold/15">
+                <iframe
+                  title={`Mapa de ${product.venue_name}`}
+                  src={`https://www.google.com/maps?q=${encodeURIComponent(`${product.venue_name}, ${address}, Buenos Aires, Argentina`)}&output=embed`}
+                  width="100%"
+                  height="280"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
             </section>
           )}
 

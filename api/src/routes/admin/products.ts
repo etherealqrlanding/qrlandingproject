@@ -30,6 +30,7 @@ const productSchema = z.object({
   address_en: z.string().max(300).optional().nullable(),
   schedule_summary_es: z.string().max(800).optional().nullable(),
   schedule_summary_en: z.string().max(800).optional().nullable(),
+  video_url: z.string().max(500).optional().nullable(),
   starting_price_usd: z.number().nonnegative().optional().nullable(),
   is_active: z.boolean().optional(),
   display_order: z.number().int().optional(),

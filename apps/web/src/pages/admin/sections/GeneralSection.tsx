@@ -18,6 +18,7 @@ const empty = {
   long_description_es: '', long_description_en: '',
   address_es: '', address_en: '',
   schedule_summary_es: '', schedule_summary_en: '',
+  video_url: '',
   starting_price_usd: null as number | null,
   is_active: true, display_order: 0,
 };
@@ -197,6 +198,16 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
           />
         </Field>
       </div>
+
+      <Field label="Video (YouTube)" hint="Pegá el link del video de YouTube de esta casa — se muestra en el detalle público">
+        <input
+          type="url" maxLength={500}
+          value={form.video_url ?? ''}
+          onChange={(e) => update('video_url', e.target.value)}
+          className="input"
+          placeholder="https://www.youtube.com/watch?v=..."
+        />
+      </Field>
 
       <div className="grid sm:grid-cols-3 gap-4">
         <Field label="Precio mínimo (USD)" hint="Auto-calculado desde los tiers. Editable.">

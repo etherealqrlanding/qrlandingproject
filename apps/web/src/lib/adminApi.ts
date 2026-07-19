@@ -156,6 +156,7 @@ export interface AdminProductDetail {
   long_description_es: string | null; long_description_en: string | null;
   address_es: string | null; address_en: string | null;
   schedule_summary_es: string | null; schedule_summary_en: string | null;
+  video_url: string | null;
   starting_price_usd: number | null;
   is_active: boolean; display_order: number;
   options: AdminOption[];
