@@ -67,6 +67,10 @@ const TIPS = [
   },
 ];
 
+function fmtArs(n: number) {
+  return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+
 export default function AdminDashboard() {
   const { me } = useAdminAuth();
   if (!me) return null;
@@ -74,20 +78,32 @@ export default function AdminDashboard() {
   const cards = [
     {
       label: 'Productos activos',
-      value: me.stats.products,
+      value: String(me.stats.products),
       hint: 'Casas de tango publicadas',
       href: '/admin/products',
     },
     {
       label: 'Órdenes pagadas',
-      value: me.stats.orders_paid,
+      value: String(me.stats.orders_paid),
       hint: 'Total histórico',
       href: '/admin/orders',
     },
     {
       label: 'Órdenes pendientes',
-      value: me.stats.orders_pending,
+      value: String(me.stats.orders_pending),
       hint: 'Esperando confirmación de pago',
+      href: '/admin/orders',
+    },
+    {
+      label: 'Facturación Mercado Pago',
+      value: fmtArs(me.stats.mp_revenue_ars),
+      hint: 'Total histórico cobrado por MP',
+      href: '/admin/orders',
+    },
+    {
+      label: 'Neto pendiente',
+      value: fmtArs(me.stats.net_pending_ars),
+      hint: 'Efectivo que los vendedores todavía tienen que rendir',
       href: '/admin/orders',
     },
   ];
@@ -102,7 +118,7 @@ export default function AdminDashboard() {
       </header>
 
       {/* Stats */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-5">
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-5">
         {cards.map((c) => (
           <Link
             key={c.label}
@@ -110,7 +126,7 @@ export default function AdminDashboard() {
             className="rounded-lg border border-gold/10 bg-ink-soft/60 p-4 md:p-6 transition hover:border-gold/30 block"
           >
             <p className="text-xs uppercase tracking-widest text-gold-soft leading-tight">{c.label}</p>
-            <p className="font-display text-3xl md:text-5xl text-cream mt-2 md:mt-3">{c.value}</p>
+            <p className="font-display text-2xl md:text-4xl text-cream mt-2 md:mt-3">{c.value}</p>
             <p className="mt-1 text-xs text-cream/50">{c.hint}</p>
           </Link>
         ))}

@@ -112,7 +112,10 @@ export interface AdminMe {
     role: 'super_admin' | 'admin' | 'operator';
     full_name: string | null;
   };
-  stats: { products: number; orders_paid: number; orders_pending: number };
+  stats: {
+    products: number; orders_paid: number; orders_pending: number;
+    mp_revenue_ars: number; net_pending_ars: number;
+  };
 }
 
 export interface AdminCategory {

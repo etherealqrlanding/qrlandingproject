@@ -21,7 +21,7 @@ import {
 import { sendOrderPaidNotifications, sendCashOrderNotifications, sendOrderIncreasedNotifications } from '../services/email.js';
 import { createOrderPaidNotification, createCashBookingNotification, notifyAdminsNewOrderPaid } from '../repos/notifications.js';
 import { checkSingleDateAvailability } from '../repos/availability.js';
-import { findAddonByPublicId, applyAddonPayment } from '../repos/addons.js';
+import { findAddonByPublicId, applyAddonPayment, cancelPendingAddonsForOrder } from '../repos/addons.js';
 import { checkoutLimiter, webhookLimiter } from '../middleware/rateLimit.js';
 import { generateVoucherPdf } from '../services/voucherPdf.js';
 
@@ -500,6 +500,15 @@ async function applyPaymentToOrder(
     await logPaymentEvent(updated.id, 'webhook_ignored_terminal_state', eventDataId ?? paymentIdStr, {
       payment_id: payment.id, status: payment.status, current_status: updated.status, attempted_status: newStatus,
     });
+    if (updated.status === 'expired' && newStatus === 'paid') {
+      // El cliente sí pagó en MP, pero la reserva ya se dio por caducada (y su cupo
+      // pudo haberse revendido) — no hay forma segura de confirmar sola. Requiere
+      // reconciliación manual: chequear cupo real y decidir si se confirma o se reintegra.
+      console.error(
+        `[CRITICAL] Pago aprobado en MP para la orden ${externalRef} (payment_id=${paymentIdStr ?? '?'}) ` +
+        `llegó después de que la reserva ya había caducado. Requiere reconciliación manual.`,
+      );
+    }
     return { applied: false, status: updated.status, orderId: updated.id };
   }
 
@@ -510,6 +519,14 @@ async function applyPaymentToOrder(
     await logPaymentEvent(updated.id, `order_${updated.status}`, eventDataId ?? paymentIdStr, {
       payment_id: payment.id, status: payment.status,
     });
+    if (updated.status === 'refunded' || updated.status === 'cancelled') {
+      // Un refund/cancelación disparado del lado de MP (chargeback, refund manual desde
+      // el dashboard de MP, etc. — no por nuestro botón admin) también cierra la reserva
+      // por completo: cancelamos ampliaciones sin cobrar por la misma razón que en /refund.
+      cancelPendingAddonsForOrder(updated.id).catch((err) =>
+        console.error('[addons] cancelPendingAddonsForOrder failed for order', updated.id, err),
+      );
+    }
   }
   // Notificar solo en la transición a 'paid' (primera vez) → nunca duplica emails.
   if (updated.status === 'paid' && updated.priorStatus !== 'paid') {
@@ -528,17 +545,22 @@ async function applyPaymentToOrder(
 
 // Respaldo del webhook: consulta MP por la referencia (public_id) de la orden y la
 // sincroniza. Se usa desde el retorno del checkout y desde el admin.
-export async function syncOrderWithMp(publicId: string): Promise<{ found: boolean; status?: string }> {
+export async function syncOrderWithMp(publicId: string): Promise<{ found: boolean; status?: string; blockedByTerminalState?: boolean }> {
   const payment = await searchPaymentByExternalRef(publicId);
   if (!payment) return { found: false };
   const result = await applyPaymentToOrder({ ...payment, external_reference: publicId });
-  return { found: result.applied, status: result.status };
+  // MP sí tiene un pago para esta orden, pero la guarda de estado terminal
+  // (updateOrderFromPayment) bloqueó aplicarlo — ej. la orden ya está 'expired' y el pago
+  // llegó tarde. Distinto de "MP no tiene ningún pago": acá el caller (admin/orders.ts)
+  // necesita poder distinguirlo para no decirle al admin "no hay nada" cuando sí lo hay.
+  const blockedByTerminalState = !result.applied && result.status != null;
+  return { found: result.applied, status: result.status, blockedByTerminalState };
 }
 
 // Aplica el pago aprobado de un addon a su orden y notifica (solo en la primera aplicación).
 async function applyAddonAndNotify(publicId: string, mpPaymentId: string | null): Promise<void> {
   const r = await applyAddonPayment(publicId, mpPaymentId);
-  if (r.applied && !r.alreadyApplied && r.orderId != null) {
+  if (r.applied && !r.alreadyApplied && !r.closedOrder && r.orderId != null) {
     sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
       console.error('[email] addon increase notification failed for order', r.orderId, e),
     );

@@ -1,7 +1,11 @@
+import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { checkAvailabilityTxLocked } from './availability.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from '../services/orderIncrease.js';
 import { recomputeCashCommission } from '../services/orderCommission.js';
+
+// Objeto con .query — sirve tanto para el pool como para un client dentro de una transacción.
+type Queryable = Pick<PoolClient, 'query'>;
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -100,6 +104,10 @@ export async function findAddonByPublicId(publicId: string): Promise<AddonLookup
 export interface ApplyAddonResult {
   applied: boolean;
   alreadyApplied?: boolean;
+  // El pago se cobró y el addon quedó 'paid', pero la orden principal ya estaba
+  // refunded/cancelled — no se fusionó pax ni se debe notificar al pasajero como si su
+  // reserva hubiera aumentado. Requiere reconciliación manual (ver payment_events).
+  closedOrder?: boolean;
   orderId?: number;
   chargeUsd?: number;
   chargeArs?: number;
@@ -138,15 +146,21 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
       return { applied: false };
     }
 
-    // Estado ACTUAL de la orden (por si cambió desde que se generó el link)
+    // Estado ACTUAL de la orden (por si cambió desde que se generó el link). FOR UPDATE OF o
+    // toma el mismo lock de fila que updateOrderFromPayment (el webhook de pago de la orden
+    // principal) — así, si un refund/cancelación de la orden está corriendo en paralelo
+    // (ej. llegó casi al mismo tiempo que este pago de ampliación), una de las dos
+    // transacciones espera a la otra en vez de correr con datos ya obsoletos: quien llegue
+    // segundo ve el estado ya committeado, no el de antes.
     const { rows: orderRows } = await client.query<{
-      order_id: number; exchange_rate_used: number; payment_method: string;
+      order_id: number; status: string; exchange_rate_used: number; payment_method: string;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_requested: boolean;
       commission_percent: number | null; seller_id: number | null; net_total_usd: number | null;
     }>(
-      `SELECT o.id AS order_id, o.exchange_rate_used::float AS exchange_rate_used, o.payment_method,
+      `SELECT o.id AS order_id, o.status::text AS status,
+              o.exchange_rate_used::float AS exchange_rate_used, o.payment_method,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
@@ -158,11 +172,33 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
          LEFT JOIN order_attributions a ON a.order_id = o.id
         WHERE o.id = $1
         ORDER BY oi.id
-        LIMIT 1`,
+        LIMIT 1
+        FOR UPDATE OF o`,
       [addon.order_id],
     );
     const cur = orderRows[0];
     if (!cur) { await client.query('ROLLBACK'); return { applied: false }; }
+    if (cur.status === 'refunded' || cur.status === 'cancelled') {
+      // La orden se cerró (reintegro/cancelación) mientras este pago de ampliación estaba
+      // en tránsito — no fusionamos pax a una reserva que ya no existe. El dinero cobrado
+      // por MP queda registrado para reconciliar manualmente (mismo criterio que el
+      // "[CRITICAL]" de checkout.ts para un pago principal tardío sobre orden cerrada).
+      await client.query(
+        `UPDATE order_addons SET status = 'paid', mp_payment_id = $1, paid_at = NOW() WHERE id = $2`,
+        [mpPaymentId, addon.id],
+      );
+      await client.query(
+        `INSERT INTO payment_events (order_id, event_type, payload)
+         VALUES ($1, 'addon_paid_after_order_closed', $2::jsonb)`,
+        [addon.order_id, JSON.stringify({ addon_id: addon.id, order_status: cur.status })],
+      );
+      await client.query('COMMIT');
+      console.error(
+        `[CRITICAL] Pago de ampliación aprobado para la orden ${addon.order_id} (addon=${addon.id}) ` +
+        `pero la orden ya estaba "${cur.status}". Requiere reconciliación manual.`,
+      );
+      return { applied: true, closedOrder: true, orderId: addon.order_id, chargeUsd: addon.charge_usd, chargeArs: addon.charge_ars };
+    }
 
     const snap: OrderIncreaseSnapshot = {
       origAdults: cur.adults,
@@ -330,4 +366,21 @@ export async function expireStaleCashAddons(hours: number): Promise<Array<{ id: 
 
 export async function expireAddon(id: number): Promise<void> {
   await pool.query(`UPDATE order_addons SET status = 'expired' WHERE id = $1 AND status = 'pending'`, [id]);
+}
+
+/**
+ * Cancela todos los addons PENDIENTES de una orden — se llama al reintegrar (total) o
+ * cancelar la orden completa, para que un link de pago de una ampliación no cobrada no
+ * quede huérfano cobrándose días después sobre una reserva que ya no existe. Acepta un
+ * client opcional para correr dentro de la misma transacción que el refund/cancel.
+ * Devuelve cuántos addons canceló.
+ */
+export async function cancelPendingAddonsForOrder(orderId: number, db: Queryable = pool): Promise<number> {
+  const { rows } = await db.query(
+    `UPDATE order_addons SET status = 'cancelled'
+      WHERE order_id = $1 AND status = 'pending'
+      RETURNING id`,
+    [orderId],
+  );
+  return rows.length;
 }

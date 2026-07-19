@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Fragment, useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { adminApi, type ArchivedOrderItem } from '../../lib/adminApi';
 import Checkbox from '../../components/Checkbox';
+import DetailRow from '../../components/DetailRow';
+import ExpandToggle from '../../components/ExpandToggle';
 import { useReturnHighlight } from '../../hooks/useReturnHighlight';
 
 const LAST_VIEWED_KEY = 'lastViewedArchivedOrderId';
@@ -31,14 +33,54 @@ const STATUS_COLOR: Record<string, string> = {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
 function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+}
+
+const CANCELLED_BY_LABEL: Record<string, string> = { admin: 'Admin', seller: 'Vendedor', system: 'Sistema' };
+
+// Detalle inline — para monitorear una orden archivada sin tener que entrar al detalle
+// completo (que sigue disponible vía "Ver →").
+function ArchivedOrderExtraDetails({ o }: Readonly<{ o: ArchivedOrderItem }>) {
+  return (
+    <div className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5">
+      {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
+      {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
+      {o.adults != null && (
+        <DetailRow label="Pasajeros">{o.adults} ad.{o.children ? ` · ${o.children} men.` : ''}</DetailRow>
+      )}
+      <DetailRow label="Medio de pago">{o.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</DetailRow>
+      {o.payment_method !== 'cash' && o.commission_amount_ars != null && (
+        <DetailRow label="Comisión">{fmtArs(o.commission_amount_ars)}</DetailRow>
+      )}
+      {o.payment_method !== 'cash' && o.seller_name && (
+        <DetailRow label="Liquidado al vendedor">
+          {o.paid_to_seller_at ? fmtDate(o.paid_to_seller_at) : 'Pendiente'}
+        </DetailRow>
+      )}
+      {o.payment_method === 'cash' && o.status === 'paid' && (
+        <DetailRow label="Neto rendido">
+          {o.net_settled_at ? fmtDate(o.net_settled_at) : 'Pendiente'}
+        </DetailRow>
+      )}
+      {o.cancelled_by && (
+        <DetailRow label="Cancelado por">{CANCELLED_BY_LABEL[o.cancelled_by] ?? o.cancelled_by}</DetailRow>
+      )}
+      {o.cancelled_at && <DetailRow label="Fecha de cancelación">{fmtDateTime(o.cancelled_at)}</DetailRow>}
+      {o.cancel_reason && <DetailRow label="Motivo">{o.cancel_reason}</DetailRow>}
+      <DetailRow label="Creada">{fmtDateTime(o.created_at)}</DetailRow>
+      {o.archived_at && <DetailRow label="Archivada">{fmtDate(o.archived_at)}</DetailRow>}
+      <DetailRow label="Referencia"><span className="font-mono">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
+    </div>
+  );
 }
 
 const PAGE_SIZE = 20;
 
 export default function OrdersArchive() {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState<ArchivedOrderItem[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -54,6 +96,7 @@ export default function OrdersArchive() {
     LAST_VIEWED_KEY, orders, (o: ArchivedOrderItem) => o.public_id,
   );
   const [msg, setMsg] = useState<string | null>(null);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const load = useCallback(async (p = page, s = search, st = status) => {
     setLoading(true);
@@ -236,9 +279,10 @@ export default function OrdersArchive() {
               </thead>
               <tbody>
                 {orders.map((o, i) => (
-                  <tr key={o.public_id}
+                  <Fragment key={o.public_id}>
+                  <tr
                     ref={isHighlighted(o.public_id) ? highlightedRef : undefined}
-                    onClick={() => { markVisited(o.public_id); navigate(`/admin/orders/${o.public_id}`); }}
+                    onClick={() => { markVisited(o.public_id); setExpandedRow(expandedRow === o.public_id ? null : o.public_id); }}
                     className={`border-b transition duration-500 cursor-pointer ${
                       isHighlighted(o.public_id)
                         ? 'bg-gold/10 shadow-[inset_0_0_0_1.5px_rgba(200,168,90,0.55)]'
@@ -280,9 +324,30 @@ export default function OrdersArchive() {
                       {o.archived_at ? fmtDate(o.archived_at) : '—'}
                     </td>
                     <td className="px-3 py-2.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                      <Link to={`/admin/orders/${o.public_id}`} className="text-xs text-gold-soft hover:text-gold transition">Ver →</Link>
+                      <div className="flex items-center justify-end gap-3">
+                        <Link
+                          to={`/admin/orders/${o.public_id}`}
+                          onClick={() => markVisited(o.public_id)}
+                          className="text-xs text-gold-soft hover:text-gold transition"
+                        >Ver →</Link>
+                        <ExpandToggle
+                          open={expandedRow === o.public_id}
+                          onClick={() => setExpandedRow(expandedRow === o.public_id ? null : o.public_id)}
+                        />
+                      </div>
                     </td>
                   </tr>
+                  {expandedRow === o.public_id && (
+                    <tr className="border-b border-gold/5 bg-ink-soft/20">
+                      <td colSpan={9} className="px-6 py-3">
+                        <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
+                        <div className="max-w-xl">
+                          <ArchivedOrderExtraDetails o={o} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

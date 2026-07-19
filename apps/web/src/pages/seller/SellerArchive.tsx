@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { sellerApi, SellerApiError, type SellerArchivedOrder, type ArchivePage } from '../../lib/sellerApi';
+import DetailRow from '../../components/DetailRow';
 
 const STATUS_TABS = [
   { value: '', label: 'Todas' },
@@ -35,15 +36,6 @@ function fmtDate(iso: string) {
 }
 function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="text-cream/40 shrink-0">{label}</span>
-      <span className="text-cream/80 text-right">{children}</span>
-    </div>
-  );
 }
 
 const PAGE_SIZE = 20;

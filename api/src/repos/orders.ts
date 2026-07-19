@@ -175,6 +175,15 @@ export async function setOrderPreferenceId(orderId: number, preferenceId: string
  * un evento tardío o duplicado revierta un estado terminal (refunded/cancelled, que
  * ya implica un movimiento real de fondos resuelto) de vuelta a 'paid'/'failed'. Un
  * solo statement SQL es atómico en Postgres, no hace falta BEGIN/COMMIT manual acá.
+ *
+ * 'expired' también está blindado: el cron de expiración (expireOrders.ts) solo caduca
+ * pending sin pago encontrado en MP, así que un pago aprobado tardío sobre una orden ya
+ * expirada llega DESPUÉS de que su cupo se dio por liberado (pudo revenderse). Si se
+ * dejara pisar silenciosamente a 'paid', quedaría una reserva "confirmada" sin garantía
+ * real de cupo. El caller (applyPaymentToOrder) detecta que la guarda bloqueó el cambio
+ * (updated.status !== newStatus) y lo deja registrado en payment_events sin notificar,
+ * para reconciliación manual (el cliente sí fue cobrado en MP).
+ *
  * Devuelve también el estado PREVIO para que el caller decida si notificar.
  */
 export async function updateOrderFromPayment(
@@ -193,7 +202,7 @@ export async function updateOrderFromPayment(
      )
      UPDATE orders o
         SET status = (CASE
-                        WHEN prior.status IN ('refunded','cancelled') AND $1::text NOT IN ('refunded','cancelled')
+                        WHEN prior.status IN ('refunded','cancelled','expired') AND $1::text NOT IN ('refunded','cancelled')
                         THEN prior.status
                         ELSE $1::text
                       END)::order_status,

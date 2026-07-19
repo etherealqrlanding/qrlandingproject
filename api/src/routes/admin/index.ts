@@ -58,11 +58,22 @@ adminRouter.get('/me', async (req, res, next) => {
   try {
     const { rows } = await pool.query<{
       products: number; orders_paid: number; orders_pending: number;
+      mp_revenue_ars: number; net_pending_ars: number;
     }>(
       `SELECT
          (SELECT COUNT(*) FROM products WHERE is_active = TRUE) AS products,
          (SELECT COUNT(*) FROM orders WHERE status = 'paid') AS orders_paid,
-         (SELECT COUNT(*) FROM orders WHERE status = 'pending') AS orders_pending`,
+         (SELECT COUNT(*) FROM orders WHERE status = 'pending') AS orders_pending,
+         (SELECT COALESCE(SUM(total_ars), 0)::float FROM orders
+           WHERE status = 'paid' AND payment_method = 'mercadopago') AS mp_revenue_ars,
+         (SELECT COALESCE(SUM(
+            CASE WHEN a.net_total_usd_snapshot IS NOT NULL
+                 THEN a.net_total_usd_snapshot * o.exchange_rate_used
+                 ELSE o.total_ars END
+          ), 0)::float
+          FROM orders o
+          JOIN order_attributions a ON a.order_id = o.id
+          WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL) AS net_pending_ars`,
     );
     res.json({
       data: {

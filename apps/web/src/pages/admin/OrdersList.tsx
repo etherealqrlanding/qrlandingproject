@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
 import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
 import Checkbox from '../../components/Checkbox';
+import DetailRow from '../../components/DetailRow';
+import ExpandToggle from '../../components/ExpandToggle';
 
 
 
@@ -46,30 +48,6 @@ function orderTotalDisplay(o: AdminOrderListItem): string {
   }
   const netArs = o.net_total_usd != null ? o.net_total_usd * o.exchange_rate_used : o.total_ars;
   return `ARS ${Math.round(netArs).toLocaleString('es-AR')}`;
-}
-
-function DetailRow({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="text-cream/40 shrink-0">{label}</span>
-      <span className="text-cream/80 text-right">{children}</span>
-    </div>
-  );
-}
-
-// Ícono de expandir/contraer, chevron que rota — mismo gesto en mobile y desktop.
-function ExpandToggle({ open, onClick }: Readonly<{ open: boolean; onClick: () => void }>) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      aria-label={open ? 'Ocultar detalle' : 'Ver detalle'}
-      aria-expanded={open}
-      className="text-gold-soft hover:text-gold text-xs shrink-0 inline-flex items-center gap-1"
-    >
-      <span className={`inline-block transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>▶</span>
-    </button>
-  );
 }
 
 // Detalle inline de la orden — solo lectura. Las acciones (reintegrar, modificar,

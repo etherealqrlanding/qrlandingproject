@@ -31,6 +31,7 @@ const empty = {
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
   const [form, setForm] = useState(() => seller ? { ...empty, ...seller, commission_percent: Number(seller.commission_percent) } : { ...empty });
+  const [emailConfirm, setEmailConfirm] = useState(() => seller?.contact_email ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -38,9 +39,13 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
   useEffect(() => {
     if (seller) {
       setForm({ ...empty, ...seller, commission_percent: Number(seller.commission_percent) });
+      setEmailConfirm(seller.contact_email ?? '');
       setDirty(false);
     }
   }, [seller]);
+
+  const emailMismatch = (form.contact_email ?? '').trim() !== ''
+    && (form.contact_email ?? '').trim().toLowerCase() !== emailConfirm.trim().toLowerCase();
 
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -56,6 +61,10 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (emailMismatch) {
+      setError('El email y su confirmación no coinciden.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -139,15 +148,32 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             className="input"
           />
         </Field>
-        <Field label="Teléfono / WhatsApp" hint="Con código de país. Habilita el botón de WhatsApp en su ficha">
+        <Field label="Confirmar email">
           <input
-            type="tel" maxLength={40}
-            value={form.contact_phone ?? ''}
-            onChange={(e) => update('contact_phone', e.target.value)}
-            className="input"
+            type="email" maxLength={160}
+            value={emailConfirm}
+            onChange={(e) => setEmailConfirm(e.target.value)}
+            className={`input ${emailMismatch ? 'border-bordeaux-light/60' : ''}`}
+            autoComplete="off"
+            onPaste={(e) => e.preventDefault()}
           />
+          {emailMismatch && (
+            <p className="mt-1 text-xs text-bordeaux-light">⚠ El email y su confirmación no coinciden.</p>
+          )}
         </Field>
       </div>
+
+      <Field
+        label="Teléfono / WhatsApp"
+        hint='Sin "+" ni espacios ni guiones: código de país + código de área (sin el 0) + número (sin el 15). Ej: Buenos Aires → 5491132368312. Habilita el botón de WhatsApp en su ficha.'
+      >
+        <input
+          type="tel" maxLength={40}
+          value={form.contact_phone ?? ''}
+          onChange={(e) => update('contact_phone', e.target.value)}
+          className="input font-mono"
+        />
+      </Field>
 
       <Field label="Notas internas" hint="No se le muestra al vendedor. Para tu referencia.">
         <textarea
@@ -203,7 +229,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         </div>
         <div className="flex items-center gap-3">
           {dirty && !isNew && <span className="text-xs text-gold-soft">Cambios sin guardar</span>}
-          <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
+          <button type="submit" disabled={saving || emailMismatch} className="btn-primary disabled:opacity-50">
             {saving ? 'Guardando...' : isNew ? 'Crear vendedor' : 'Guardar cambios'}
           </button>
         </div>

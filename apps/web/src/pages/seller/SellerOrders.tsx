@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerOrder, type SellerPendingAddon } from '../../lib/sellerApi';
+import DetailRow from '../../components/DetailRow';
 
 function isWindowBlocked(hours: number | null, serviceDate: string): boolean {
   if (!hours) return false;
@@ -145,15 +146,6 @@ function paxDetail(o: SellerOrder, events?: OrderEvent[]) {
     extraChildren > 0 ? `+${extraChildren} men` : '',
   ].filter(Boolean);
   return { current, original, added: addedParts.length > 0 ? addedParts.join(' · ') : null };
-}
-
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="text-cream/40 shrink-0">{label}</span>
-      <span className="text-cream/80 text-right">{children}</span>
-    </div>
-  );
 }
 
 export default function SellerOrders() {

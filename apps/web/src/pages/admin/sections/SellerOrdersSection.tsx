@@ -2,6 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminSeller, type AdminSellerOrder } from '../../../lib/adminApi';
 import Checkbox from '../../../components/Checkbox';
+import DetailRow from '../../../components/DetailRow';
+import ExpandToggle from '../../../components/ExpandToggle';
 
 interface Props { seller: AdminSeller; }
 
@@ -435,28 +437,6 @@ function Card({ label, value, sub, highlight }: { label: string; value: string; 
   );
 }
 
-function DetailRow({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 text-xs">
-      <span className="text-cream/40 shrink-0">{label}</span>
-      <span className="text-cream/80 text-right">{children}</span>
-    </div>
-  );
-}
-
-function ExpandToggle({ open, onClick }: Readonly<{ open: boolean; onClick: () => void }>) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-      aria-label={open ? 'Ocultar detalle' : 'Ver detalle'}
-      aria-expanded={open}
-      className="text-gold-soft hover:text-gold text-xs shrink-0 inline-flex items-center gap-1"
-    >
-      <span className={`inline-block transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>▶</span>
-    </button>
-  );
-}
 
 const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo' };
 

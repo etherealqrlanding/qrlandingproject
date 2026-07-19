@@ -2,34 +2,22 @@ import { Router } from 'express';
 import { z } from 'zod';
 import type { PoolClient } from 'pg';
 import { pool } from '../../db.js';
+import { RouteValidationError } from '../../errors.js';
 import { refundPayment } from '../../services/mercadopago.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications } from '../../services/email.js';
 import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
-import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon } from '../../repos/addons.js';
+import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon, cancelPendingAddonsForOrder } from '../../repos/addons.js';
 import { syncOrderWithMp } from '../checkout.js';
 import { getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
-import { checkSingleDateAvailability } from '../../repos/availability.js';
+import { checkAvailabilityTxLocked } from '../../repos/availability.js';
 import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNotification } from '../../repos/notifications.js';
 
 export const adminOrdersRouter = Router();
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
-
-// Error de validación con status HTTP propio — se lanza durante /refund y /modify
-// (que sostienen una transacción abierta mientras llaman a Mercado Pago) para que el
-// catch central sea el ÚNICO lugar que hace ROLLBACK, en vez de repetirlo en cada
-// early-return y arriesgarse a dejar una transacción colgada en alguna rama.
-class RouteValidationError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = 'RouteValidationError';
-    this.status = status;
-  }
-}
 
 const collectCashCurrencySchema = z.object({ currency: z.enum(['ARS', 'USD']).default('ARS') });
 
@@ -336,6 +324,13 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
         amount_usd: amountUsdToRefund ?? order.total_usd,
       })],
     );
+
+    // Refund total = la reserva completa deja de existir: cancelamos cualquier
+    // ampliación todavía sin cobrar para que su link de pago no quede huérfano
+    // cobrándose días después sobre una orden ya reintegrada.
+    if (!isPartial) {
+      await cancelPendingAddonsForOrder(order.id, client);
+    }
 
     await client.query('COMMIT');
 
@@ -823,6 +818,9 @@ adminOrdersRouter.post('/addons/:addonPublicId/collect', async (req, res, next) 
 
     const r = await applyAddonPayment(addonPublicId, null);
     if (!r.applied) return res.status(409).json({ error: 'No se pudo aplicar la ampliación.' });
+    if (r.closedOrder) {
+      return res.status(409).json({ error: 'La reserva ya se había cerrado (reintegrada/cancelada) antes de este cobro — no se sumó el pasajero extra. Queda registrado para revisión manual.' });
+    }
     if (!r.alreadyApplied && r.orderId != null) {
       sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
         console.error('[email] cash addon collect notification failed', e));
@@ -877,6 +875,11 @@ adminOrdersRouter.post('/:publicId/sync-mp', async (req, res, next) => {
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
     const result = await syncOrderWithMp(publicId);
     if (!result.found) {
+      if (result.blockedByTerminalState) {
+        return res.status(409).json({
+          error: `Mercado Pago tiene un pago para esta orden, pero quedó en estado "${result.status}" y no se puede confirmar sola (por seguridad de cupo). Revisá el historial de eventos de la orden y resolvé manualmente (confirmar si hay cupo real, o reintegrar el pago).`,
+        });
+      }
       return res.status(404).json({ error: 'No se encontró ningún pago en Mercado Pago para esta orden. Si el cobro no se completó, la orden no debería figurar como pagada.' });
     }
     res.json({ data: { ok: true, status: result.status } });
@@ -891,18 +894,34 @@ const rescheduleSchema = z.object({
 });
 
 adminOrdersRouter.post('/:publicId/reschedule', async (req, res, next) => {
+  const publicId = req.params.publicId;
+  if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+  const parsed = rescheduleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+  const { new_date, reason, notify_customer } = parsed.data;
+  const newDateObj = new Date(`${new_date}T00:00:00`);
+  if (Number.isNaN(newDateObj.getTime())) return res.status(400).json({ error: 'Fecha inválida' });
+  if (newDateObj.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'La fecha no puede ser pasada' });
+
+  // Se resuelve ANTES de abrir la transacción: es una config global que no depende de la
+  // orden, y no tiene sentido retener el lock de la fila mientras se espera esta consulta.
+  const modifyWindowHours = await getModifyWindow();
+
+  // Transaccional con el mismo advisory lock que usa la creación de órdenes/addons: sin
+  // esto, dos reprogramaciones (o una reprogramación y una reserva nueva) al mismo
+  // tier+fecha podían pasar ambas el chequeo de cupo antes de que ninguna escribiera,
+  // y sobrevender la fecha destino (ver auditoría). No se toma FOR UPDATE de la orden acá
+  // a propósito: applyOrderIncrease/createOrderAddon toman el advisory lock ANTES que
+  // cualquier lock de fila sobre la orden, así que tomar el lock de fila primero (como se
+  // hacía antes) invertía ese orden entre rutas y era una receta de deadlock. En su lugar,
+  // el UPDATE final es optimista (guarda `AND service_date = $3`) — si la orden cambió
+  // entre la lectura y la escritura, no pisa nada, tira ConcurrentModificationError (409).
+  const client: PoolClient = await pool.connect();
   try {
-    const publicId = req.params.publicId;
-    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
-    const parsed = rescheduleSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await client.query('BEGIN');
 
-    const { new_date, reason, notify_customer } = parsed.data;
-    const newDateObj = new Date(`${new_date}T00:00:00`);
-    if (Number.isNaN(newDateObj.getTime())) return res.status(400).json({ error: 'Fecha inválida' });
-    if (newDateObj.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'La fecha no puede ser pasada' });
-
-    const { rows } = await pool.query<{
+    const { rows } = await client.query<{
       order_id: number; status: string; item_id: number; option_id: number;
       adults: number; children: number; service_date: string;
     }>(
@@ -916,31 +935,60 @@ adminOrdersRouter.post('/:publicId/reschedule', async (req, res, next) => {
       [publicId],
     );
     const row = rows[0];
-    if (!row) return res.status(404).json({ error: 'Not found' });
+    if (!row) throw new RouteValidationError(404, 'Not found');
     if (!['pending', 'paid'].includes(row.status)) {
-      return res.status(400).json({ error: `No se puede reprogramar una reserva en estado "${row.status}".` });
+      throw new RouteValidationError(400, `No se puede reprogramar una reserva en estado "${row.status}".`);
     }
     if (row.service_date === new_date) {
-      return res.status(400).json({ error: 'La nueva fecha es igual a la fecha actual.' });
+      throw new RouteValidationError(400, 'La nueva fecha es igual a la fecha actual.');
     }
 
-    const { rows: optionRows } = await pool.query<{ default_capacity_per_day: number; available_days: number[] }>(
+    // Misma ventana que ya rige refund (getCancelWindow) y reducir pax (getModifyWindow)
+    // en este archivo — reprogramar no tenía este chequeo y quedaba como única excepción.
+    const windowCheck = checkOperationWindow(modifyWindowHours, row.service_date);
+    if (windowCheck.blocked) throw new RouteValidationError(409, windowCheck.message ?? 'Fuera de la ventana permitida.');
+
+    const { rows: optionRows } = await client.query<{ default_capacity_per_day: number; available_days: number[] }>(
       `SELECT default_capacity_per_day, available_days FROM product_options WHERE id = $1 LIMIT 1`,
       [row.option_id],
     );
     const option = optionRows[0];
-    if (!option) return res.status(404).json({ error: 'Opción no encontrada' });
+    if (!option) throw new RouteValidationError(404, 'Opción no encontrada');
 
     const isoDow = newDateObj.getDay() === 0 ? 7 : newDateObj.getDay();
     if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
-      return res.status(400).json({ error: 'El servicio no opera ese día de la semana.' });
+      throw new RouteValidationError(400, 'El servicio no opera ese día de la semana.');
     }
-    const availCheck = await checkSingleDateAvailability(
-      row.option_id, option.default_capacity_per_day, new_date, row.adults + row.children,
-    );
-    if (!availCheck.ok) return res.status(409).json({ error: availCheck.message ?? 'Fecha no disponible' });
 
-    await pool.query(`UPDATE order_items SET service_date = $1 WHERE id = $2`, [new_date, row.item_id]);
+    // Ampliaciones pendientes (sin cobrar todavía): hoy reservan cupo en la fecha VIEJA.
+    // Si no las movemos junto con la orden, ese pax queda reservado en la fecha vieja (cupo
+    // fantasma) y cuando se cobre el link se fusiona a la fecha nueva sin haber pasado por
+    // ningún chequeo de cupo ahí — hay que contarlas en el chequeo de la fecha nueva y
+    // moverlas junto con la orden.
+    const { rows: pendingAddons } = await client.query<{ extra_adults: number; extra_children: number }>(
+      `SELECT extra_adults, extra_children FROM order_addons WHERE order_id = $1 AND status = 'pending'`,
+      [row.order_id],
+    );
+    const addonPax = pendingAddons.reduce((sum, a) => sum + a.extra_adults + a.extra_children, 0);
+
+    // Chequeo autoritativo con lock — reemplaza el pre-chequeo no transaccional de antes.
+    await checkAvailabilityTxLocked(client, row.option_id, option.default_capacity_per_day, new_date, row.adults + row.children + addonPax);
+
+    const { rowCount } = await client.query(
+      `UPDATE order_items SET service_date = $1 WHERE id = $2 AND service_date = $3`,
+      [new_date, row.item_id, row.service_date],
+    );
+    if (!rowCount) throw new ConcurrentModificationError();
+
+    if (pendingAddons.length > 0) {
+      await client.query(
+        `UPDATE order_addons SET service_date = $1 WHERE order_id = $2 AND status = 'pending'`,
+        [new_date, row.order_id],
+      );
+    }
+
+    await client.query('COMMIT');
+
     await logPaymentEvent(row.order_id, 'order_rescheduled', null, {
       prev_date: row.service_date, new_date, actor: 'admin', reason: reason ?? null,
     });
@@ -952,7 +1000,18 @@ adminOrdersRouter.post('/:publicId/reschedule', async (req, res, next) => {
     }
 
     res.json({ data: { ok: true, prev_date: row.service_date, new_date } });
-  } catch (err) { next(err); }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => { /* la conexión puede haber quedado inservible */ });
+    if (err instanceof RouteValidationError) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    if (err instanceof ConcurrentModificationError) {
+      return res.status(409).json({ error: err.message });
+    }
+    next(err);
+  } finally {
+    client.release();
+  }
 });
 
 adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
@@ -998,6 +1057,11 @@ adminOrdersRouter.patch('/:publicId/status', async (req, res, next) => {
     if (parsed.data.status === 'cancelled' && previousStatus !== 'cancelled') {
       sendAdminCancelledNotifications(rows[0].id, parsed.data.note ?? null).catch((err) =>
         console.error('[email] admin cancel notification failed for order', rows[0].id, err),
+      );
+      // La reserva completa se canceló: cualquier ampliación sin cobrar queda sin efecto,
+      // para que su link de pago no se cobre después sobre una orden ya cancelada.
+      cancelPendingAddonsForOrder(rows[0].id).catch((err) =>
+        console.error('[addons] cancelPendingAddonsForOrder failed for order', rows[0].id, err),
       );
     }
 
