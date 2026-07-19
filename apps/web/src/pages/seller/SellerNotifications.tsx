@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerNotification } from '../../lib/sellerApi';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
+import { useSupportWhatsapp } from '../../lib/useSupportWhatsapp';
 
 const TYPE_CONFIG: Record<string, { icon: string; accent: string }> = {
   order_paid:           { icon: '🏆', accent: 'border-gold/30 bg-gold/5' },
@@ -20,6 +21,7 @@ export default function SellerNotifications() {
   const [notifications, setNotifications] = useState<SellerNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const supportWhatsapp = useSupportWhatsapp();
 
   useEffect(() => {
     sellerApi.notifications.list()
@@ -133,7 +135,7 @@ export default function SellerNotifications() {
             Te respondemos a la brevedad.
           </p>
           <a
-            href="https://wa.me/5491132368312"
+            href={`https://wa.me/${supportWhatsapp}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-2 mt-3 rounded-lg border border-gold/20 bg-gold/5 px-4 py-2 text-sm text-gold-soft hover:bg-gold/10 transition"

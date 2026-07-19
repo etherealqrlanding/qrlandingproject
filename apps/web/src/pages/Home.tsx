@@ -14,6 +14,7 @@ import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
 import { getStoredRef } from '../lib/referral';
 import { buildShareUrl } from '../lib/shareLinks';
+import { useSupportWhatsapp } from '../lib/useSupportWhatsapp';
 import type { ProductDetail, ProductSummary } from '../types/api';
 
 function truncate(text: string, max: number): string {
@@ -62,6 +63,7 @@ export default function Home() {
   const lang = i18n.resolvedLanguage;
   const navigate = useNavigate();
   const exchangeRate = useExchangeRate();
+  const supportWhatsapp = useSupportWhatsapp();
   const [featured, setFeatured] = useState<ProductSummary[]>([]);
   const [heroImages, setHeroImages] = useState<string[]>([]);
   const [houses, setHouses] = useState<ProductSummary[]>([]);
@@ -203,7 +205,7 @@ export default function Home() {
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link to="/shows" className="btn-ghost">{t('hero.cta_primary')}</Link>
             <a
-              href="https://wa.me/5491132368312"
+              href={`https://wa.me/${supportWhatsapp}`}
               target="_blank"
               rel="noreferrer"
               className="btn-ghost"

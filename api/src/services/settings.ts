@@ -168,6 +168,32 @@ export async function setMaintenanceMode(enabled: boolean): Promise<void> {
   );
 }
 
+const SUPPORT_WHATSAPP_KEY = 'support_whatsapp';
+
+// Número de WhatsApp de contacto/soporte (solo dígitos, código de país incluido,
+// ej: 5491132368312). Se usa en todo el contacto con nosotros de la app: el sitio
+// público, el portal de vendedores y los emails de reservas.
+export async function getSupportWhatsapp(): Promise<string | null> {
+  const { rows } = await pool.query<{ value: { number: string } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [SUPPORT_WHATSAPP_KEY],
+  );
+  return rows[0]?.value?.number ?? null;
+}
+
+export async function setSupportWhatsapp(number: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [
+      SUPPORT_WHATSAPP_KEY,
+      JSON.stringify({ number }),
+      'Número de WhatsApp de contacto/soporte (solo dígitos, con código de país). Usado en el sitio público, el portal de vendedores y los emails.',
+    ],
+  );
+}
+
 const ARCHIVE_RETENTION_KEY = 'archive_retention_days';
 const DEFAULT_ARCHIVE_RETENTION_DAYS = 5;
 

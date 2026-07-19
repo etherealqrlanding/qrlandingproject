@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
-import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays } from '../../services/settings.js';
+import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays, getSupportWhatsapp, setSupportWhatsapp } from '../../services/settings.js';
 import { fetchOficialVentaRate } from '../../services/exchangeRateSync.js';
 import { getAbout, setAbout, getFaq, setFaq, getSellerFaq, setSellerFaq } from '../../services/content.js';
 
@@ -129,6 +129,24 @@ adminSettingsRouter.put('/archive-retention', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     await setArchiveRetentionDays(parsed.data.days);
     res.json({ data: { days: await getArchiveRetentionDays() } });
+  } catch (err) { next(err); }
+});
+
+// ─── WhatsApp de contacto/soporte ─────────────────────────
+const whatsappSchema = z.object({ number: z.string().regex(/^\d{10,15}$/, 'Solo dígitos, con código de país (ej: 5491132368312)') });
+
+adminSettingsRouter.get('/support-whatsapp', async (_req, res, next) => {
+  try {
+    res.json({ data: { number: await getSupportWhatsapp() } });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/support-whatsapp', async (req, res, next) => {
+  try {
+    const parsed = whatsappSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await setSupportWhatsapp(parsed.data.number);
+    res.json({ data: { number: await getSupportWhatsapp() } });
   } catch (err) { next(err); }
 });
 

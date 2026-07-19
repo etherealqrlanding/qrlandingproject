@@ -282,6 +282,7 @@ export interface AdminOrderListItem {
   commission_amount_ars: number | null;
   net_total_usd: number | null;
   paid_to_seller_at: string | null;
+  net_settled_at: string | null;
   payment_method: 'mercadopago' | 'cash';
   created_at: string;
   paid_at: string | null;
@@ -435,6 +436,18 @@ export const adminApi = {
         }),
       delete: (imageId: number) =>
         request<{ ok: true }>(`/api/admin/products/images/${imageId}`, { method: 'DELETE' }),
+    },
+    availability: {
+      list: (productId: number) =>
+        request<Array<{ date: string; is_closed: boolean; capacity_override: number | null; notes: string | null }>>(
+          `/api/admin/products/${productId}/availability`,
+        ),
+      upsert: (productId: number, input: { date: string; is_closed: boolean; capacity_override?: number | null; notes?: string | null }) =>
+        request<{ ok: true; affected: number }>(`/api/admin/products/${productId}/availability`, {
+          method: 'POST', body: JSON.stringify(input),
+        }),
+      clear: (productId: number, date: string) =>
+        request<{ ok: true }>(`/api/admin/products/${productId}/availability/${date}`, { method: 'DELETE' }),
     },
   },
   options: {
@@ -630,6 +643,12 @@ export const adminApi = {
       request<{ time: string | null }>('/api/admin/settings/booking-cutoff', {
         method: 'PUT',
         body: JSON.stringify({ time }),
+      }),
+    getSupportWhatsapp: () =>
+      request<{ number: string | null }>('/api/admin/settings/support-whatsapp'),
+    updateSupportWhatsapp: (number: string) =>
+      request<{ number: string | null }>('/api/admin/settings/support-whatsapp', {
+        method: 'PUT', body: JSON.stringify({ number }),
       }),
     getModifyWindow: () =>
       request<{ hours: number | null }>('/api/admin/settings/modify-window'),

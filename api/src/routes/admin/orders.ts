@@ -81,7 +81,7 @@ adminOrdersRouter.get('/', async (req, res, next) => {
          a.commission_amount_usd::float AS commission_amount_usd,
          a.commission_amount_ars::float AS commission_amount_ars,
          a.net_total_usd_snapshot::float AS net_total_usd,
-         a.paid_to_seller_at
+         a.paid_to_seller_at, a.net_settled_at
          FROM orders o
          LEFT JOIN order_items oi ON oi.order_id = o.id
          LEFT JOIN order_attributions a ON a.order_id = o.id

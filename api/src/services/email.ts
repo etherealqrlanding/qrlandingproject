@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
 import { config } from '../config.js';
 import { pool } from '../db.js';
+import { getSupportWhatsapp } from './settings.js';
 
 // Transporte preferido: SMTP (ej. Gmail) si está configurado. Mandar vía el SMTP del
 // proveedor del remitente (Gmail) mantiene SPF/DKIM/DMARC alineados → buena entregabilidad
@@ -135,15 +136,30 @@ const baseStyles = {
   footer: 'color:rgba(245,239,230,0.4);font-size:12px;text-align:center;margin-top:40px;',
 };
 
-// Número de soporte por WhatsApp (formato internacional AR: 54 9 11 3236-8312).
-const SUPPORT_WHATSAPP = '5491132368312';
+// Número de soporte por WhatsApp — configurable desde el admin (Settings). Se cachea
+// en memoria porque los templates de abajo son funciones síncronas (no pueden esperar
+// una consulta a la base en cada email); el número casi no cambia, así que un desfasaje
+// de hasta 5 minutos tras un cambio en el admin es aceptable. Default = el número
+// histórico, por si todavía no se configuró nada en "settings".
+const DEFAULT_SUPPORT_WHATSAPP = '5491132368312';
+let cachedSupportWhatsapp = DEFAULT_SUPPORT_WHATSAPP;
+
+async function refreshSupportWhatsappCache(): Promise<void> {
+  try {
+    const number = await getSupportWhatsapp();
+    if (number) cachedSupportWhatsapp = number;
+  } catch { /* ante cualquier error dejamos el último valor conocido */ }
+}
+
+refreshSupportWhatsappCache();
+setInterval(refreshSupportWhatsappCache, 5 * 60 * 1000).unref();
 
 // Bloque de soporte con botón de WhatsApp — el pago es una operación sensible,
 // así el cliente/vendedor tiene contacto directo ante cualquier inconveniente.
 function supportBlock(): string {
   return `<div style="text-align:center;margin:28px 0 4px">
     <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0 0 10px">¿Algún inconveniente con tu pago o tu reserva? Estamos para ayudarte al instante.</p>
-    <a href="https://wa.me/${SUPPORT_WHATSAPP}" style="display:inline-block;background:#25D366;color:#0d0a0a;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px">Escribinos por WhatsApp</a>
+    <a href="https://wa.me/${cachedSupportWhatsapp}" style="display:inline-block;background:#25D366;color:#0d0a0a;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:700;font-size:14px">Escribinos por WhatsApp</a>
   </div>`;
 }
 

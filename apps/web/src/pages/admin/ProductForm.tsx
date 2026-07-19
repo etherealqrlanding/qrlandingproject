@@ -4,9 +4,10 @@ import { adminApi, AdminApiError, type AdminCategory, type AdminProductDetail } 
 import OptionsEditor from './sections/OptionsEditor';
 import ImagesEditor from './sections/ImagesEditor';
 import GeneralSection from './sections/GeneralSection';
+import ProductAvailabilityEditor from './sections/ProductAvailabilityEditor';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
-type Tab = 'general' | 'options' | 'images';
+type Tab = 'general' | 'options' | 'availability' | 'images';
 type DeleteDialog = 'deactivate' | 'hard';
 
 export default function ProductForm() {
@@ -103,7 +104,7 @@ export default function ProductForm() {
         <>
           {!isNew && (
             <div className="flex gap-1 border-b border-gold/10 mb-6">
-              {(['general', 'options', 'images'] as Tab[]).map((t) => (
+              {(['general', 'options', 'availability', 'images'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -116,6 +117,7 @@ export default function ProductForm() {
                 >
                   {t === 'general' && 'Datos generales'}
                   {t === 'options' && `Tiers / Opciones (${product?.options.length ?? 0})`}
+                  {t === 'availability' && 'Disponibilidad por fecha'}
                   {t === 'images' && `Imágenes (${product?.images.length ?? 0})`}
                 </button>
               ))}
@@ -135,6 +137,9 @@ export default function ProductForm() {
           )}
           {tab === 'options' && product && (
             <OptionsEditor product={product} onChange={handleUpdated} />
+          )}
+          {tab === 'availability' && product && (
+            <ProductAvailabilityEditor product={product} />
           )}
           {tab === 'images' && product && (
             <ImagesEditor product={product} onChange={handleUpdated} />

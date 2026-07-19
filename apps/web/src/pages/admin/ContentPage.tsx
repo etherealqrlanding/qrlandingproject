@@ -8,7 +8,7 @@ export default function ContentPage() {
   const [tab, setTab] = useState<Tab>('about');
 
   return (
-    <div className="max-w-3xl">
+    <div className="p-4 md:p-8 max-w-3xl">
       <h1 className="font-display text-3xl text-cream">Contenido</h1>
       <p className="mt-1 text-sm text-cream/50">Editá las secciones del sitio y del portal de vendedores.</p>
 

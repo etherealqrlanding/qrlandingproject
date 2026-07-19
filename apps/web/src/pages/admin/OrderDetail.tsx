@@ -358,7 +358,7 @@ export default function OrderDetail() {
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-8">
         <div className="space-y-6">
-          <Section title="Cliente">
+          <Section title="Cliente" twoColumn>
             <Row label="Nombre">{order.customer_name}</Row>
             <Row label="Email">{order.customer_email}</Row>
             <Row label="Teléfono">{order.customer_phone ?? '—'}</Row>
@@ -367,7 +367,7 @@ export default function OrderDetail() {
           </Section>
 
           {order.items.map((item) => (
-            <Section key={item.id} title="Servicio">
+            <Section key={item.id} title="Servicio" twoColumn>
               <Row label="Producto">{item.product_name_snapshot}</Row>
               <Row label="Tier">{item.option_name_snapshot}</Row>
               <Row label="Fecha del servicio">{item.service_date}</Row>
@@ -375,7 +375,7 @@ export default function OrderDetail() {
               {item.children > 0 && (
                 <Row label="Menores">{item.children} × USD {item.unit_price_child_usd ?? 0}</Row>
               )}
-              <Row label="Subtotal" highlight>USD {item.subtotal_usd}</Row>
+              <Row label="Subtotal" highlight full>USD {item.subtotal_usd}</Row>
               {item.transfer_requested && (
                 <>
                   <Row label="Traslado">Sí</Row>
@@ -386,7 +386,7 @@ export default function OrderDetail() {
             </Section>
           ))}
 
-          <Section title="Mercado Pago">
+          <Section title="Mercado Pago" twoColumn>
             <Row label="Payment ID">{order.mp_payment_id ?? '—'}</Row>
             <Row label="Estado MP">{order.mp_payment_status ?? '—'}</Row>
             <Row label="Método">{order.mp_payment_method ?? '—'}</Row>
@@ -818,18 +818,18 @@ function cashNetDisplay(order: OrderFull): string {
   return fmtArs((order.net_total_usd ?? 0) * Number(order.exchange_rate_used));
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, twoColumn, children }: { title: string; twoColumn?: boolean; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-gold/10 bg-ink-soft/40 p-5">
       <h2 className="text-xs uppercase tracking-widest text-gold-soft mb-3">{title}</h2>
-      <div className="space-y-2">{children}</div>
+      <div className={twoColumn ? 'grid sm:grid-cols-2 gap-x-6 gap-y-2' : 'space-y-2'}>{children}</div>
     </section>
   );
 }
 
-function Row({ label, children, highlight }: { label: string; children: React.ReactNode; highlight?: boolean }) {
+function Row({ label, children, highlight, full }: { label: string; children: React.ReactNode; highlight?: boolean; full?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 text-sm">
+    <div className={`flex items-baseline justify-between gap-4 text-sm ${full ? 'sm:col-span-2' : ''}`}>
       <span className="text-cream/50">{label}</span>
       <span className={highlight ? 'text-gold tabular-nums' : 'text-cream/90 tabular-nums'}>{children}</span>
     </div>

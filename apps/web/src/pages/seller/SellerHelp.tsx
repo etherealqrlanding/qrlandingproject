@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { sellerApi, SellerApiError } from '../../lib/sellerApi';
-
-const SUPPORT_WHATSAPP = '5491132368312';
-const WA_URL = `https://wa.me/${SUPPORT_WHATSAPP}?text=${encodeURIComponent('Hola, soy vendedor de Tangos y Milongas Tickets y necesito ayuda con el portal.')}`;
+import { useSupportWhatsapp } from '../../lib/useSupportWhatsapp';
 
 type FaqItem = { q_es: string; a_es: string };
 
@@ -62,6 +60,8 @@ export default function SellerHelp() {
   const [open, setOpen] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const supportWhatsapp = useSupportWhatsapp();
+  const waUrl = `https://wa.me/${supportWhatsapp}?text=${encodeURIComponent('Hola, soy vendedor de Tangos y Milongas Tickets y necesito ayuda con el portal.')}`;
 
   useEffect(() => {
     sellerApi.faq()
@@ -87,7 +87,7 @@ export default function SellerHelp() {
             </p>
           </div>
           <a
-            href={WA_URL}
+            href={waUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="shrink-0 flex items-center gap-2.5 rounded-xl bg-[#25D366] px-5 py-3 text-sm font-bold text-[#0d0a0a] hover:bg-[#22c55e] transition-colors"

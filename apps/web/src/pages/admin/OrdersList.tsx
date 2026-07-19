@@ -77,9 +77,9 @@ function ExpandToggle({ open, onClick }: Readonly<{ open: boolean; onClick: () =
 // esto es para monitorear sin salir del listado.
 const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo' };
 
-function OrderExtraDetails({ o }: Readonly<{ o: AdminOrderListItem }>) {
+function OrderExtraDetails({ o, twoColumns }: Readonly<{ o: AdminOrderListItem; twoColumns?: boolean }>) {
   return (
-    <div className="space-y-1.5">
+    <div className={twoColumns ? 'grid sm:grid-cols-2 gap-x-8 gap-y-1.5' : 'space-y-1.5'}>
       {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
       {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
       {(o.adults != null) && (
@@ -345,10 +345,17 @@ export default function OrdersList() {
         if (o.payment_method !== 'cash') {
           acc.revenue += o.total_ars ?? 0;
           acc.commission += o.commission_amount_ars ?? 0;
+        } else if (!o.net_settled_at) {
+          // Neto que el vendedor todavía nos tiene que rendir por ventas en efectivo
+          // ya pagadas. Normalizamos todo a ARS (algunos se cobraron en dólares) para
+          // poder sumarlos en un solo total.
+          const netArs = o.net_total_usd != null ? o.net_total_usd * o.exchange_rate_used : o.total_ars;
+          acc.netPending += netArs ?? 0;
+          acc.netPendingCount++;
         }
       }
       return acc;
-    }, { count: 0, paidCount: 0, revenue: 0, commission: 0 });
+    }, { count: 0, paidCount: 0, revenue: 0, commission: 0, netPending: 0, netPendingCount: 0 });
   }, [orders]);
 
   const totalPages = Math.ceil((orders?.length ?? 0) / PAGE_SIZE);
@@ -521,8 +528,8 @@ export default function OrdersList() {
                   <tr className="border-t border-gold/5 bg-ink-soft/20">
                     <td colSpan={9} className="px-6 py-3">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
-                      <div className="max-w-sm">
-                        <OrderExtraDetails o={o} />
+                      <div className="max-w-xl">
+                        <OrderExtraDetails o={o} twoColumns />
                       </div>
                     </td>
                   </tr>
@@ -558,11 +565,17 @@ export default function OrdersList() {
       </header>
 
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 md:mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4 md:mb-6">
           <SummaryCard label="Total" value={`${summary.count}`} sub="órdenes en este listado" />
           <SummaryCard label="Pagadas" value={`${summary.paidCount}`} sub="confirmadas, MP o efectivo" />
           <SummaryCard label="Facturación MP" value={`ARS ${Math.round(summary.revenue).toLocaleString('es-AR')}`} sub="cobrado por Mercado Pago (no incluye efectivo)" />
           <SummaryCard label="Comisiones" value={`ARS ${Math.round(summary.commission).toLocaleString('es-AR')}`} sub="a liquidar, solo ventas por MP" highlight />
+          <SummaryCard
+            label="Neto por cobrar"
+            value={`ARS ${Math.round(summary.netPending).toLocaleString('es-AR')}`}
+            sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
+            highlight
+          />
         </div>
       )}
 

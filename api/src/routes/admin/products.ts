@@ -236,6 +236,117 @@ adminProductsRouter.delete('/availability/:availabilityId', async (req, res, nex
   } catch (err) { next(err); }
 });
 
+// ─── Disponibilidad de toda la casa por fecha ──────────
+// Aplica el mismo override (cierre o cupo) a option_availability para TODOS los
+// tiers activos del producto en esa fecha, en vez de tener que repetirlo tier
+// por tier. El checkout ya valida is_closed/capacity_override por option_id,
+// así que este fan-out alcanza para que la casa entera respete el override.
+
+const productAvailabilitySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  is_closed: z.boolean(),
+  capacity_override: z.number().int().nonnegative().nullable().optional(),
+  notes: z.string().max(300).nullable().optional(),
+});
+
+// Lista las fechas donde TODOS los tiers activos comparten el mismo override
+// (o bien todos cerrados, o bien todos con el mismo cupo puntual). Si los
+// tiers difieren entre sí para una fecha, esa fecha no se agrega acá — ese
+// caso mixto se sigue viendo/editando por tier en la pestaña "Tiers / Opciones".
+adminProductsRouter.get('/:productId/availability', async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const { pool } = await import('../../db.js');
+    const { rows: activeOptions } = await pool.query<{ id: number }>(
+      `SELECT id FROM product_options WHERE product_id = $1 AND is_active = TRUE`,
+      [productId],
+    );
+    const totalActive = activeOptions.length;
+    if (totalActive === 0) return res.json({ data: [] });
+
+    const { rows } = await pool.query<{
+      date: string; option_id: number; capacity_override: number | null; is_closed: boolean; notes: string | null;
+    }>(
+      `SELECT to_char(oa.date, 'YYYY-MM-DD') AS date, oa.option_id, oa.capacity_override, oa.is_closed, oa.notes
+         FROM option_availability oa
+         JOIN product_options po ON po.id = oa.option_id
+        WHERE po.product_id = $1 AND po.is_active = TRUE
+        ORDER BY oa.date`,
+      [productId],
+    );
+
+    const byDate = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const list = byDate.get(row.date) ?? [];
+      list.push(row);
+      byDate.set(row.date, list);
+    }
+
+    const data: Array<{ date: string; is_closed: boolean; capacity_override: number | null; notes: string | null }> = [];
+    for (const [date, entries] of byDate) {
+      if (entries.length !== totalActive) continue; // no cubre todos los tiers: es un caso mixto/parcial
+      const allClosed = entries.every((e) => e.is_closed);
+      const caps = new Set(entries.map((e) => e.capacity_override));
+      if (allClosed) {
+        data.push({ date, is_closed: true, capacity_override: null, notes: entries[0].notes });
+      } else if (entries.every((e) => !e.is_closed) && caps.size === 1 && entries[0].capacity_override !== null) {
+        data.push({ date, is_closed: false, capacity_override: entries[0].capacity_override, notes: entries[0].notes });
+      }
+      // si no es uniforme (mixto entre tiers), no se muestra acá.
+    }
+    data.sort((a, b) => a.date.localeCompare(b.date));
+    res.json({ data });
+  } catch (err) { next(err); }
+});
+
+adminProductsRouter.post('/:productId/availability', async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = productAvailabilitySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    const { pool } = await import('../../db.js');
+    const { rows: options } = await pool.query<{ id: number }>(
+      `SELECT id FROM product_options WHERE product_id = $1 AND is_active = TRUE`,
+      [productId],
+    );
+    if (options.length === 0) return res.status(404).json({ error: 'El producto no tiene tiers activos' });
+    const capacity = parsed.data.is_closed ? null : (parsed.data.capacity_override ?? null);
+    await Promise.all(options.map((o) =>
+      pool.query(
+        `INSERT INTO option_availability (option_id, date, capacity_override, is_closed, notes)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (option_id, date) DO UPDATE
+           SET capacity_override = EXCLUDED.capacity_override,
+               is_closed = EXCLUDED.is_closed,
+               notes = EXCLUDED.notes`,
+        [o.id, parsed.data.date, capacity, parsed.data.is_closed, parsed.data.notes ?? null],
+      ),
+    ));
+    res.status(201).json({ data: { ok: true, affected: options.length } });
+  } catch (err) { next(err); }
+});
+
+// Quita el override de toda la casa para esa fecha: cada tier vuelve a su cupo
+// por defecto (borra el override en todos los tiers activos del producto).
+adminProductsRouter.delete('/:productId/availability/:date', async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    const { date } = req.params;
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid id' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Invalid date' });
+    const { pool } = await import('../../db.js');
+    await pool.query(
+      `DELETE FROM option_availability oa
+        USING product_options po
+       WHERE oa.option_id = po.id AND po.product_id = $1 AND oa.date = $2::date`,
+      [productId, date],
+    );
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
 // ─── Imágenes ───────────────────────────────────────────
 
 const imageSchema = z.object({

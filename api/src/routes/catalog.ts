@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getProductBySlug, listCategories, listProducts } from '../repos/catalog.js';
 import { pool } from '../db.js';
-import { getSameDayCutoff, getExchangeRate } from '../services/settings.js';
+import { getSameDayCutoff, getExchangeRate, getSupportWhatsapp } from '../services/settings.js';
 import { getAbout, getFaq } from '../services/content.js';
 
 export const catalogRouter = Router();
@@ -116,6 +116,14 @@ catalogRouter.get('/settings/booking-cutoff', async (_req, res, next) => {
   try {
     const time = await getSameDayCutoff();
     res.json({ data: { time } });
+  } catch (err) { next(err); }
+});
+
+// Número de WhatsApp de contacto — endpoint público (solo lectura)
+catalogRouter.get('/settings/whatsapp', async (_req, res, next) => {
+  try {
+    const number = await getSupportWhatsapp();
+    res.json({ data: { number } });
   } catch (err) { next(err); }
 });
 

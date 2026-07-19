@@ -79,6 +79,66 @@ function CutoffForm({
   );
 }
 
+function WhatsAppForm({
+  number,
+  onSave,
+}: {
+  number: string | null;
+  onSave: (n: string) => Promise<void>;
+}) {
+  const [value, setValue] = useState(number ?? '');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { setValue(number ?? ''); }, [number]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const digits = value.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 15) {
+      setErr('Ingresá un número válido: solo dígitos, con código de país (ej: 5491132368312).');
+      return;
+    }
+    setErr(null); setMsg(null); setSaving(true);
+    try {
+      await onSave(digits);
+      setValue(digits);
+      setMsg('✓ Guardado.');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <section className="rounded-lg border border-gold/15 bg-ink-soft/50 p-6 max-w-2xl">
+      <h2 className="font-display text-2xl text-cream">WhatsApp de contacto</h2>
+      <p className="mt-2 text-sm text-cream/60">
+        Se usa en todo el contacto con nosotros de la app: el botón "Hablar por WhatsApp" del sitio público,
+        el portal de vendedores y el WhatsApp que se ofrece en los emails de reservas. Cambiarlo acá lo actualiza
+        en todos esos lugares (los emails pueden tardar hasta 5 minutos en tomar el cambio).
+      </p>
+      <form onSubmit={handleSave} className="mt-5 space-y-4">
+        <label className="block max-w-xs">
+          <span className="block text-sm text-cream/80 mb-1.5">Número (con código de país)</span>
+          <input
+            type="text" inputMode="numeric"
+            value={value} onChange={(e) => setValue(e.target.value)}
+            placeholder="Ej: 5491132368312" className="input font-mono" />
+        </label>
+        <button type="submit" disabled={saving || !value} className="btn-primary disabled:opacity-50">
+          {saving ? 'Guardando...' : 'Guardar'}
+        </button>
+        {msg && <p className="text-sm text-gold">{msg}</p>}
+        {err && <p className="text-sm text-bordeaux-light">{err}</p>}
+        <p className="text-xs text-cream/40">
+          Sin "+" ni espacios ni guiones: código de país + código de área (sin el 0) + número (sin el 15). Ej: Buenos Aires → 5491132368312.
+        </p>
+      </form>
+    </section>
+  );
+}
+
 function ArchiveRetentionForm({
   days,
   onSave,
@@ -170,16 +230,18 @@ export default function SettingsPage() {
   const [rateMode, setRateMode] = useState<'auto' | 'manual'>('manual');
   const [rateModeSaving, setRateModeSaving] = useState(false);
   const [rateModeMsg, setRateModeMsg] = useState<string | null>(null);
+  const [whatsapp, setWhatsapp] = useState<string | null>(null);
 
   const load = async () => {
     try {
-      const [data, mw, cw, ar, mm, rm] = await Promise.all([
+      const [data, mw, cw, ar, mm, rm, ww] = await Promise.all([
         adminApi.settings.list(),
         adminApi.settings.getModifyWindow(),
         adminApi.settings.getCancelWindow(),
         adminApi.settings.getArchiveRetention(),
         adminApi.settings.getMaintenanceMode(),
         adminApi.settings.getExchangeRateMode(),
+        adminApi.settings.getSupportWhatsapp(),
       ]);
       setSettings(data);
       setModifyWindow(mw.hours);
@@ -187,6 +249,7 @@ export default function SettingsPage() {
       setArchiveRetention(ar.days);
       setMaintenance(mm.enabled);
       setRateMode(rm.mode);
+      setWhatsapp(ww.number);
       const exchange = data.find((s) => s.key === 'exchange_rate_usd_ars');
       if (exchange) {
         const value = exchange.value as { rate?: number };
@@ -286,6 +349,14 @@ export default function SettingsPage() {
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Configuración</p>
         <h1 className="mt-2 font-display text-4xl text-cream">Settings</h1>
       </header>
+
+      <WhatsAppForm
+        number={whatsapp}
+        onSave={async (n) => {
+          const res = await adminApi.settings.updateSupportWhatsapp(n);
+          setWhatsapp(res.number);
+        }}
+      />
 
       {/* Tipo de cambio */}
       <section className="rounded-lg border border-gold/15 bg-ink-soft/50 p-6 max-w-2xl">

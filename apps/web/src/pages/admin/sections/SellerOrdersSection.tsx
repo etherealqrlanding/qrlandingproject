@@ -394,8 +394,8 @@ export default function SellerOrdersSection({ seller }: Props) {
                     <tr className="border-t border-gold/5 bg-ink-soft/20">
                       <td colSpan={9} className="px-6 py-3">
                         <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
-                        <div className="max-w-sm">
-                          <SettleOrderExtraDetails o={o} />
+                        <div className="max-w-xl">
+                          <SettleOrderExtraDetails o={o} twoColumns />
                         </div>
                       </td>
                     </tr>
@@ -462,9 +462,11 @@ const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cas
 
 // Detalle para reconocer la orden al momento de liquidar — solo lectura, no repite
 // lo que ya se ve en la fila/tarjeta (cliente, servicio, monto, estado).
-function SettleOrderExtraDetails({ o }: Readonly<{ o: AdminSellerOrder }>) {
+// twoColumns: en la tabla de escritorio hay ancho de sobra (colSpan completo) y todo
+// apilado en una sola columna quedaba muy alto — en la tarjeta mobile se deja como estaba.
+function SettleOrderExtraDetails({ o, twoColumns }: Readonly<{ o: AdminSellerOrder; twoColumns?: boolean }>) {
   return (
-    <div className="space-y-1.5">
+    <div className={twoColumns ? 'grid sm:grid-cols-2 gap-x-8 gap-y-1.5' : 'space-y-1.5'}>
       {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
       {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
       <DetailRow label="Pasajeros">{o.adults} ad.{o.children ? ` · ${o.children} men.` : ''}</DetailRow>

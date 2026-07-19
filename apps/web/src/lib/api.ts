@@ -127,6 +127,7 @@ export const api = {
   settings: {
     bookingCutoff: () => request<{ time: string | null }>('/api/settings/booking-cutoff'),
     exchangeRate: () => request<{ rate: number }>('/api/settings/exchange-rate'),
+    whatsapp: () => request<{ number: string | null }>('/api/settings/whatsapp'),
   },
   status: {
     maintenance: () => request<{ maintenance: boolean }>('/health/status'),
