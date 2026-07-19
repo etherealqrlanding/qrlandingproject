@@ -200,6 +200,9 @@ export default function SellerOrders() {
     setAddonBusy(addonPublicId);
     try {
       await sellerApi.collectAddon(addonPublicId);
+      // Invalida el histórico cacheado: confirmar el cobro agrega un evento nuevo
+      // ("cobro confirmado") que si no, quedaba sin verse hasta recargar la página entera.
+      setEventsByOrder((prev) => { const next = { ...prev }; delete next[orderPublicId]; return next; });
       await reload();
       await loadAddons(orderPublicId);
     } catch (err) {
@@ -213,6 +216,8 @@ export default function SellerOrders() {
     setAddonBusy(addonPublicId);
     try {
       await sellerApi.cancelAddon(addonPublicId);
+      // Mismo motivo: cancelar también agrega un evento nuevo al histórico.
+      setEventsByOrder((prev) => { const next = { ...prev }; delete next[orderPublicId]; return next; });
       await loadAddons(orderPublicId);
     } catch (err) {
       alert((err as SellerApiError).message);
