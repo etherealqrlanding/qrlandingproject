@@ -237,8 +237,12 @@ export default function SellerOrders() {
     setCancelingOrder(cancelConfirmOrder.public_id);
     setCancelError(null);
     try {
-      await sellerApi.cancelOrder(cancelConfirmOrder.public_id, cancelReason.trim() || undefined);
+      const publicId = cancelConfirmOrder.public_id;
+      await sellerApi.cancelOrder(publicId, cancelReason.trim() || undefined);
       setCancelConfirmOrder(null);
+      // Cancelar agrega un evento nuevo al histórico — sin esto, si se reabre la fila
+      // después de cancelar, se seguía viendo el histórico viejo hasta recargar la página.
+      setEventsByOrder((prev) => { const next = { ...prev }; delete next[publicId]; return next; });
       await reload();
       setExpanded(null);
     } catch (err) {
@@ -252,6 +256,7 @@ export default function SellerOrders() {
     setArchivingOrder(publicId);
     try {
       await sellerApi.archiveOrder(publicId);
+      setEventsByOrder((prev) => { const next = { ...prev }; delete next[publicId]; return next; });
       await reload();
       setExpanded(null);
     } catch (err) {
