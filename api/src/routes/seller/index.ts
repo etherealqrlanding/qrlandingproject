@@ -178,7 +178,7 @@ const sellerCheckoutSchema = z.object({
     name: z.string().min(2).max(120),
     email: z.string().email().max(160),
     phone: z.string().max(40).optional().nullable(),
-    nationality: z.string().max(80).optional().nullable(),
+    nationality: z.string().min(1, 'La nacionalidad es obligatoria').max(80),
     dni: z.string().max(40).optional().nullable(),
   }),
   payment_method: z.enum(['mercadopago', 'cash']),

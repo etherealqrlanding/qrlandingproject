@@ -139,7 +139,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             className="input"
           />
         </Field>
-        <Field label="Teléfono / WhatsApp">
+        <Field label="Teléfono / WhatsApp" hint="Con código de país. Habilita el botón de WhatsApp en su ficha">
           <input
             type="tel" maxLength={40}
             value={form.contact_phone ?? ''}

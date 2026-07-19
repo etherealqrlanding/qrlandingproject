@@ -306,7 +306,7 @@ function OptionFormFields({ option, onChange }: {
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Descripción (ES)">
+        <Field label="Descripción (ES)" hint="Texto corto que resume este tier en el selector de checkout">
           <textarea
             rows={2} maxLength={500}
             value={option.description_es ?? ''} onChange={(e) => update('description_es', e.target.value)}
@@ -344,7 +344,7 @@ function OptionFormFields({ option, onChange }: {
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
-        <Field label="Precio adulto (USD)" required>
+        <Field label="Precio adulto (USD)" required hint="Lo que le cobramos al pasajero (distinto del neto, más abajo)">
           <input
             type="number" required min={0} step={0.01}
             value={option.price_adult_usd ?? ''} onChange={(e) => update('price_adult_usd', Number(e.target.value))}
@@ -460,7 +460,7 @@ function OptionFormFields({ option, onChange }: {
         )}
       </div>
 
-      <Field label="Días de operación">
+      <Field label="Días de operación" hint="Días de la semana en que este tier se puede reservar">
         <div className="flex gap-2 flex-wrap">
           {DAYS.map((d) => {
             const active = (option.available_days ?? []).includes(d.value);
@@ -555,7 +555,7 @@ function OptionFormFields({ option, onChange }: {
             </label>
           )}
         </div>
-        <Field label="Orden display">
+        <Field label="Orden display" hint="Menor número aparece primero dentro del producto">
           <input
             type="number"
             value={option.display_order ?? 0}

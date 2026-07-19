@@ -151,16 +151,26 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
   };
 
+  // Validación manual en vez de la nativa del navegador (los popups por defecto no
+  // se pueden estilizar y quedan inconsistentes entre navegadores) — el form usa
+  // noValidate y este chequeo decide qué mensaje mostrar en el cartel de error ya
+  // existente, en el mismo orden visual en que aparecen los campos.
+  const validate = (): string | null => {
+    if (form.name.trim().length < 2) return t('checkout.name_required');
+    if (!form.phone.trim()) return t('checkout.phone_required');
+    if (!form.email.trim()) return t('checkout.email_required');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return t('checkout.email_invalid');
+    if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) return t('checkout.email_mismatch');
+    if (!form.nationality) return t('checkout.nationality_required');
+    if (isDateBlocked) return selectedDateStatus === 'closed' ? t('checkout.date_closed') : t('checkout.date_full');
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDateBlocked) {
-      setError(selectedDateStatus === 'closed'
-        ? t('checkout.date_closed')
-        : t('checkout.date_full'));
-      return;
-    }
-    if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) {
-      setError(t('checkout.email_mismatch'));
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError(null);
@@ -207,11 +217,11 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="p-7 space-y-5">
+        <form onSubmit={handleSubmit} noValidate className="p-7 space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label={t('checkout.name')} required>
               <input
-                type="text" required minLength={2} maxLength={120}
+                type="text" maxLength={120}
                 value={form.name} onChange={(e) => updateField('name', e.target.value)}
                 className="input"
                 autoComplete="name"
@@ -219,14 +229,14 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </Field>
             <Field label={t('checkout.phone')} required>
               <input
-                type="tel" required maxLength={40}
+                type="tel" maxLength={40}
                 value={form.phone} onChange={(e) => updateField('phone', e.target.value)}
                 className="input"
                 placeholder="+54 9 11 1234 5678"
                 autoComplete="tel"
               />
             </Field>
-            <Field label={t('checkout.dni')}>
+            <Field label={t('checkout.dni')} hint={t('checkout.dni_hint')}>
               <input
                 type="text" maxLength={40}
                 value={form.dni} onChange={(e) => updateField('dni', e.target.value)}
@@ -237,7 +247,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </Field>
             <Field label={t('checkout.email')} required>
               <input
-                type="email" required maxLength={160}
+                type="email" maxLength={160}
                 value={form.email} onChange={(e) => updateField('email', e.target.value)}
                 className="input"
                 autoComplete="email"
@@ -245,7 +255,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </Field>
             <Field label={t('checkout.email_confirm')} required>
               <input
-                type="email" required maxLength={160}
+                type="email" maxLength={160}
                 value={form.emailConfirm} onChange={(e) => updateField('emailConfirm', e.target.value)}
                 className={`input ${form.emailConfirm && form.emailConfirm.trim().toLowerCase() !== form.email.trim().toLowerCase() ? 'border-bordeaux-light/60' : ''}`}
                 autoComplete="off"
@@ -259,7 +269,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               <span className="text-gold mt-0.5 text-base leading-none">✉</span>
               <p className="text-xs text-cream/70 leading-relaxed">{t('checkout.contact_info_notice')}</p>
             </div>
-            <Field label={t('checkout.nationality')}>
+            <Field label={t('checkout.nationality')} required>
               <select
                 value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
                 className="input"
@@ -270,7 +280,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </Field>
             <Field label={t('checkout.service_date')} required>
               <input
-                type="date" required min={today} max={horizonDate}
+                type="date" min={today} max={horizonDate}
                 value={form.service_date}
                 onChange={(e) => updateField('service_date', e.target.value)}
                 className={`input ${isDateBlocked ? 'border-bordeaux-light/60' : ''}`}
@@ -425,13 +435,14 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="block text-sm text-cream/80 mb-1.5">
         {label} {required && <span className="text-gold">*</span>}
       </span>
       {children}
+      {hint && <p className="mt-1 text-xs text-cream/40">{hint}</p>}
     </label>
   );
 }

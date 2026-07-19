@@ -161,7 +161,7 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Dirección (ES)">
+        <Field label="Dirección (ES)" hint="Se muestra en el detalle público y en el voucher del pasajero">
           <input
             type="text" maxLength={300}
             value={form.address_es ?? ''}
@@ -207,7 +207,7 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
             className="input"
           />
         </Field>
-        <Field label="Orden de display">
+        <Field label="Orden de display" hint="Menor número aparece primero en el listado público">
           <input
             type="number"
             value={form.display_order}

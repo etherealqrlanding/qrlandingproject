@@ -74,7 +74,7 @@ export default function QuickSelect({
         <ListboxOptions
           transition
           modal={false}
-          className="absolute z-50 top-full left-0 mt-2 w-full max-h-72 overflow-auto rounded-lg border border-gold/25 bg-ink-soft py-1.5 shadow-2xl shadow-black/50 focus:outline-none transition duration-150 ease-out data-[closed]:opacity-0 data-[closed]:-translate-y-1"
+          className="absolute z-50 top-full left-0 mt-2 w-full max-h-96 overflow-auto rounded-lg border border-gold/25 bg-ink-soft py-1.5 shadow-2xl shadow-black/50 focus:outline-none transition duration-150 ease-out data-[closed]:opacity-0 data-[closed]:-translate-y-1"
         >
           {options.map((opt) => (
             <ListboxOption

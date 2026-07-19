@@ -66,25 +66,26 @@ export default function PaymentMethods({ variant = 'compact', className = '' }: 
   }
 
   return (
-    <div
-      className={`flex flex-wrap items-center justify-center gap-x-6 gap-y-3 rounded-full border border-white/10 bg-white/[0.03] px-6 py-3 text-sm text-cream/60 ${className}`}
-    >
-      <span className="inline-flex items-center gap-2">
-        <ShieldIcon className="h-5 w-5 text-gold" />
-        {t('payment_methods.secure_note')}
-      </span>
-      <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
-      <span className="inline-flex items-center gap-2">
-        <img src="/mercadopagolog.png" alt="" className="h-7 w-auto shrink-0" />
-        <b className="font-medium text-cream/80">Mercado Pago</b>
-        <span className="hidden sm:inline text-cream/40">· {t('payment_methods.mp_types_short')}</span>
-      </span>
-      <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
-      <span className="inline-flex items-center gap-2">
-        <PixIcon className="h-5 w-5 text-[#5fd9cb]" />
-        <b className="font-medium text-cream/80">PIX</b>
-        <span className="text-cream/40">({t('payment_methods.pix_soon')})</span>
-      </span>
+    <div className={className}>
+      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 rounded-full border border-white/10 bg-white/[0.03] px-6 py-3 text-sm text-cream/60">
+        <span className="inline-flex items-center gap-2">
+          <ShieldIcon className="h-5 w-5 text-gold" />
+          {t('payment_methods.secure_note')}
+        </span>
+        <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
+        <span className="inline-flex items-center gap-2">
+          <img src="/mercadopagolog.png" alt="" className="h-7 w-auto shrink-0" />
+          <b className="font-medium text-cream/80">Mercado Pago</b>
+          <span className="hidden sm:inline text-cream/40">· {t('payment_methods.mp_types_short')}</span>
+        </span>
+        <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
+        <span className="inline-flex items-center gap-2">
+          <PixIcon className="h-5 w-5 text-[#5fd9cb]" />
+          <b className="font-medium text-cream/80">PIX</b>
+          <span className="text-cream/40">({t('payment_methods.pix_soon')})</span>
+        </span>
+      </div>
+      <p className="mt-2 text-center text-xs text-cream/40">{t('payment_methods.currency_note')}</p>
     </div>
   );
 }

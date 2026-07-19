@@ -126,20 +126,32 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   const updateField = <K extends keyof typeof form>(field: K, value: typeof form[K]) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Validación manual en vez de la nativa del navegador (los popups por defecto no
+  // se pueden estilizar) — el form usa noValidate y este chequeo decide qué mensaje
+  // mostrar en el cartel de error ya existente, en el mismo orden en que aparecen los campos.
+  const validate = (): string | null => {
+    if (form.name.trim().length < 2) return 'Ingresá el nombre completo del pasajero.';
+    if (!form.email.trim()) return 'Ingresá el email del pasajero.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Ingresá un email válido.';
+    if (!form.nationality) return 'Seleccioná la nacionalidad del pasajero.';
     if (isDateBlocked) {
       if (selectedDateStatus === 'closed') {
-        setError(
-          selectedDay?.reason === 'cutoff'
-            ? 'El horario límite de reservas del día ya pasó.'
-            : selectedDay?.reason === 'not_operating_day'
-              ? 'El servicio no opera ese día de la semana.'
-              : 'La casa no opera esa fecha.',
-        );
-      } else {
-        setError('Sin cupos para esa fecha.');
+        return selectedDay?.reason === 'cutoff'
+          ? 'El horario límite de reservas del día ya pasó.'
+          : selectedDay?.reason === 'not_operating_day'
+            ? 'El servicio no opera ese día de la semana.'
+            : 'La casa no opera esa fecha.';
       }
+      return 'Sin cupos para esa fecha.';
+    }
+    return null;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError(null);
@@ -280,20 +292,20 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
           </p>
         )}
 
-        <form onSubmit={handleSubmit} className="p-7 space-y-5">
+        <form onSubmit={handleSubmit} noValidate className="p-7 space-y-5">
           {/* Datos del pasajero */}
           <p className="text-xs uppercase tracking-[0.2em] text-gold-soft">Datos del pasajero</p>
           <div className="grid sm:grid-cols-2 gap-4">
             <Field label="Nombre completo" required>
               <input
-                type="text" required minLength={2} maxLength={120}
+                type="text" maxLength={120}
                 value={form.name} onChange={(e) => updateField('name', e.target.value)}
                 className="input" placeholder="Nombre Apellido"
               />
             </Field>
             <Field label="Email" required>
               <input
-                type="email" required maxLength={160}
+                type="email" maxLength={160}
                 value={form.email} onChange={(e) => updateField('email', e.target.value)}
                 className="input" placeholder="pasajero@email.com"
               />
@@ -305,7 +317,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                 className="input" placeholder="+54 9 11 1234 5678"
               />
             </Field>
-            <Field label="DNI / Pasaporte">
+            <Field label="DNI / Pasaporte" hint="Opcional — algunas casas piden identificación en la puerta">
               <input
                 type="text" maxLength={40}
                 value={form.dni} onChange={(e) => updateField('dni', e.target.value)}
@@ -313,7 +325,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                 autoComplete="off"
               />
             </Field>
-            <Field label="Nacionalidad">
+            <Field label="Nacionalidad" required>
               <select
                 value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
                 className="input"
@@ -324,7 +336,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             </Field>
             <Field label="Fecha del servicio" required>
               <input
-                type="date" required min={today} max={horizonDate}
+                type="date" min={today} max={horizonDate}
                 value={form.service_date}
                 onChange={(e) => updateField('service_date', e.target.value)}
                 className={`input ${isDateBlocked ? 'border-bordeaux-light/60' : ''}`}
@@ -508,13 +520,14 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="block text-sm text-cream/80 mb-1.5">
         {label} {required && <span className="text-gold">*</span>}
       </span>
       {children}
+      {hint && <p className="mt-1 text-xs text-cream/40">{hint}</p>}
     </label>
   );
 }
