@@ -3,7 +3,9 @@ import { api } from '../../lib/api';
 import type { ProductDetail, ProductOption, ProductSummary } from '../../types/api';
 import { OptionInfoCard } from '../../components/seller/OptionInfoCard';
 import SellerBookingModal from '../../components/seller/SellerBookingModal';
+import ShareButton from '../../components/ShareButton';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
+import { buildShareUrl } from '../../lib/shareLinks';
 
 export default function SellerCatalog() {
   const { me } = useSellerAuth();
@@ -82,32 +84,42 @@ export default function SellerCatalog() {
                 }`}
               >
                 {/* Header del producto */}
-                <button
-                  type="button"
-                  onClick={() => handleToggle(product.slug)}
-                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gold/5 transition"
-                >
-                  {product.hero_image && (
-                    <img
-                      src={product.hero_image}
-                      alt=""
-                      className="h-14 w-14 rounded-lg object-cover shrink-0 border border-gold/10"
+                <div className="w-full flex items-center gap-2 px-5 py-4 hover:bg-gold/5 transition">
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(product.slug)}
+                    className="flex-1 min-w-0 flex items-center gap-4 text-left"
+                  >
+                    {product.hero_image && (
+                      <img
+                        src={product.hero_image}
+                        alt=""
+                        className="h-14 w-14 rounded-lg object-cover shrink-0 border border-gold/10"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-cream font-semibold">{product.name}</p>
+                      <p className="text-xs text-gold-soft">{product.venue_name}</p>
+                      {product.short_description_es && (
+                        <p className="text-xs text-cream/50 mt-0.5 line-clamp-1">{product.short_description_es}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {product.starting_price_usd != null && (
+                        <span className="text-gold text-sm font-display">desde USD {product.starting_price_usd}</span>
+                      )}
+                      <span className={`text-cream/40 text-sm transition-transform inline-block ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                    </div>
+                  </button>
+                  {me?.code && (
+                    <ShareButton
+                      url={buildShareUrl(`/shows/${product.slug}`, me.code)}
+                      title={product.name}
+                      waMessage={`Hola! Te paso el link para reservar la experiencia: ${buildShareUrl(`/shows/${product.slug}`, me.code)}`}
+                      label="Compartir"
                     />
                   )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-cream font-semibold">{product.name}</p>
-                    <p className="text-xs text-gold-soft">{product.venue_name}</p>
-                    {product.short_description_es && (
-                      <p className="text-xs text-cream/50 mt-0.5 line-clamp-1">{product.short_description_es}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {product.starting_price_usd != null && (
-                      <span className="text-gold text-sm font-display">desde USD {product.starting_price_usd}</span>
-                    )}
-                    <span className={`text-cream/40 text-sm transition-transform inline-block ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-                  </div>
-                </button>
+                </div>
 
                 {/* Detalle expandido */}
                 {isOpen && (

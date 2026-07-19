@@ -14,8 +14,8 @@ export default function Navbar() {
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm">
           <Link to="/shows" className="hover:text-gold transition">{t('nav.shows')}</Link>
-          <Link to="/nosotros" className="hover:text-gold transition">{t('nav.about')}</Link>
           <Link to="/preguntas-frecuentes" className="hover:text-gold transition">{t('nav.faq')}</Link>
+          <Link to="/nosotros" className="hover:text-gold transition">{t('nav.about')}</Link>
         </nav>
         <div className="flex items-center gap-4">
           <LanguageSwitcher />

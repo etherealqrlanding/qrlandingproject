@@ -7,9 +7,13 @@ import ProductCard from '../components/ProductCard';
 import HeroSlideshow from '../components/HeroSlideshow';
 import QuickSelect from '../components/QuickSelect';
 import PaymentMethods from '../components/PaymentMethods';
+import PlatformShowcase from '../components/PlatformShowcase';
+import ShareButton from '../components/ShareButton';
 import { api } from '../lib/api';
 import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
+import { getStoredRef } from '../lib/referral';
+import { buildShareUrl } from '../lib/shareLinks';
 import type { ProductDetail, ProductSummary } from '../types/api';
 
 function truncate(text: string, max: number): string {
@@ -71,7 +75,7 @@ export default function Home() {
       .then((rows) => {
         if (cancelled) return;
         setHouses(rows);
-        setFeatured(rows.slice(0, 6));
+        setFeatured(rows.slice(0, 9));
         setHeroImages(
           rows.map((r) => r.hero_image).filter((u): u is string => !!u).slice(0, 5),
         );
@@ -116,6 +120,14 @@ export default function Home() {
           <h1 className="mt-1.5 font-display text-3xl md:text-4xl leading-[1.05] text-cream max-w-3xl">
             {t('hero.title')}
           </h1>
+
+          <ShareButton
+            className="mt-4"
+            url={buildShareUrl('/', getStoredRef())}
+            title={t('hero.title')}
+            waMessage={t('share.site_message', { link: buildShareUrl('/', getStoredRef()) })}
+            label={`↗ ${t('share.button')}`}
+          />
 
           <div className="mt-5 w-full max-w-3xl rounded-2xl border-2 border-gold/40 bg-ink-soft/80 backdrop-blur-sm p-5 md:p-7 shadow-2xl shadow-gold/10">
             <p className="font-display text-xl md:text-2xl text-gold">
@@ -245,24 +257,31 @@ export default function Home() {
             to="/shows"
             className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-gold/40 px-4 py-2 text-sm text-gold hover:bg-gold/10 transition"
           >
-            {t('home.view_all')} →
+            {t('home.view_all')}{houses.length > 0 ? ` (${houses.length})` : ''} →
           </Link>
         </div>
 
         <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
           {featured.length === 0
-            ? [0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="aspect-[4/3] sm:aspect-[4/5] rounded-lg bg-ink-soft animate-pulse" />
+            ? Array.from({ length: 9 }, (_, i) => (
+                <div
+                  key={i}
+                  className={`aspect-[4/3] sm:aspect-[4/5] rounded-lg bg-ink-soft animate-pulse ${i === 8 ? 'hidden lg:block' : ''}`}
+                />
               ))
-            : featured.map((p) => <ProductCard key={p.id} product={p} />)}
+            : featured.map((p, i) => (
+                <ProductCard key={p.id} product={p} className={i === 8 ? 'hidden lg:block' : undefined} />
+              ))}
         </div>
 
         <div className="mt-12 flex justify-center">
           <Link to="/shows" className="btn-primary text-base px-8">
-            {t('home.view_all_cta')} →
+            {t('home.view_all_cta')}{houses.length > 0 ? ` (${houses.length})` : ''} →
           </Link>
         </div>
       </section>
+
+      <PlatformShowcase />
     </>
   );
 }

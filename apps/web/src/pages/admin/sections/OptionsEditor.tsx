@@ -281,7 +281,7 @@ function OptionFormFields({ option, onChange }: {
 
   return (
     <div className="space-y-4">
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Código interno" required hint="Ej: cena-show-vip, solo-show-promo">
           <input
             type="text" required maxLength={50} pattern="[a-z0-9-]{2,50}"
@@ -289,59 +289,32 @@ function OptionFormFields({ option, onChange }: {
             className="input font-mono text-sm"
           />
         </Field>
-        <Field label="Nombre (ES)" required>
+        <Field label="Nombre" required hint="El sitio traduce automáticamente al resto de los idiomas">
           <input
             type="text" required maxLength={160}
             value={option.name_es ?? ''} onChange={(e) => update('name_es', e.target.value)}
             className="input"
           />
         </Field>
-        <Field label="Nombre (EN)" required>
-          <input
-            type="text" required maxLength={160}
-            value={option.name_en ?? ''} onChange={(e) => update('name_en', e.target.value)}
-            className="input"
-          />
-        </Field>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Descripción (ES)" hint="Texto corto que resume este tier en el selector de checkout">
-          <textarea
-            rows={2} maxLength={500}
-            value={option.description_es ?? ''} onChange={(e) => update('description_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Descripción (EN)">
-          <textarea
-            rows={2} maxLength={500}
-            value={option.description_en ?? ''} onChange={(e) => update('description_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-      </div>
+      <Field label="Descripción" hint="Texto corto que resume este tier en el selector de checkout">
+        <textarea
+          rows={2} maxLength={500}
+          value={option.description_es ?? ''} onChange={(e) => update('description_es', e.target.value)}
+          className="input"
+        />
+      </Field>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Incluye (ES)" hint="Una línea por ítem">
-          <textarea
-            rows={5}
-            value={(option.includes_es ?? []).join('\n')}
-            onChange={(e) => update('includes_es', e.target.value.split('\n').map((l) => l.trim()).filter(Boolean))}
-            className="input"
-            placeholder="Mesa preferencial&#10;Menú a la carta&#10;Bebidas libres"
-          />
-        </Field>
-        <Field label="Incluye (EN)" hint="Una línea por ítem">
-          <textarea
-            rows={5}
-            value={(option.includes_en ?? []).join('\n')}
-            onChange={(e) => update('includes_en', e.target.value.split('\n').map((l) => l.trim()).filter(Boolean))}
-            className="input"
-            placeholder="Preferential table&#10;À la carte menu&#10;Free drinks"
-          />
-        </Field>
-      </div>
+      <Field label="Incluye" hint="Una línea por ítem">
+        <textarea
+          rows={5}
+          value={(option.includes_es ?? []).join('\n')}
+          onChange={(e) => update('includes_es', e.target.value.split('\n').map((l) => l.trim()).filter(Boolean))}
+          className="input"
+          placeholder="Mesa preferencial&#10;Menú a la carta&#10;Bebidas libres"
+        />
+      </Field>
 
       <div className="grid sm:grid-cols-3 gap-4">
         <Field label="Precio adulto (USD)" required hint="Lo que le cobramos al pasajero (distinto del neto, más abajo)">
@@ -482,46 +455,25 @@ function OptionFormFields({ option, onChange }: {
         </div>
       </Field>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Ventana de traslado (ES)" hint="Ej: 'Entre 19:30 y 20:00'">
+      <div className="grid sm:grid-cols-3 gap-4">
+        <Field label="Ventana de traslado" hint="Ej: 'Entre 19:30 y 20:00'">
           <input
             type="text" maxLength={200}
             value={option.pickup_window_es ?? ''} onChange={(e) => update('pickup_window_es', e.target.value)}
             className="input"
           />
         </Field>
-        <Field label="Ventana de traslado (EN)">
-          <input
-            type="text" maxLength={200}
-            value={option.pickup_window_en ?? ''} onChange={(e) => update('pickup_window_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Horario cena (ES)" hint="Ej: 'Cena desde 20:00'">
+        <Field label="Horario cena" hint="Ej: 'Cena desde 20:00'">
           <input
             type="text" maxLength={200}
             value={option.dinner_time_es ?? ''} onChange={(e) => update('dinner_time_es', e.target.value)}
             className="input"
           />
         </Field>
-        <Field label="Horario cena (EN)">
-          <input
-            type="text" maxLength={200}
-            value={option.dinner_time_en ?? ''} onChange={(e) => update('dinner_time_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Horario show (ES)" hint="Ej: 'Show desde 22:00'">
+        <Field label="Horario show" hint="Ej: 'Show desde 22:00'">
           <input
             type="text" maxLength={200}
             value={option.show_time_es ?? ''} onChange={(e) => update('show_time_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Horario show (EN)">
-          <input
-            type="text" maxLength={200}
-            value={option.show_time_en ?? ''} onChange={(e) => update('show_time_en', e.target.value)}
             className="input"
           />
         </Field>

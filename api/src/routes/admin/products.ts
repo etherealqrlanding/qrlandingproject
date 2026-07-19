@@ -108,7 +108,7 @@ adminProductsRouter.delete('/:id', async (req, res, next) => {
 const optionSchema = z.object({
   code: z.string().regex(/^[a-z0-9-]{2,50}$/),
   name_es: z.string().min(1).max(160),
-  name_en: z.string().min(1).max(160),
+  name_en: z.string().max(160).optional().nullable(),
   description_es: z.string().max(500).optional().nullable(),
   description_en: z.string().max(500).optional().nullable(),
   includes_es: z.array(z.string().max(300)).max(30).optional(),

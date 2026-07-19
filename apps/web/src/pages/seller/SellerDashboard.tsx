@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { sellerApi } from '../../lib/sellerApi';
+import ShareButton from '../../components/ShareButton';
+import { buildShareUrl } from '../../lib/shareLinks';
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -91,7 +93,8 @@ export default function SellerDashboard() {
   const earned = me.commission_earned_ars;
   const paid = me.commission_paid_ars;
   const netToSettle = me.net_pending_settlement_ars ?? 0;
-  const refLink = `${window.location.origin}/?ref=${encodeURIComponent(me.code)}`;
+  const refLink = buildShareUrl('/', me.code);
+  const showsLink = buildShareUrl('/shows', me.code);
 
   const handleDownloadQr = async () => {
     try {
@@ -163,12 +166,31 @@ export default function SellerDashboard() {
             {me.contact_email && <InfoRow label="Email">{me.contact_email}</InfoRow>}
             {me.contact_phone && <InfoRow label="Teléfono">{me.contact_phone}</InfoRow>}
 
-            {/* Link para compartir */}
-            <div className="pt-2 border-t border-gold/10">
-              <p className="text-xs text-cream/40 mb-1.5">Tu link de referido</p>
-              <div className="flex items-center gap-2 rounded-lg border border-gold/15 bg-ink/40 px-3 py-2 min-w-0 overflow-hidden">
-                <span className="text-xs text-cream/60 font-mono truncate min-w-0 flex-1">{refLink}</span>
-                <CopyButton text={refLink} label="Copiar" />
+            {/* Links para compartir */}
+            <div className="pt-2 border-t border-gold/10 space-y-3">
+              <div>
+                <p className="text-xs text-cream/40 mb-1.5">Tu link de referido</p>
+                <div className="flex items-center gap-2 rounded-lg border border-gold/15 bg-ink/40 px-3 py-2 min-w-0 overflow-hidden">
+                  <span className="text-xs text-cream/60 font-mono truncate min-w-0 flex-1">{refLink}</span>
+                  <ShareButton
+                    url={refLink}
+                    title="Tangos y Milongas Tickets"
+                    waMessage={`Hola! Te paso el link para reservar la experiencia: ${refLink}`}
+                    label="Compartir"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-cream/40 mb-1.5">Catálogo completo de shows</p>
+                <div className="flex items-center gap-2 rounded-lg border border-gold/15 bg-ink/40 px-3 py-2 min-w-0 overflow-hidden">
+                  <span className="text-xs text-cream/60 font-mono truncate min-w-0 flex-1">{showsLink}</span>
+                  <ShareButton
+                    url={showsLink}
+                    title="Shows de Tango"
+                    waMessage={`Hola! Mirá todos los shows de tango de Buenos Aires: ${showsLink}`}
+                    label="Compartir"
+                  />
+                </div>
               </div>
             </div>
           </div>

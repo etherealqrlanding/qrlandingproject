@@ -41,11 +41,12 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="text-xs uppercase tracking-widest text-cream/50">{label}</span>
       <div className="mt-1">{children}</div>
+      {hint && <p className="mt-1 text-xs text-cream/40">{hint}</p>}
     </label>
   );
 }
@@ -94,19 +95,11 @@ function AboutEditor() {
 
   return (
     <form onSubmit={save} className="space-y-5">
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Título (ES)">
-          <input className="input" value={form.title_es} onChange={(e) => setForm({ ...form, title_es: e.target.value })} />
-        </Field>
-        <Field label="Title (EN)">
-          <input className="input" value={form.title_en} onChange={(e) => setForm({ ...form, title_en: e.target.value })} />
-        </Field>
-      </div>
-      <Field label="Texto (ES) — separá párrafos con una línea en blanco">
-        <textarea className="input min-h-[200px]" value={form.body_es} onChange={(e) => setForm({ ...form, body_es: e.target.value })} />
+      <Field label="Título" hint="El sitio traduce automáticamente al resto de los idiomas">
+        <input className="input" value={form.title_es} onChange={(e) => setForm({ ...form, title_es: e.target.value })} />
       </Field>
-      <Field label="Text (EN)">
-        <textarea className="input min-h-[200px]" value={form.body_en} onChange={(e) => setForm({ ...form, body_en: e.target.value })} />
+      <Field label="Texto — separá párrafos con una línea en blanco">
+        <textarea className="input min-h-[200px]" value={form.body_es} onChange={(e) => setForm({ ...form, body_es: e.target.value })} />
       </Field>
 
       <ErrorMsg msg={error} />
@@ -185,18 +178,12 @@ function FaqEditor() {
               <button type="button" onClick={() => remove(i)} className="px-2 py-1 text-bordeaux-light hover:text-bordeaux" aria-label="Eliminar">✕</button>
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Pregunta (ES)">
+          <div className="space-y-3">
+            <Field label="Pregunta">
               <input className="input" value={it.q_es} onChange={(e) => update(i, { q_es: e.target.value })} />
             </Field>
-            <Field label="Question (EN)">
-              <input className="input" value={it.q_en} onChange={(e) => update(i, { q_en: e.target.value })} />
-            </Field>
-            <Field label="Respuesta (ES)">
+            <Field label="Respuesta">
               <textarea className="input min-h-[90px]" value={it.a_es} onChange={(e) => update(i, { a_es: e.target.value })} />
-            </Field>
-            <Field label="Answer (EN)">
-              <textarea className="input min-h-[90px]" value={it.a_en} onChange={(e) => update(i, { a_en: e.target.value })} />
             </Field>
           </div>
         </div>

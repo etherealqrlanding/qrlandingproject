@@ -32,14 +32,14 @@ export default function BottomNavPublic() {
           <span className="text-[10px] leading-none mt-0.5">Shows</span>
         </NavLink>
 
+        <NavLink to="/preguntas-frecuentes" className={tab}>
+          <span className="text-xl leading-none">?</span>
+          <span className="text-[10px] leading-none mt-0.5">{t('nav.faq_short')}</span>
+        </NavLink>
+
         <NavLink to="/nosotros" className={tab}>
           <span className="text-xl leading-none">✧</span>
           <span className="text-[10px] leading-none mt-0.5">{t('nav.about')}</span>
-        </NavLink>
-
-        <NavLink to="/preguntas-frecuentes" className={tab}>
-          <span className="text-xl leading-none">?</span>
-          <span className="text-[10px] leading-none mt-0.5">{t('nav.faq')}</span>
         </NavLink>
 
         <button

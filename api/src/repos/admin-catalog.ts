@@ -164,7 +164,7 @@ export async function adminHardDeleteProduct(
 export interface AdminOptionInput {
   code: string;
   name_es: string;
-  name_en: string;
+  name_en?: string | null;
   description_es?: string | null;
   description_en?: string | null;
   includes_es?: string[];
@@ -209,7 +209,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
      RETURNING id`,
     [
-      productId, input.code, input.name_es, input.name_en,
+      productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
       input.description_es ?? null, input.description_en ?? null,
       input.includes_es ?? [], input.includes_en ?? [],
       input.price_adult_usd, input.price_child_usd ?? null,

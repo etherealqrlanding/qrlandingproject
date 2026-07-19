@@ -387,8 +387,8 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                       : 'border-gold/20 text-cream/50 hover:border-gold/40'
                   }`}
                 >
-                  <span className="block font-medium">Mercado Pago</span>
-                  <span className="text-xs opacity-70">Tarjeta, transferencia</span>
+                  <span className="block font-medium">Tarjeta</span>
+                  <span className="text-xs opacity-70">Crédito, débito y más</span>
                 </button>
                 <button
                   type="button"

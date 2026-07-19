@@ -123,81 +123,41 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
         </Field>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Descripción corta (ES)" hint="Aparece en las cards del listado">
-          <textarea
-            rows={3} maxLength={500}
-            value={form.short_description_es ?? ''}
-            onChange={(e) => update('short_description_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Descripción corta (EN)">
-          <textarea
-            rows={3} maxLength={500}
-            value={form.short_description_en ?? ''}
-            onChange={(e) => update('short_description_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-      </div>
+      <Field label="Descripción corta (ES)" hint="Aparece en las cards del listado — el sitio traduce automáticamente al resto de los idiomas">
+        <textarea
+          rows={3} maxLength={500}
+          value={form.short_description_es ?? ''}
+          onChange={(e) => update('short_description_es', e.target.value)}
+          className="input"
+        />
+      </Field>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Descripción larga (ES)" hint="En la página de detalle">
-          <textarea
-            rows={6} maxLength={4000}
-            value={form.long_description_es ?? ''}
-            onChange={(e) => update('long_description_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Descripción larga (EN)">
-          <textarea
-            rows={6} maxLength={4000}
-            value={form.long_description_en ?? ''}
-            onChange={(e) => update('long_description_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-      </div>
+      <Field label="Descripción larga (ES)" hint="En la página de detalle">
+        <textarea
+          rows={6} maxLength={4000}
+          value={form.long_description_es ?? ''}
+          onChange={(e) => update('long_description_es', e.target.value)}
+          className="input"
+        />
+      </Field>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Dirección (ES)" hint="Se muestra en el detalle público y en el voucher del pasajero">
-          <input
-            type="text" maxLength={300}
-            value={form.address_es ?? ''}
-            onChange={(e) => update('address_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Dirección (EN)">
-          <input
-            type="text" maxLength={300}
-            value={form.address_en ?? ''}
-            onChange={(e) => update('address_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-      </div>
+      <Field label="Dirección" hint="Se muestra en el detalle público y en el voucher del pasajero">
+        <input
+          type="text" maxLength={300}
+          value={form.address_es ?? ''}
+          onChange={(e) => update('address_es', e.target.value)}
+          className="input"
+        />
+      </Field>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Resumen de horarios (ES)" hint="Texto libre — ej: 'Lun a Dom, traslado 19:30-20:00...'">
-          <textarea
-            rows={3} maxLength={800}
-            value={form.schedule_summary_es ?? ''}
-            onChange={(e) => update('schedule_summary_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Resumen de horarios (EN)">
-          <textarea
-            rows={3} maxLength={800}
-            value={form.schedule_summary_en ?? ''}
-            onChange={(e) => update('schedule_summary_en', e.target.value)}
-            className="input"
-          />
-        </Field>
-      </div>
+      <Field label="Resumen de horarios" hint="Texto libre — ej: 'Lun a Dom, traslado 19:30-20:00...'">
+        <textarea
+          rows={3} maxLength={800}
+          value={form.schedule_summary_es ?? ''}
+          onChange={(e) => update('schedule_summary_es', e.target.value)}
+          className="input"
+        />
+      </Field>
 
       <Field label="Video (YouTube)" hint="Pegá el link del video de YouTube de esta casa — se muestra en el detalle público">
         <input

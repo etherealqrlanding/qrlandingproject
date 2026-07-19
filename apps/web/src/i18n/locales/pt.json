@@ -4,6 +4,7 @@
     "shows": "Shows de Tango",
     "about": "Sobre nós",
     "faq": "Perguntas Frequentes",
+    "faq_short": "FAQ",
     "contact": "Contato",
     "book": "Reservar"
   },
@@ -66,11 +67,30 @@
     "view_all": "Ver todas",
     "view_all_cta": "Ver todas as casas"
   },
+  "platform": {
+    "eyebrow": "Reservar sem complicação",
+    "title": "A forma mais segura de viver o tango em Buenos Aires",
+    "subtitle": "Selecionamos as casas de tango mais emblemáticas da cidade e criamos uma plataforma de reservas para que você só precise se preocupar em aproveitar a noite.",
+    "benefits": [
+      { "title": "Operações 100% seguras", "desc": "Pagamentos protegidos com cartão e confirmação criptografada em cada reserva." },
+      { "title": "Disponibilidade em tempo real", "desc": "Vemos as vagas de cada casa na hora: o que aparece disponível, você pode reservar." },
+      { "title": "Confirmação automática", "desc": "Sem esperar resposta de ninguém: sua reserva fica pronta em segundos, 24 horas por dia." },
+      { "title": "O melhor do tango portenho", "desc": "As casas de tango mais emblemáticas de Buenos Aires, selecionadas em um só lugar." }
+    ],
+    "cta": "Reserve sua noite de tango"
+  },
   "shows": {
-    "title": "As 14 casas de tango de Buenos Aires",
+    "title": "As {{count}} casas de tango de Buenos Aires",
+    "title_fallback": "As casas de tango de Buenos Aires",
     "subtitle": "Cada casa com seu estilo, seu cardápio e sua própria personalidade. Encontre a que mais combina com você.",
     "empty": "Ainda não há shows publicados.",
     "error": "Não foi possível carregar o catálogo"
+  },
+  "share": {
+    "button": "Compartilhar",
+    "site_message": "Conheça o Tangos y Milongas Tickets: {{link}}",
+    "shows_message": "Veja todos os shows de tango de Buenos Aires: {{link}}",
+    "house_message": "Te mando o link desta experiência: {{link}}"
   },
   "product": {
     "from": "A partir de",
@@ -87,7 +107,7 @@
     "your_selection": "Sua escolha",
     "book_cta": "Reservar agora",
     "book_option": "Reservar esta opção",
-    "secure_payment": "Pagamento 100% seguro com Mercado Pago: cartão de crédito, débito ou saldo em conta. PIX em breve.",
+    "secure_payment": "Pagamento 100% seguro com cartão: crédito, débito ou saldo em conta. PIX em breve.",
     "back_to_list": "Voltar à lista",
     "error": "Não foi possível carregar este serviço",
     "currency_notice": "Os valores serão processados em pesos argentinos (ARS) e convertidos pela taxa de câmbio que o operador determinar.",
@@ -118,12 +138,12 @@
     "charged_in_ars": "A cobrança é processada em pesos argentinos (ARS) conforme a taxa de câmbio atual.",
     "usd_ref": "≈ USD {{amount}} pela taxa de câmbio de referência",
     "dollar_account_notice": "Se você pagar com uma conta em dólares, o valor no extrato do seu banco pode variar conforme a taxa de câmbio aplicada pela sua instituição no momento da operação.",
-    "pay_with_mp": "Pagar com Mercado Pago",
+    "pay_with_mp": "Pagar com Cartão",
     "pay_with_seller": "Pagar ao vendedor (dinheiro)",
     "confirm_booking": "Confirmar reserva",
     "processing": "Processando...",
     "cash_note": "O vendedor coordenará o pagamento no momento do serviço. A reserva fica pendente de confirmação.",
-    "mp_redirect_note": "Levamos você ao ambiente seguro do Mercado Pago. Aceitamos cartões, transferência e dinheiro.",
+    "mp_redirect_note": "Levamos você ao ambiente de pagamento seguro. Aceitamos cartões, transferência e dinheiro.",
     "checking_availability": "Verificando disponibilidade...",
     "date_full": "Sem vagas para esta data. Escolha outro dia.",
     "date_closed": "A casa não opera nessa data. Escolha outro dia.",
@@ -163,8 +183,9 @@
     "currency_note": "Os preços são exibidos em USD como referência — a cobrança é processada em pesos argentinos (ARS)",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",
-    "mp_wallet": "Saldo em conta Mercado Pago",
+    "mp_wallet": "Saldo em conta",
     "mp_types_short": "Crédito, débito e saldo em conta",
+    "card_label": "Cartão",
     "pix_soon": "Em breve"
   },
   "categories": {
@@ -192,7 +213,7 @@
     "steps_title": "O que você pode fazer?",
     "step1": "Explore shows de tango em Buenos Aires",
     "step2": "Escolha data, quantidades e sua experiência",
-    "step3": "Pague com segurança pelo Mercado Pago",
+    "step3": "Pague com segurança com cartão",
     "cta": "Explorar experiências →",
     "kind": {
       "uber": "Motorista / Translados",

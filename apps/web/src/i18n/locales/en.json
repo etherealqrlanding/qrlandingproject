@@ -4,6 +4,7 @@
     "shows": "Tango Shows",
     "about": "About",
     "faq": "FAQ",
+    "faq_short": "FAQ",
     "contact": "Contact",
     "book": "Book now"
   },
@@ -66,11 +67,30 @@
     "view_all": "View all",
     "view_all_cta": "View all houses"
   },
+  "platform": {
+    "eyebrow": "Booking made simple",
+    "title": "The safest way to experience tango in Buenos Aires",
+    "subtitle": "We curate the most iconic tango houses in the city and built a booking platform so all you have to worry about is enjoying the night.",
+    "benefits": [
+      { "title": "100% secure operations", "desc": "Secure card payments, with encrypted confirmation on every booking." },
+      { "title": "Real-time availability", "desc": "We show each house's spots instantly — what you see available, you can book." },
+      { "title": "Automatic confirmation", "desc": "No waiting on anyone: your booking is ready in seconds, 24/7." },
+      { "title": "The best of Buenos Aires tango", "desc": "The city's most iconic tango houses, curated in one place." }
+    ],
+    "cta": "Book your tango night"
+  },
   "shows": {
-    "title": "The 14 tango houses of Buenos Aires",
+    "title": "The {{count}} tango houses of Buenos Aires",
+    "title_fallback": "The tango houses of Buenos Aires",
     "subtitle": "Each house with its own style, menu and personality. Find the one that fits you best.",
     "empty": "No shows published yet.",
     "error": "We couldn't load the catalog"
+  },
+  "share": {
+    "button": "Share",
+    "site_message": "Check out Tangos y Milongas Tickets: {{link}}",
+    "shows_message": "Check out all the tango shows in Buenos Aires: {{link}}",
+    "house_message": "Here's the link to this experience: {{link}}"
   },
   "product": {
     "from": "From",
@@ -87,7 +107,7 @@
     "your_selection": "Your selection",
     "book_cta": "Book now",
     "book_option": "Book this option",
-    "secure_payment": "100% secure payment with Mercado Pago: credit card, debit or account balance. PIX coming soon.",
+    "secure_payment": "100% secure payment by card: credit, debit or account balance. PIX coming soon.",
     "back_to_list": "Back to list",
     "error": "We couldn't load this experience",
     "currency_notice": "Charges will be processed in Argentine Pesos (ARS) at the exchange rate determined by the operator.",
@@ -118,12 +138,12 @@
     "charged_in_ars": "Payment is processed in Argentine Pesos (ARS) at the current exchange rate.",
     "usd_ref": "≈ USD {{amount}} at reference exchange rate",
     "dollar_account_notice": "If you pay from a dollar-denominated account, the amount shown in your bank statement may vary based on the exchange rate applied by your institution at the time of the transaction.",
-    "pay_with_mp": "Pay with Mercado Pago",
+    "pay_with_mp": "Pay with Card",
     "pay_with_seller": "Pay to seller (cash)",
     "confirm_booking": "Confirm booking",
     "processing": "Processing...",
     "cash_note": "The seller will coordinate payment at the time of the service. Booking is pending confirmation.",
-    "mp_redirect_note": "We take you to Mercado Pago's secure checkout. Cards, transfers and cash accepted.",
+    "mp_redirect_note": "We take you to our secure payment checkout. Cards, transfers and cash accepted.",
     "checking_availability": "Checking availability...",
     "date_full": "No seats left for this date. Pick another day.",
     "date_closed": "The venue does not operate on that date. Pick another day.",
@@ -163,8 +183,9 @@
     "currency_note": "Prices are shown in USD as a reference — charges are processed in Argentine pesos (ARS)",
     "mp_credit": "Credit",
     "mp_debit": "Debit",
-    "mp_wallet": "Mercado Pago balance",
+    "mp_wallet": "Account balance",
     "mp_types_short": "Credit, debit and account balance",
+    "card_label": "Card",
     "pix_soon": "Coming soon"
   },
   "categories": {
@@ -192,7 +213,7 @@
     "steps_title": "What can you do?",
     "step1": "Explore tango shows in Buenos Aires",
     "step2": "Choose date, guests and your experience",
-    "step3": "Pay securely with Mercado Pago",
+    "step3": "Pay securely with card",
     "cta": "Explore experiences →",
     "kind": {
       "uber": "Driver / Transfers",

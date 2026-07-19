@@ -11,10 +11,12 @@ interface Props {
   highlighted?: boolean;
   /** Se dispara al hacer click, antes de navegar — para que el listado recuerde esta card. */
   onNavigate?: () => void;
+  /** Clases extra para el link raíz (ej. ocultar la card en ciertos breakpoints). */
+  className?: string;
 }
 
 const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
-  { product, highlighted, onNavigate },
+  { product, highlighted, onNavigate, className },
   ref,
 ) {
   const { t, i18n } = useTranslation();
@@ -33,7 +35,7 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
         highlighted
           ? 'border-gold ring-2 ring-gold ring-offset-2 ring-offset-ink shadow-[0_0_28px_rgba(200,168,90,0.35)]'
           : 'border-gold/10 hover:border-gold/40'
-      }`}
+      } ${className ?? ''}`}
     >
       {/* Foto: tira arriba en mobile (flujo normal, no se corta nada del texto), overlay completo desde sm+ */}
       <div className="relative aspect-[4/3] sm:absolute sm:inset-0 sm:aspect-auto">

@@ -5,9 +5,11 @@ import { api, type SellerPublicInfo } from '../lib/api';
 import type { ProductDetail, ProductOption } from '../types/api';
 import { localized, localizedArray } from '../lib/i18nFields';
 import { getStoredRef, clearRef } from '../lib/referral';
+import { buildShareUrl } from '../lib/shareLinks';
 import { ApiError } from '../lib/api';
 import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
+import ShareButton from '../components/ShareButton';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
 // Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
@@ -33,6 +35,14 @@ const PixIcon = (
   <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0" aria-hidden>
     <path d="M10 2L18 10L10 18L2 10Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
     <circle cx="10" cy="10" r="2" fill="currentColor" />
+  </svg>
+);
+
+const CreditCardIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-5 w-5 shrink-0" aria-hidden>
+    <rect x="2" y="5" width="16" height="11" rx="1.8" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M2 8.5H18" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M4.5 13H8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 );
 
@@ -129,11 +139,20 @@ export default function ProductPage() {
         ← {t('product.back_to_list')}
       </Link>
 
-      <header className="mt-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">{product.venue_name}</p>
-        <h1 className="mt-2 font-display text-5xl md:text-6xl text-cream leading-[1.05]">
-          {product.name}
-        </h1>
+      <header className="mt-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">{product.venue_name}</p>
+          <h1 className="mt-2 font-display text-5xl md:text-6xl text-cream leading-[1.05]">
+            {product.name}
+          </h1>
+        </div>
+        <ShareButton
+          className="mt-1"
+          url={buildShareUrl(`/shows/${product.slug}`, getStoredRef())}
+          title={product.name}
+          waMessage={t('share.house_message', { link: buildShareUrl(`/shows/${product.slug}`, getStoredRef()) })}
+          label={`↗ ${t('share.button')}`}
+        />
       </header>
 
       <div className="mt-8">
@@ -378,7 +397,7 @@ function BookingSummary({
             onClick={() => onBook('mercadopago')}
             className="btn-primary w-full gap-2"
           >
-            <img src="/mercadopagolog.png" alt="" className="h-5 w-5 shrink-0" />
+            {CreditCardIcon}
             {t('checkout.pay_with_mp')}
           </button>
           <button
@@ -407,7 +426,7 @@ function BookingSummary({
             onClick={() => onBook('mercadopago')}
             className="btn-primary w-full mt-4 gap-2"
           >
-            <img src="/mercadopagolog.png" alt="" className="h-5 w-5 shrink-0" />
+            {CreditCardIcon}
             {t('product.book_cta')}
           </button>
           <button

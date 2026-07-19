@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import type { ProductSummary } from '../types/api';
 import ProductCard from '../components/ProductCard';
+import ShareButton from '../components/ShareButton';
+import { getStoredRef } from '../lib/referral';
+import { buildShareUrl } from '../lib/shareLinks';
 
 // Recuerda la última casa que se abrió desde este listado (una sola lectura, se
 // consume al volver). App.tsx resetea el scroll a top en cada cambio de ruta, así
@@ -41,15 +44,27 @@ export default function ShowsList() {
 
   return (
     <section className="container-narrow py-16">
-      <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
-        {t('categories.shows')}
-      </p>
-      <h1 className="mt-3 font-display text-5xl text-cream">
-        {t('shows.title')}
-      </h1>
-      <p className="mt-3 max-w-xl text-cream/70">
-        {t('shows.subtitle')}
-      </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
+            {t('categories.shows')}
+          </p>
+          <h1 className="mt-3 font-display text-5xl text-cream">
+            {products && products.length > 0
+              ? t('shows.title', { count: products.length })
+              : t('shows.title_fallback')}
+          </h1>
+          <p className="mt-3 max-w-xl text-cream/70">
+            {t('shows.subtitle')}
+          </p>
+        </div>
+        <ShareButton
+          url={buildShareUrl('/shows', getStoredRef())}
+          title={t('shows.title')}
+          waMessage={t('share.shows_message', { link: buildShareUrl('/shows', getStoredRef()) })}
+          label={`↗ ${t('share.button')}`}
+        />
+      </div>
 
       {error && (
         <div className="mt-8 rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-4 text-sm text-cream/80">
