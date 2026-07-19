@@ -1,6 +1,10 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+// Bandera del país de referencia de cada idioma (no una bandera "del idioma" en
+// abstracto — ES→Argentina, porque es el mercado principal del sitio).
+const LANG_FLAG: Record<string, string> = { es: '🇦🇷', en: '🇺🇸', pt: '🇧🇷' };
+
 export default function BottomNavPublic() {
   const { t, i18n } = useTranslation();
   const order = ['es', 'en', 'pt'];
@@ -43,7 +47,7 @@ export default function BottomNavPublic() {
           className="flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-2 text-cream/40 transition-colors active:text-cream/60"
           aria-label="Cambiar idioma"
         >
-          <span className="text-lg leading-none">🌐</span>
+          <span className="text-lg leading-none">{LANG_FLAG[lang] ?? '🌐'}</span>
           <span className="text-[10px] leading-none mt-0.5 uppercase tracking-widest text-gold">
             {lang.toUpperCase()}
           </span>
