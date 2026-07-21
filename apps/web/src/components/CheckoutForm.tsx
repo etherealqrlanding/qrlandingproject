@@ -13,14 +13,32 @@ interface Props {
   option: ProductOption;
   onClose: () => void;
   initialPaymentMethod?: 'mercadopago' | 'cash';
+  // El vendedor referido tiene cobro en efectivo habilitado — muestra el botón
+  // "Al vendedor" en el selector. Si es false, solo quedan tarjeta y PIX (próx.).
+  showCash: boolean;
 }
+
+const PixIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0" aria-hidden>
+    <path d="M10 2L18 10L10 18L2 10Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    <circle cx="10" cy="10" r="2" fill="currentColor" />
+  </svg>
+);
+
+const CreditCardIcon = (
+  <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0" aria-hidden>
+    <rect x="2" y="5" width="16" height="11" rx="1.8" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M2 8.5H18" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M4.5 13H8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+);
 
 const NATIONALITIES = [
   'Argentina', 'Brasil', 'Estados Unidos', 'Reino Unido', 'España',
   'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
 ];
 
-export default function CheckoutForm({ product, option, onClose, initialPaymentMethod }: Props) {
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
@@ -33,8 +51,6 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
-  // Si viene pre-seleccionado desde la página del producto, no mostramos el selector
-  const showMethodSelector = !initialPaymentMethod && Boolean(storedRef);
 
   const today = new Date().toISOString().slice(0, 10);
   const horizonDate = useMemo(() => {
@@ -373,23 +389,34 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             />
           )}
 
-          {/* Selector de método de pago — solo cuando no viene pre-seleccionado */}
-          {showMethodSelector && (
-            <div className="rounded-lg border border-gold/15 bg-ink/30 p-4 space-y-2">
-              <p className="text-xs uppercase tracking-widest text-gold-soft">Forma de pago</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('mercadopago')}
-                  className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
-                    paymentMethod === 'mercadopago'
-                      ? 'border-gold bg-gold/10 text-cream'
-                      : 'border-gold/20 text-cream/50 hover:border-gold/40'
-                  }`}
-                >
-                  <span className="block font-medium">Tarjeta</span>
-                  <span className="text-xs opacity-70">Crédito, débito y más</span>
-                </button>
+          {/* Selector de método de pago — siempre visible, sin importar desde dónde se
+              abrió el formulario (tier card o resumen), para que quien no vio el resumen
+              (típico en mobile, si no bajó hasta el final) igual pueda elegir acá. */}
+          <div className="rounded-lg border border-gold/15 bg-ink/30 p-4 space-y-2">
+            <p className="text-xs uppercase tracking-widest text-gold-soft">{t('checkout.payment_method')}</p>
+            <div className={`grid gap-2 ${showCash ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('mercadopago')}
+                className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                  paymentMethod === 'mercadopago'
+                    ? 'border-gold bg-gold/10 text-cream'
+                    : 'border-gold/20 text-cream/50 hover:border-gold/40'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 font-medium">{CreditCardIcon}{t('payment_methods.card_label')}</span>
+                <span className="text-xs opacity-70">{t('payment_methods.mp_types_short')}</span>
+              </button>
+              <button
+                type="button"
+                disabled
+                title={t('payment_methods.pix_soon')}
+                className="rounded-lg border border-[#32BCAD]/25 bg-[#32BCAD]/5 px-3 py-2.5 text-sm text-left text-cream/40 cursor-not-allowed"
+              >
+                <span className="flex items-center gap-1.5 font-medium">{PixIcon}PIX</span>
+                <span className="text-xs opacity-70">{t('payment_methods.pix_soon')}</span>
+              </button>
+              {showCash && (
                 <button
                   type="button"
                   onClick={() => setPaymentMethod('cash')}
@@ -399,15 +426,15 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                       : 'border-gold/20 text-cream/50 hover:border-gold/40'
                   }`}
                 >
-                  <span className="block font-medium">Al vendedor</span>
-                  <span className="text-xs opacity-70">Efectivo</span>
+                  <span className="block font-medium">{t('payment_methods.cash_label')}</span>
+                  <span className="text-xs opacity-70">{t('payment_methods.cash_short')}</span>
                 </button>
-              </div>
-              {paymentMethod === 'cash' && (
-                <p className="text-xs text-cream/50 pt-1">{t('checkout.cash_note')}</p>
               )}
             </div>
-          )}
+            {paymentMethod === 'cash' && showCash && (
+              <p className="text-xs text-cream/50 pt-1">{t('checkout.cash_note')}</p>
+            )}
+          </div>
 
           {error && (
             <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90">

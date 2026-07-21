@@ -138,6 +138,7 @@
     "charged_in_ars": "A cobrança é processada em pesos argentinos (ARS) conforme a taxa de câmbio atual.",
     "usd_ref": "≈ USD {{amount}} pela taxa de câmbio de referência",
     "dollar_account_notice": "Se você pagar com uma conta em dólares, o valor no extrato do seu banco pode variar conforme a taxa de câmbio aplicada pela sua instituição no momento da operação.",
+    "payment_method": "Forma de pagamento",
     "pay_with_mp": "Pagar com Cartão",
     "pay_with_seller": "Pagar ao vendedor (dinheiro)",
     "confirm_booking": "Confirmar reserva",
@@ -186,6 +187,8 @@
     "mp_wallet": "Saldo em conta",
     "mp_types_short": "Crédito, débito e saldo em conta",
     "card_label": "Cartão",
+    "cash_label": "Ao vendedor",
+    "cash_short": "Dinheiro",
     "pix_soon": "Em breve"
   },
   "categories": {

@@ -138,6 +138,7 @@
     "charged_in_ars": "Payment is processed in Argentine Pesos (ARS) at the current exchange rate.",
     "usd_ref": "≈ USD {{amount}} at reference exchange rate",
     "dollar_account_notice": "If you pay from a dollar-denominated account, the amount shown in your bank statement may vary based on the exchange rate applied by your institution at the time of the transaction.",
+    "payment_method": "Payment method",
     "pay_with_mp": "Pay with Card",
     "pay_with_seller": "Pay to seller (cash)",
     "confirm_booking": "Confirm booking",
@@ -186,6 +187,8 @@
     "mp_wallet": "Account balance",
     "mp_types_short": "Credit, debit and account balance",
     "card_label": "Card",
+    "cash_label": "To the seller",
+    "cash_short": "Cash",
     "pix_soon": "Coming soon"
   },
   "categories": {

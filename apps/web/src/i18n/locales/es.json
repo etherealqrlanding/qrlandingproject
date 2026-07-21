@@ -138,6 +138,7 @@
     "charged_in_ars": "El cobro se procesa en pesos argentinos (ARS) según tipo de cambio actual.",
     "usd_ref": "≈ USD {{amount}} al tipo de cambio de referencia",
     "dollar_account_notice": "Si abonás con una cuenta en dólares, el importe en el resumen de tu banco puede variar según el tipo de cambio aplicado por tu entidad al momento de la operación.",
+    "payment_method": "Forma de pago",
     "pay_with_mp": "Pagar con Tarjeta",
     "pay_with_seller": "Pagar al vendedor (efectivo)",
     "confirm_booking": "Confirmar reserva",
@@ -186,6 +187,8 @@
     "mp_wallet": "Dinero en cuenta",
     "mp_types_short": "Crédito, débito y dinero en cuenta",
     "card_label": "Tarjeta",
+    "cash_label": "Al vendedor",
+    "cash_short": "Efectivo",
     "pix_soon": "Próximamente"
   },
   "categories": {

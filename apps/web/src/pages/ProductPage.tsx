@@ -261,6 +261,7 @@ export default function ProductPage() {
           option={selectedOption}
           onClose={() => setCheckoutOpen(false)}
           initialPaymentMethod={checkoutPaymentMethod}
+          showCash={sellerInfo?.is_permanent === true}
         />
       )}
     </article>
