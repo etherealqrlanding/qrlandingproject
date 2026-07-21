@@ -69,11 +69,24 @@ export interface OrderStatus {
   total_ars: number;
   customer_email: string;
   customer_name: string;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
+  // Solo presentes en órdenes de PIX (para la página de pago).
+  pix_qrcode?: string | null;
+  pix_expires_at?: string | null;
+  pix_fiat_amount_brl?: number | null;
 }
 
 export interface CashCheckoutResponse {
   order_public_id: string;
+  total_usd: number;
+}
+
+export interface PixCheckoutResponse {
+  order_public_id: string;
+  nautt_order_uuid: string;
+  pix_qrcode: string;
+  pix_expires_at: string | null;
+  fiat_brl: number;
   total_usd: number;
 }
 
@@ -147,6 +160,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    createPixOrder: (input: CheckoutInput) =>
+      request<PixCheckoutResponse>('/api/checkout/pix', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    refreshPix: (publicId: string) =>
+      request<PixCheckoutResponse>(
+        `/api/checkout/orders/${encodeURIComponent(publicId)}/pix-refresh`,
+        { method: 'POST' },
+      ),
     getOrder: (publicId: string) =>
       request<OrderStatus>(`/api/checkout/orders/${encodeURIComponent(publicId)}`),
     syncOrder: (publicId: string) =>

@@ -12,9 +12,9 @@ interface Props {
   product: ProductDetail;
   option: ProductOption;
   onClose: () => void;
-  initialPaymentMethod?: 'mercadopago' | 'cash';
+  initialPaymentMethod?: 'mercadopago' | 'cash' | 'pix';
   // El vendedor referido tiene cobro en efectivo habilitado — muestra el botón
-  // "Al vendedor" en el selector. Si es false, solo quedan tarjeta y PIX (próx.).
+  // "Al vendedor" en el selector. Si es false, solo quedan tarjeta y PIX.
   showCash: boolean;
 }
 
@@ -45,7 +45,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const storedRef = getStoredRef();
-  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash'>(initialPaymentMethod ?? 'mercadopago');
+  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(initialPaymentMethod ?? 'mercadopago');
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
@@ -146,6 +146,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const submitLabel = (() => {
     if (isDateBlocked) return t('checkout.choose_another_date');
     if (paymentMethod === 'cash') return t('checkout.confirm_booking');
+    if (paymentMethod === 'pix') return t('checkout.pay_with_pix');
     return t('checkout.pay_with_mp');
   })();
 
@@ -195,6 +196,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
       if (paymentMethod === 'cash') {
         const response = await api.checkout.createCashOrder(checkoutInput);
         globalThis.location.href = `/checkout/cash?order=${encodeURIComponent(response.order_public_id)}`;
+      } else if (paymentMethod === 'pix') {
+        const response = await api.checkout.createPixOrder(checkoutInput);
+        globalThis.location.href = `/checkout/pix?order=${encodeURIComponent(response.order_public_id)}`;
       } else {
         const response = await api.checkout.createPreference(checkoutInput);
         globalThis.location.href = response.init_point;
@@ -409,12 +413,15 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               </button>
               <button
                 type="button"
-                disabled
-                title={t('payment_methods.pix_soon')}
-                className="rounded-lg border border-[#32BCAD]/25 bg-[#32BCAD]/5 px-3 py-2.5 text-sm text-left text-cream/40 cursor-not-allowed"
+                onClick={() => setPaymentMethod('pix')}
+                className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                  paymentMethod === 'pix'
+                    ? 'border-[#32BCAD] bg-[#32BCAD]/10 text-cream'
+                    : 'border-[#32BCAD]/25 text-cream/50 hover:border-[#32BCAD]/50'
+                }`}
               >
                 <span className="flex items-center gap-1.5 font-medium">{PixIcon}PIX</span>
-                <span className="text-xs opacity-70">{t('payment_methods.pix_soon')}</span>
+                <span className="text-xs opacity-70">{t('payment_methods.pix_short')}</span>
               </button>
               {showCash && (
                 <button
@@ -433,6 +440,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </div>
             {paymentMethod === 'cash' && showCash && (
               <p className="text-xs text-cream/50 pt-1">{t('checkout.cash_note')}</p>
+            )}
+            {paymentMethod === 'pix' && (
+              <p className="text-xs text-cream/50 pt-1">{t('checkout.pix_note')}</p>
             )}
           </div>
 

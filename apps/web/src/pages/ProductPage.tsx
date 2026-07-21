@@ -57,7 +57,7 @@ export default function ProductPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'mercadopago' | 'cash'>('mercadopago');
+  const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>('mercadopago');
   const [sellerInfo, setSellerInfo] = useState<SellerPublicInfo | null>(null);
 
   useEffect(() => {
@@ -362,7 +362,7 @@ function BookingSummary({
   product: ProductDetail;
   option: ProductOption | null;
   sellerInfo: SellerPublicInfo | null;
-  onBook: (method: 'mercadopago' | 'cash') => void;
+  onBook: (method: 'mercadopago' | 'cash' | 'pix') => void;
 }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
@@ -420,13 +420,11 @@ function BookingSummary({
           </button>
           <button
             type="button"
-            disabled
-            title={t('payment_methods.pix_soon')}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/25 bg-[#32BCAD]/5 px-6 py-3 text-sm font-medium text-cream/40 cursor-not-allowed"
+            onClick={() => onBook('pix')}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-3 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
           >
             {PixIcon}
-            PIX
-            <span className="text-[10px] uppercase tracking-wide text-cream/30">({t('payment_methods.pix_soon')})</span>
+            {t('checkout.pay_with_pix')}
           </button>
           <button
             type="button"
@@ -449,13 +447,11 @@ function BookingSummary({
           </button>
           <button
             type="button"
-            disabled
-            title={t('payment_methods.pix_soon')}
-            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/25 bg-[#32BCAD]/5 px-6 py-3 text-sm font-medium text-cream/40 cursor-not-allowed"
+            onClick={() => onBook('pix')}
+            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-3 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
           >
             {PixIcon}
-            PIX
-            <span className="text-[10px] uppercase tracking-wide text-cream/30">({t('payment_methods.pix_soon')})</span>
+            {t('checkout.pay_with_pix')}
           </button>
           <p className="mt-2 text-xs text-cream/40 text-center">{t('product.secure_payment')}</p>
         </>

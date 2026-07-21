@@ -46,7 +46,8 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
 
   // ── Pantalla de éxito: MP (avisamos que el email ya salió) o efectivo ────
   if (result) {
-    const isMp = result.payment_method === 'mercadopago';
+    // MP y PIX comparten pantalla: en ambos el pasajero recibe el link de pago por email.
+    const isOnline = result.payment_method !== 'cash';
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm">
@@ -57,15 +58,17 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             </svg>
           </div>
 
-          {isMp ? (
+          {isOnline ? (
             <>
               <h2 className="font-display text-2xl text-cream mb-2">¡Reserva creada!</h2>
               <p className="text-sm text-cream/60 mb-1">
                 Ref. <span className="font-mono text-gold-soft">{result.order_public_id.slice(0, 8).toUpperCase()}</span>
               </p>
               <p className="text-sm text-cream/70 mb-6">
-                Le enviamos el link de pago al pasajero para que pague con su propia cuenta o tarjeta.
-                La reserva queda pendiente hasta que complete el pago. Si no le llega, que se contacte con nosotros.
+                {result.payment_method === 'pix'
+                  ? 'Le enviamos al pasajero por email el link para pagar con PIX (en reales, con QR o clave copia e cola).'
+                  : 'Le enviamos el link de pago al pasajero para que pague con su propia cuenta o tarjeta.'}
+                {' '}La reserva queda pendiente hasta que complete el pago. Si no le llega, que se contacte con nosotros.
               </p>
 
               <div className="flex gap-3">
@@ -142,7 +145,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
               allowCash={isPermanent}
               submitting={submitting}
               externalError={error}
-              submitLabels={{ cash: 'Confirmar reserva manual', mercadopago: 'Ir a Mercado Pago' }}
+              submitLabels={{ cash: 'Confirmar reserva manual', mercadopago: 'Enviar link de Mercado Pago', pix: 'Enviar link de PIX' }}
               onValidSubmit={handleValidSubmit}
               contextBanner={(
                 <div className="rounded-lg border border-gold/20 bg-gold/5 p-3 md:p-4 flex gap-3">

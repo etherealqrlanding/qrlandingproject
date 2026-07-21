@@ -4,8 +4,9 @@ import type { PoolClient } from 'pg';
 import { pool } from '../../db.js';
 import { RouteValidationError } from '../../errors.js';
 import { refundPayment, createPreference } from '../../services/mercadopago.js';
+import { createPixCharge } from '../../services/nautt.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendPaymentLinkEmail } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId } from '../../repos/orders.js';
+import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId, setOrderPixCharge } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -50,7 +51,7 @@ const adminCreateOrderSchema = z.object({
     nationality: z.string().min(1, 'La nacionalidad es obligatoria').max(80),
     dni: z.string().max(40).optional().nullable(),
   }),
-  payment_method: z.enum(['mercadopago', 'cash']),
+  payment_method: z.enum(['mercadopago', 'cash', 'pix']),
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
@@ -233,6 +234,39 @@ adminOrdersRouter.post('/', async (req, res, next) => {
           seller: { id: seller.id, code: seller.code, name: seller.name },
         },
       });
+    }
+
+    // ── PIX (Nautt) ───────────────────────────────────────
+    if (input.payment_method === 'pix') {
+      try {
+        const charge = await createPixCharge({
+          amountUsd: subtotalUsd,
+          orderRef: order.public_id,
+          description: `${option.name_es} — ${option.product_name}`,
+        });
+        await setOrderPixCharge(order.id, charge);
+        await logPaymentEvent(order.id, 'pix_charge_created_by_admin', charge.nauttOrderUuid, { ...eventPayload, fiat_brl: charge.fiatAmountBrl });
+        const pixUrl = `${config.WEB_ORIGIN}/checkout/pix?order=${order.public_id}`;
+        sendPaymentLinkEmail(order.id, pixUrl).catch((err) =>
+          console.error('[email] sendPaymentLinkEmail (PIX) failed for admin-created order', order.id, err),
+        );
+        createOrderCreatedByAdminNotification({
+          sellerId: seller.id, orderId: order.id, orderPublicId: order.public_id,
+          paymentMethod: 'pix', customerName: input.customer.name,
+          optionName: option.name_es, serviceDate: input.service_date, totalArs,
+        }).catch((err) => console.error('[notif] createOrderCreatedByAdminNotification failed', order.id, err));
+
+        return res.status(201).json({
+          data: {
+            order_public_id: order.public_id, payment_method: 'pix',
+            total_usd: subtotalUsd, total_ars: totalArs,
+            seller: { id: seller.id, code: seller.code, name: seller.name },
+          },
+        });
+      } catch (err) {
+        await logPaymentEvent(order.id, 'pix_charge_failed', null, { message: (err as Error).message }).catch(() => {});
+        return res.status(502).json({ error: 'No se pudo generar el cobro con PIX. Probá con otro medio de pago.' });
+      }
     }
 
     const pref = await createPreference({

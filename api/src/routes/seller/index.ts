@@ -15,8 +15,9 @@ import { createCashAddonForOrder } from '../../services/orderAddon.js';
 import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon, cancelPendingAddonsForOrder } from '../../repos/addons.js';
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
+import { createPixCharge } from '../../services/nautt.js';
 import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
-import { createPendingOrder, setOrderPreferenceId, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
+import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification, notifyAdminsNewOrderPaid } from '../../repos/notifications.js';
 import { checkSingleDateAvailability, checkAvailabilityTxLocked } from '../../repos/availability.js';
@@ -183,7 +184,7 @@ const sellerCheckoutSchema = z.object({
     nationality: z.string().min(1, 'La nacionalidad es obligatoria').max(80),
     dni: z.string().max(40).optional().nullable(),
   }),
-  payment_method: z.enum(['mercadopago', 'cash']),
+  payment_method: z.enum(['mercadopago', 'cash', 'pix']),
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
@@ -351,6 +352,32 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       return res.status(201).json({
         data: { order_public_id: order.public_id, payment_method: 'cash', total_usd: subtotalUsd },
       });
+    }
+
+    // ── PIX (Nautt) ───────────────────────────────────────
+    // Igual que MP: el pasajero recibe por email el link de pago (a la página con el QR).
+    if (input.payment_method === 'pix') {
+      try {
+        const charge = await createPixCharge({
+          amountUsd: subtotalUsd,
+          orderRef: order.public_id,
+          description: `${option.name_es} — ${option.product_name}`,
+        });
+        await setOrderPixCharge(order.id, charge);
+        await logPaymentEvent(order.id, 'pix_charge_created_by_seller', charge.nauttOrderUuid, {
+          seller_code: seller.code, fiat_brl: charge.fiatAmountBrl,
+        });
+        const pixUrl = `${config.WEB_ORIGIN}/checkout/pix?order=${order.public_id}`;
+        sendPaymentLinkEmail(order.id, pixUrl).catch((err) =>
+          console.error('[email] sendPaymentLinkEmail (PIX) failed for seller order', order.id, err),
+        );
+        return res.json({
+          data: { order_public_id: order.public_id, payment_method: 'pix', total_usd: subtotalUsd, total_ars: totalArs },
+        });
+      } catch (err) {
+        await logPaymentEvent(order.id, 'pix_charge_failed', null, { message: (err as Error).message }).catch(() => {});
+        return res.status(502).json({ error: 'No se pudo generar el cobro con PIX. Probá con otro medio de pago.' });
+      }
     }
 
     // ── Mercado Pago ──────────────────────────────────────

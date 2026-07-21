@@ -36,7 +36,7 @@ interface OrderFull {
   mp_payment_status: string | null;
   mp_payment_method: string | null;
   mp_init_point: string | null;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   cash_collected_currency: 'ARS' | 'USD' | null;
   internal_notes: string | null;
   paid_at: string | null;
@@ -319,6 +319,17 @@ export default function OrderDetail() {
         );
       })()}
 
+      {/* PIX: los reintegros no son automáticos (Nautt no expone refund) — se hacen a mano. */}
+      {order.status === 'paid' && order.payment_method === 'pix' && (
+        <div className="mb-8 rounded-xl border border-[#32BCAD]/40 bg-[#32BCAD]/5 p-5 text-sm">
+          <p className="text-xs uppercase tracking-widest text-[#5fd9cb]">Pago con PIX (reales)</p>
+          <p className="mt-1 text-cream/70">
+            Los reintegros de PIX <strong className="text-cream/90">no se procesan automáticamente</strong>. Para devolver el
+            dinero, hacé la transferencia PIX manualmente desde el panel de Nautt a la clave del cliente y dejá constancia acá.
+          </p>
+        </div>
+      )}
+
       {order.status === 'pending' && order.payment_method === 'cash' && (
         <div className="mb-8 rounded-xl border-2 border-emerald-500/50 bg-emerald-950/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -386,9 +397,9 @@ export default function OrderDetail() {
             </Section>
           ))}
 
-          <Section title="Mercado Pago" twoColumn>
-            <Row label="Payment ID">{order.mp_payment_id ?? '—'}</Row>
-            <Row label="Estado MP">{order.mp_payment_status ?? '—'}</Row>
+          <Section title={order.payment_method === 'pix' ? 'PIX (Nautt)' : 'Mercado Pago'} twoColumn>
+            <Row label={order.payment_method === 'pix' ? 'Orden Nautt' : 'Payment ID'}>{order.mp_payment_id ?? '—'}</Row>
+            <Row label="Estado">{order.mp_payment_status ?? '—'}</Row>
             <Row label="Método">{order.mp_payment_method ?? '—'}</Row>
           </Section>
 
@@ -414,8 +425,9 @@ export default function OrderDetail() {
             </div>
           </div>
 
-          {/* Modificar reserva: reducir (reintegro/devolución) o agregar (cobro/link) */}
-          {order.status === 'paid' && order.items.length > 0 && !(order.payment_method === 'cash' && order.net_settled_at) && (() => {
+          {/* Modificar reserva: reducir (reintegro/devolución) o agregar (cobro/link).
+              PIX queda afuera: no hay refund ni link incremental automático para reales. */}
+          {order.status === 'paid' && order.items.length > 0 && order.payment_method !== 'pix' && !(order.payment_method === 'cash' && order.net_settled_at) && (() => {
             const serviceDate = order.items[0]?.service_date;
             const blocked = isWindowBlocked(modifyWindow, serviceDate);
             return (
@@ -488,7 +500,7 @@ export default function OrderDetail() {
               <p className="text-xs text-gold-soft font-mono">{order.seller_code}</p>
 
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-cream/15 px-2.5 py-0.5 text-[11px] text-cream/70">
-                {order.payment_method === 'cash' ? 'Pago en efectivo' : 'Pago por Mercado Pago'}
+                {order.payment_method === 'cash' ? 'Pago en efectivo' : order.payment_method === 'pix' ? 'Pago por PIX (reales)' : 'Pago por Mercado Pago'}
               </div>
 
               {order.payment_method === 'cash' ? (

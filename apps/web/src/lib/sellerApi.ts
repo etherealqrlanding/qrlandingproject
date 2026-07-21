@@ -190,7 +190,7 @@ export interface SellerBookingInput {
     nationality?: string | null;
     dni?: string | null;
   };
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   transfer_requested?: boolean;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
@@ -198,7 +198,7 @@ export interface SellerBookingInput {
 
 export interface SellerBookingResult {
   order_public_id: string;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   total_usd: number;
   total_ars?: number;
 }

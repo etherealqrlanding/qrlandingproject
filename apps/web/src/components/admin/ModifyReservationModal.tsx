@@ -24,7 +24,9 @@ export interface ModifyHandlers {
 interface Props {
   order: {
     public_id: string;
-    payment_method: 'mercadopago' | 'cash';
+    // 'pix' nunca llega acá (el detalle de orden veda modificar reservas PIX), pero el
+    // tipo lo acepta para cuadrar con el tipo de la orden en OrderDetail.
+    payment_method: 'mercadopago' | 'cash' | 'pix';
     customer_name: string;
     customer_phone: string | null;
     total_usd: number;

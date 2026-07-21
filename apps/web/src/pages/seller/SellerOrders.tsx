@@ -77,6 +77,7 @@ function archiveButtonLabel(o: SellerOrder, archiving: boolean): string {
 const PAYMENT_LABEL: Record<string, string> = {
   mercadopago: 'Mercado Pago',
   cash: 'Efectivo',
+  pix: 'PIX',
 };
 
 // El portal muestra la plata en pesos (el negocio opera en ARS).

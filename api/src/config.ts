@@ -23,6 +23,21 @@ const schema = z.object({
   MP_PUBLIC_KEY: z.string().min(10).optional(),
   MP_WEBHOOK_SECRET: z.string().min(8).optional(),
   MP_INTEGRATOR_ID: z.string().optional(),
+  // Nautt Finance (PIX en reales). Opcional: sin API key el server arranca igual y el
+  // checkout con PIX responde un error claro (mismo criterio que las credenciales de emails).
+  NAUTT_API_KEY: z.string().min(10).optional(),
+  NAUTT_BASE_URL: z.string().url().default('https://api.nauttfinance.com'),
+  // UUIDs de la moneda BRL y del método de pago PIX (mapping conversion) en la cuenta Nautt.
+  // Traen los valores de producción por defecto; se pueden sobreescribir por entorno.
+  NAUTT_CURRENCY_UUID_BRL: z.string().uuid().default('73f6eb8b-7066-4f1e-948d-8468966fe766'),
+  NAUTT_PIX_EXCHANGE_UUID: z.string().uuid().default('c07441b4-4e23-4fc7-b686-be8967b6e2d9'),
+  // Autenticación del webhook de Nautt. Dos mecanismos, se acepta con CUALQUIERA:
+  //  - NAUTT_WEBHOOK_SECRET: secreto de firma (formato Svix/"Standard Webhooks", prefijo
+  //    whsec_) que genera el panel de Nautt al registrar el webhook. Verificamos el HMAC.
+  //  - NAUTT_WEBHOOK_TOKEN: secreto compartido que va en la URL (?token=) / header
+  //    x-webhook-token, por si se registra la URL sin depender de la firma.
+  NAUTT_WEBHOOK_SECRET: z.string().min(8).optional(),
+  NAUTT_WEBHOOK_TOKEN: z.string().min(8).optional(),
   // Supabase
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
@@ -48,6 +63,16 @@ const schema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['MP_WEBHOOK_SECRET'],
       message: 'MP_WEBHOOK_SECRET es obligatorio en producción (configuralo con el secreto real del panel de Mercado Pago) para poder verificar la firma del webhook.',
+    });
+  }
+  // Si PIX está activo (hay API key de Nautt), en producción exigimos AL MENOS un mecanismo
+  // de autenticación del webhook (firma o token): sin ninguno quedaría abierto. El pago igual
+  // se re-consulta a Nautt, pero es una defensa barata que no queremos perder por olvido.
+  if (data.NODE_ENV === 'production' && data.NAUTT_API_KEY && !data.NAUTT_WEBHOOK_SECRET && !data.NAUTT_WEBHOOK_TOKEN) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['NAUTT_WEBHOOK_SECRET'],
+      message: 'En producción con PIX activo (NAUTT_API_KEY seteada) hace falta NAUTT_WEBHOOK_SECRET o NAUTT_WEBHOOK_TOKEN para autenticar el webhook de Nautt.',
     });
   }
 });

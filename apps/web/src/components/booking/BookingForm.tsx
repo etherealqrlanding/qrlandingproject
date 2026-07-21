@@ -20,7 +20,7 @@ export interface BookingFormProps {
   option: ProductOption;
   allowCash: boolean;
   contextBanner: React.ReactNode;
-  submitLabels: { cash: string; mercadopago: string };
+  submitLabels: { cash: string; mercadopago: string; pix: string };
   submitting: boolean;
   externalError?: string | null;
   onValidSubmit: (payload: SellerBookingInput, totals: BookingFormTotals) => void;
@@ -35,7 +35,7 @@ export default function BookingForm({
   option, allowCash, contextBanner, submitLabels, submitting, externalError, onValidSubmit,
 }: BookingFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash'>(allowCash ? 'cash' : 'mercadopago');
+  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(allowCash ? 'cash' : 'mercadopago');
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
@@ -314,6 +314,9 @@ export default function BookingForm({
             <span className="text-sm text-cream/70">{paymentMethod === 'cash' ? 'Precio sugerido' : 'Total'}</span>
             <span className="font-display text-3xl text-gold">USD {totalUsd}</span>
           </div>
+          {paymentMethod === 'pix' && (
+            <p className="mt-1 text-xs text-cream/50 text-right">El cobro se procesa en reales (BRL) por PIX.</p>
+          )}
           {paymentMethod === 'cash' ? (
             <>
               <p className="mt-1 text-xs text-cream/50">
@@ -337,9 +340,9 @@ export default function BookingForm({
                 </p>
               </div>
             </>
-          ) : (
+          ) : paymentMethod === 'mercadopago' ? (
             <p className="mt-1 text-xs text-cream/50 text-right">El cobro se procesa en ARS al tipo de cambio vigente.</p>
-          )}
+          ) : null}
         </div>
 
         {/* Traslado */}
@@ -364,7 +367,7 @@ export default function BookingForm({
               Este vendedor solo tiene habilitado el pago online. El cobro en efectivo requiere autorización especial.
             </div>
           )}
-          <div className={`gap-2 ${allowCash ? 'grid grid-cols-2' : 'flex'}`}>
+          <div className={`grid gap-2 ${allowCash ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
             {allowCash && (
               <button
                 type="button"
@@ -383,8 +386,6 @@ export default function BookingForm({
               type="button"
               onClick={() => setPaymentMethod('mercadopago')}
               className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
-                allowCash ? '' : 'flex-1 '
-              }${
                 paymentMethod === 'mercadopago'
                   ? 'border-gold bg-gold/10 text-cream'
                   : 'border-gold/20 text-cream/50 hover:border-gold/40'
@@ -392,6 +393,18 @@ export default function BookingForm({
             >
               <span className="block font-medium">Mercado Pago</span>
               <span className="text-xs opacity-70">Tarjeta, transferencia</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('pix')}
+              className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                paymentMethod === 'pix'
+                  ? 'border-[#32BCAD] bg-[#32BCAD]/10 text-cream'
+                  : 'border-[#32BCAD]/25 text-cream/50 hover:border-[#32BCAD]/50'
+              }`}
+            >
+              <span className="block font-medium">PIX</span>
+              <span className="text-xs opacity-70">En reales (BRL)</span>
             </button>
           </div>
           {paymentMethod === 'cash' && allowCash && (
@@ -401,7 +414,12 @@ export default function BookingForm({
           )}
           {paymentMethod === 'mercadopago' && (
             <p className="text-xs text-cream/50 pt-1">
-              Se redirige a Mercado Pago para que el pasajero complete el pago online.
+              Se le envía al pasajero por email el link de Mercado Pago para completar el pago online.
+            </p>
+          )}
+          {paymentMethod === 'pix' && (
+            <p className="text-xs text-cream/50 pt-1">
+              Se le envía al pasajero por email el link para pagar con PIX en reales (QR o clave copia e cola).
             </p>
           )}
         </div>
@@ -423,7 +441,9 @@ export default function BookingForm({
               ? 'Elegí otra fecha'
               : paymentMethod === 'cash'
                 ? submitLabels.cash
-                : submitLabels.mercadopago}
+                : paymentMethod === 'pix'
+                  ? submitLabels.pix
+                  : submitLabels.mercadopago}
         </button>
       </form>
     </>

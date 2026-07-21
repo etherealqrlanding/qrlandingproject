@@ -47,7 +47,12 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+// Guardamos el body crudo (rawBody) además del parseado: la verificación de la firma del
+// webhook de Nautt (HMAC sobre el payload exacto) necesita los bytes originales, no el
+// JSON re-serializado. Overhead nulo (el buffer ya está en memoria durante el parseo).
+app.use(express.json({
+  verify: (req, _res, buf) => { (req as express.Request & { rawBody?: Buffer }).rawBody = buf; },
+}));
 
 // El SSE de admin/vendedor recibe el JWT de sesión por query string (?token=...) porque
 // EventSource no puede mandar headers custom — es el mismo Bearer token que se usa para

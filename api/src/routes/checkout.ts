@@ -9,10 +9,18 @@ import {
   searchPaymentByExternalRef,
   mapMpStatusToOrderStatus,
 } from '../services/mercadopago.js';
+import {
+  createPixCharge,
+  getNauttOrder,
+  mapNauttStatusToOrderStatus,
+  NauttError,
+} from '../services/nautt.js';
 import { getExchangeRate, convertUsdToArs, getSameDayCutoff } from '../services/settings.js';
 import {
   createPendingOrder,
   setOrderPreferenceId,
+  setOrderPixCharge,
+  findOrderByNauttOrderUuid,
   updateOrderFromPayment,
   logPaymentEvent,
   findOrderByPublicId,
@@ -50,6 +58,257 @@ const createCheckoutSchema = z.object({
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+});
+
+// Prepara una orden de checkout online (MP o PIX): valida vendedor, opción, fecha,
+// disponibilidad y precios (fuente de verdad = backend) y crea la orden pendiente.
+// Devuelve todo lo necesario para generar el cobro, o un error HTTP listo para responder.
+// No lo usa /preferences (que mantiene su lógica inline) — solo el flujo PIX, para no
+// tocar el camino de MP ya probado.
+type PreparedCheckout =
+  | { ok: true; order: { id: number; public_id: string }; option: { name_es: string; product_name: string }; subtotalUsd: number; totalArs: number; rate: number }
+  | { ok: false; status: number; body: Record<string, unknown> };
+
+async function prepareCheckoutOrder(
+  input: z.infer<typeof createCheckoutSchema>,
+  paymentMethod: 'mercadopago' | 'pix',
+): Promise<PreparedCheckout> {
+  // 0) Exclusividad de venta: el ref_code debe pertenecer a un vendedor activo.
+  const { rows: sellerCheck } = await pool.query<{ id: number }>(
+    `SELECT id FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+    [input.ref_code],
+  );
+  if (sellerCheck.length === 0) return { ok: false, status: 403, body: { error: 'SELLER_REQUIRED' } };
+
+  // 1) Cargar option + product (precios autoritativos del backend)
+  const { rows: optionRows } = await pool.query<{
+    id: number; product_id: number;
+    name_es: string; name_en: string;
+    price_adult_usd: string; price_child_usd: string | null;
+    net_price_adult_usd: string | null; net_price_child_usd: string | null;
+    transfer_price_usd: string; net_transfer_price_usd: string | null;
+    net_price_currency: string;
+    net_price_adult_ars: string | null; net_price_child_ars: string | null;
+    net_transfer_price_ars: string | null;
+    available_days: number[];
+    default_capacity_per_day: number;
+    product_name: string; product_slug: string;
+    is_active: boolean; product_active: boolean;
+  }>(
+    `SELECT o.id, o.product_id, o.name_es, o.name_en,
+            o.price_adult_usd::text          AS price_adult_usd,
+            o.price_child_usd::text          AS price_child_usd,
+            o.net_price_adult_usd::text      AS net_price_adult_usd,
+            o.net_price_child_usd::text      AS net_price_child_usd,
+            o.transfer_price_usd::text       AS transfer_price_usd,
+            o.net_transfer_price_usd::text   AS net_transfer_price_usd,
+            o.net_price_currency,
+            o.net_price_adult_ars::text      AS net_price_adult_ars,
+            o.net_price_child_ars::text      AS net_price_child_ars,
+            o.net_transfer_price_ars::text   AS net_transfer_price_ars,
+            o.available_days, o.default_capacity_per_day, o.is_active,
+            p.name AS product_name, p.slug AS product_slug, p.is_active AS product_active
+       FROM product_options o
+       JOIN products p ON p.id = o.product_id
+      WHERE o.id = $1 LIMIT 1`,
+    [input.option_id],
+  );
+  const option = optionRows[0];
+  if (!option || !option.is_active || !option.product_active) {
+    return { ok: false, status: 404, body: { error: 'Option not found or inactive' } };
+  }
+
+  // 2) Validar día de operación
+  const date = new Date(`${input.service_date}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return { ok: false, status: 400, body: { error: 'Invalid service_date' } };
+  if (date.getTime() < Date.now() - 86_400_000) return { ok: false, status: 400, body: { error: 'service_date cannot be in the past' } };
+  const cutoffTime = await getSameDayCutoff();
+  if (cutoffTime) {
+    const nowBA = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const todayBA = nowBA.toISOString().slice(0, 10);
+    if (input.service_date === todayBA) {
+      const currentMin = nowBA.getUTCHours() * 60 + nowBA.getUTCMinutes();
+      const [ch, cm] = cutoffTime.split(':').map(Number);
+      if (currentMin >= ch * 60 + cm) {
+        return { ok: false, status: 409, body: { error: `Reservas para hoy se aceptan hasta las ${cutoffTime} (hora Buenos Aires)` } };
+      }
+    }
+  }
+  const isoDow = date.getDay() === 0 ? 7 : date.getDay();
+  if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
+    return { ok: false, status: 400, body: { error: 'This option does not operate on the selected day', available_days: option.available_days } };
+  }
+
+  // 2b) Disponibilidad puntual (fechas cerradas y capacidad real)
+  const availCheck = await checkSingleDateAvailability(
+    option.id, option.default_capacity_per_day, input.service_date, input.adults + input.children,
+  );
+  if (!availCheck.ok) return { ok: false, status: 409, body: { error: availCheck.message ?? 'Fecha no disponible' } };
+
+  // 3) Totales (USD)
+  const priceAdult = Number.parseFloat(option.price_adult_usd);
+  const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
+  if (input.children > 0 && option.price_child_usd == null) {
+    return { ok: false, status: 400, body: { error: 'This option does not allow children pricing' } };
+  }
+  const transferPriceUsd = Number.parseFloat(option.transfer_price_usd ?? '0');
+  const transferRequested = input.transfer_requested === true && transferPriceUsd > 0;
+  const pax = input.adults + input.children;
+  const transferSubtotal = transferRequested ? Math.round(transferPriceUsd * pax * 100) / 100 : 0;
+  const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
+
+  // 4) Tipo de cambio (para totales en ARS y netos en ARS)
+  const rate = await getExchangeRate();
+  const totalArs = convertUsdToArs(subtotalUsd, rate);
+
+  // Neto (mínimo a recibir por el operador), igual que en /preferences
+  const netCurrency = option.net_price_currency ?? 'USD';
+  let netTotalUsd: number | null = null;
+  if (netCurrency === 'USD') {
+    const netAdult = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
+    const netChild = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
+    const netTransfer = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+    if (netAdult != null) {
+      netTotalUsd = Math.round((
+        input.adults * netAdult + input.children * (netChild ?? netAdult)
+        + (transferRequested && netTransfer != null ? netTransfer * pax : 0)
+      ) * 100) / 100;
+    }
+  } else {
+    const netAdultArs = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
+    const netChildArs = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
+    const netTransferArs = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+    if (netAdultArs != null && rate > 0) {
+      const netTotalArs = Math.round((
+        input.adults * netAdultArs + input.children * (netChildArs ?? netAdultArs)
+        + (transferRequested && netTransferArs != null ? netTransferArs * pax : 0)
+      ) * 100) / 100;
+      netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
+    }
+  }
+
+  // 5) Crear orden pendiente
+  const order = await createPendingOrder({
+    customer: input.customer,
+    item: {
+      product_id: option.product_id,
+      option_id: option.id,
+      product_name_snapshot: option.product_name,
+      option_name_snapshot: option.name_es,
+      service_date: input.service_date,
+      adults: input.adults,
+      children: input.children,
+      unit_price_adult_usd: priceAdult,
+      unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
+      subtotal_usd: subtotalUsd,
+      transfer_requested: transferRequested,
+      transfer_hotel: input.transfer_hotel ?? null,
+      transfer_room: (transferRequested && input.transfer_room) ? input.transfer_room : null,
+      net_total_usd: netTotalUsd,
+    },
+    total_usd: subtotalUsd,
+    total_ars: totalArs,
+    exchange_rate_used: rate,
+    ref_code: input.ref_code ?? null,
+    payment_method: paymentMethod,
+    default_capacity_per_day: option.default_capacity_per_day,
+    utm: input.utm,
+  });
+
+  return {
+    ok: true,
+    order,
+    option: { name_es: option.name_es, product_name: option.product_name },
+    subtotalUsd, totalArs, rate,
+  };
+}
+
+// ─── POST /api/checkout/pix ───────────────────────────────
+// Cobra en reales (BRL) con PIX vía Nautt: crea la orden pendiente, abre la orden on-ramp
+// y devuelve el "copia e cola" para que el front renderice el QR. Confirmación por webhook
+// + polling (POST /orders/:publicId/sync).
+checkoutRouter.post('/pix', checkoutLimiter, async (req, res, next) => {
+  try {
+    const parsed = createCheckoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const prep = await prepareCheckoutOrder(parsed.data, 'pix');
+    if (!prep.ok) return res.status(prep.status).json(prep.body);
+
+    try {
+      const charge = await createPixCharge({
+        amountUsd: prep.subtotalUsd,
+        orderRef: prep.order.public_id,
+        description: `${prep.option.name_es} — ${prep.option.product_name}`,
+      });
+      await setOrderPixCharge(prep.order.id, charge);
+      await logPaymentEvent(prep.order.id, 'pix_charge_created', charge.nauttOrderUuid, {
+        fiat_brl: charge.fiatAmountBrl, pix_expires_at: charge.pixExpiresAt,
+      });
+      res.json({
+        data: {
+          order_public_id: prep.order.public_id,
+          nautt_order_uuid: charge.nauttOrderUuid,
+          pix_qrcode: charge.pixQrcode,
+          pix_expires_at: charge.pixExpiresAt,
+          fiat_brl: charge.fiatAmountBrl,
+          total_usd: prep.subtotalUsd,
+        },
+      });
+    } catch (err) {
+      // La orden quedó creada (pending) pero no se pudo generar el cobro PIX. La dejamos
+      // registrada para diagnóstico; el barrido de caducidad la limpiará si no se cobra.
+      await logPaymentEvent(prep.order.id, 'pix_charge_failed', null, {
+        message: (err as Error).message, code: err instanceof NauttError ? err.code : undefined,
+      }).catch(() => {});
+      const status = err instanceof NauttError ? (err.status && err.status >= 500 ? 502 : 400) : 502;
+      return res.status(status).json({ error: 'No se pudo generar el cobro con PIX. Probá con otro medio de pago.' });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/checkout/orders/:publicId/pix-refresh ──────
+// Regenera el QR PIX de una orden pendiente cuyo "copia e cola" venció, sin recrear la
+// orden. Reutiliza el monto original (total_usd). Solo aplica a órdenes PIX pendientes.
+checkoutRouter.post('/orders/:publicId/pix-refresh', checkoutLimiter, async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const order = await findOrderByPublicId(publicId);
+    if (!order) return res.status(404).json({ error: 'Not found' });
+    if (order.payment_method !== 'pix') return res.status(400).json({ error: 'La orden no es de PIX' });
+    if (order.status !== 'pending') return res.status(409).json({ error: 'La orden ya no está pendiente' });
+
+    try {
+      const charge = await createPixCharge({
+        amountUsd: order.total_usd,
+        orderRef: publicId,
+        description: `Reserva ${publicId.slice(0, 8)}`,
+      });
+      await setOrderPixCharge(order.id, charge);
+      await logPaymentEvent(order.id, 'pix_charge_refreshed', charge.nauttOrderUuid, {
+        fiat_brl: charge.fiatAmountBrl, pix_expires_at: charge.pixExpiresAt,
+      });
+      res.json({
+        data: {
+          order_public_id: publicId,
+          nautt_order_uuid: charge.nauttOrderUuid,
+          pix_qrcode: charge.pixQrcode,
+          pix_expires_at: charge.pixExpiresAt,
+          fiat_brl: charge.fiatAmountBrl,
+          total_usd: order.total_usd,
+        },
+      });
+    } catch (err) {
+      const status = err instanceof NauttError ? (err.status && err.status >= 500 ? 502 : 400) : 502;
+      return res.status(status).json({ error: 'No se pudo regenerar el QR de PIX.' });
+    }
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ─── POST /api/checkout/preferences ───────────────────────
@@ -483,13 +742,32 @@ async function applyPaymentToOrder(
   const externalRef = payment.external_reference;
   if (!externalRef) return { applied: false };
   const newStatus = mapMpStatusToOrderStatus(payment.status);
-  const paymentIdStr = payment.id != null ? String(payment.id) : null;
+  return applyGatewayResolution(externalRef, newStatus, {
+    label: 'Mercado Pago',
+    paymentId: payment.id != null ? String(payment.id) : null,
+    gatewayStatus: payment.status ?? null,
+    gatewayMethod: payment.payment_method_id ?? null,
+  }, eventDataId);
+}
 
-  const updated = await updateOrderFromPayment(externalRef, {
+/**
+ * Núcleo compartido MP/PIX: aplica un estado ya resuelto a la orden, respetando la guarda
+ * de estado terminal (updateOrderFromPayment) y disparando notificaciones solo en la
+ * transición real a 'paid'. Los datos del gateway se guardan en las columnas mp_* (que
+ * funcionan como columnas genéricas de "pago del gateway": para PIX, paymentId = uuid de
+ * la orden Nautt, gatewayMethod = 'pix'). `label` solo se usa en logs/mensajes.
+ */
+async function applyGatewayResolution(
+  publicId: string,
+  newStatus: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded',
+  gateway: { label: string; paymentId: string | null; gatewayStatus: string | null; gatewayMethod: string | null },
+  eventDataId?: string | null,
+): Promise<{ applied: boolean; status?: string; orderId?: number }> {
+  const updated = await updateOrderFromPayment(publicId, {
     status: newStatus,
-    mp_payment_id: paymentIdStr,
-    mp_payment_status: payment.status ?? null,
-    mp_payment_method: payment.payment_method_id ?? null,
+    mp_payment_id: gateway.paymentId,
+    mp_payment_status: gateway.gatewayStatus,
+    mp_payment_method: gateway.gatewayMethod,
     paid_at: newStatus === 'paid' ? new Date() : null,
   });
   if (!updated) return { applied: false };
@@ -497,32 +775,32 @@ async function applyPaymentToOrder(
   if (updated.status !== newStatus) {
     // La guarda ignoró el intento de revertir un estado terminal — queda registrado
     // para que sea visible en el histórico, pero no se toca nada más ni se notifica.
-    await logPaymentEvent(updated.id, 'webhook_ignored_terminal_state', eventDataId ?? paymentIdStr, {
-      payment_id: payment.id, status: payment.status, current_status: updated.status, attempted_status: newStatus,
+    await logPaymentEvent(updated.id, 'webhook_ignored_terminal_state', eventDataId ?? gateway.paymentId, {
+      payment_id: gateway.paymentId, status: gateway.gatewayStatus, current_status: updated.status, attempted_status: newStatus,
     });
     if (updated.status === 'expired' && newStatus === 'paid') {
-      // El cliente sí pagó en MP, pero la reserva ya se dio por caducada (y su cupo
-      // pudo haberse revendido) — no hay forma segura de confirmar sola. Requiere
-      // reconciliación manual: chequear cupo real y decidir si se confirma o se reintegra.
+      // El cliente sí pagó, pero la reserva ya se dio por caducada (y su cupo pudo haberse
+      // revendido) — no hay forma segura de confirmar sola. Requiere reconciliación manual:
+      // chequear cupo real y decidir si se confirma o se reintegra.
       console.error(
-        `[CRITICAL] Pago aprobado en MP para la orden ${externalRef} (payment_id=${paymentIdStr ?? '?'}) ` +
+        `[CRITICAL] Pago aprobado en ${gateway.label} para la orden ${publicId} (payment_id=${gateway.paymentId ?? '?'}) ` +
         `llegó después de que la reserva ya había caducado. Requiere reconciliación manual.`,
       );
     }
     return { applied: false, status: updated.status, orderId: updated.id };
   }
 
-  // Solo se loguea en el histórico cuando el estado REALMENTE cambió — MP puede
+  // Solo se loguea en el histórico cuando el estado REALMENTE cambió — el gateway puede
   // reenviar la misma notificación varias veces (reintentos de webhook) y antes cada
   // una agregaba un evento idéntico al histórico de la orden, aunque no cambiara nada.
   if (updated.status !== updated.priorStatus) {
-    await logPaymentEvent(updated.id, `order_${updated.status}`, eventDataId ?? paymentIdStr, {
-      payment_id: payment.id, status: payment.status,
+    await logPaymentEvent(updated.id, `order_${updated.status}`, eventDataId ?? gateway.paymentId, {
+      payment_id: gateway.paymentId, status: gateway.gatewayStatus,
     });
     if (updated.status === 'refunded' || updated.status === 'cancelled') {
-      // Un refund/cancelación disparado del lado de MP (chargeback, refund manual desde
-      // el dashboard de MP, etc. — no por nuestro botón admin) también cierra la reserva
-      // por completo: cancelamos ampliaciones sin cobrar por la misma razón que en /refund.
+      // Un refund/cancelación disparado del lado del gateway (chargeback, refund manual, etc.
+      // — no por nuestro botón admin) también cierra la reserva por completo: cancelamos
+      // ampliaciones sin cobrar por la misma razón que en /refund.
       cancelPendingAddonsForOrder(updated.id).catch((err) =>
         console.error('[addons] cancelPendingAddonsForOrder failed for order', updated.id, err),
       );
@@ -541,6 +819,23 @@ async function applyPaymentToOrder(
     );
   }
   return { applied: true, status: updated.status, orderId: updated.id };
+}
+
+// Respaldo del webhook de Nautt: consulta el estado en vivo de la orden PIX y la sincroniza.
+// Se usa desde el retorno del checkout, el webhook y el barrido de caducidad.
+export async function syncOrderWithNautt(publicId: string): Promise<{ found: boolean; status?: string; blockedByTerminalState?: boolean }> {
+  const order = await findOrderByPublicId(publicId);
+  if (!order?.nautt_order_uuid) return { found: false };
+  const nauttOrder = await getNauttOrder(order.nautt_order_uuid);
+  const newStatus = mapNauttStatusToOrderStatus(nauttOrder.status);
+  const result = await applyGatewayResolution(publicId, newStatus, {
+    label: 'PIX/Nautt',
+    paymentId: order.nautt_order_uuid,
+    gatewayStatus: nauttOrder.status,
+    gatewayMethod: 'pix',
+  }, order.nautt_order_uuid);
+  const blockedByTerminalState = !result.applied && result.status != null;
+  return { found: result.applied, status: result.status, blockedByTerminalState };
 }
 
 // Respaldo del webhook: consulta MP por la referencia (public_id) de la orden y la
@@ -661,6 +956,46 @@ checkoutRouter.post('/webhook', webhookLimiter, async (req: Request, res: Respon
   }
 });
 
+// ─── POST /api/checkout/nautt-webhook ─────────────────────
+// Nautt notifica cambios de estado de la orden PIX. El body no viene firmado: lo
+// autenticamos con un token compartido (query ?token= o header x-webhook-token) que se
+// configura al registrar la URL en el panel de Nautt. La defensa real contra datos falsos
+// es que NUNCA confiamos en el body: re-consultamos el estado a Nautt por el uuid.
+checkoutRouter.post('/nautt-webhook', webhookLimiter, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Autenticación: aceptamos si la FIRMA (Standard Webhooks/Svix) es válida O si el TOKEN
+    // coincide. Así funciona tanto si Nautt firma el webhook como si registrás la URL con
+    // ?token=. Igual, la defensa real es que el estado se re-consulta a Nautt por el uuid.
+    const secret = config.NAUTT_WEBHOOK_SECRET;
+    const expectedToken = config.NAUTT_WEBHOOK_TOKEN;
+    const token = req.header('x-webhook-token') ?? (typeof req.query.token === 'string' ? req.query.token : undefined);
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+    const signatureOk = secret ? verifyStandardWebhookSignature(req, rawBody, secret) : false;
+    const tokenOk = expectedToken != null && token === expectedToken;
+    if ((secret || expectedToken) && !signatureOk && !tokenOk) {
+      await logPaymentEvent(null, 'nautt_webhook_unauthenticated', null, {
+        event: req.body?.event, had_signature: !!req.header('webhook-signature'),
+      }).catch(() => {});
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const event = req.body?.event as string | undefined;
+    const nauttOrderUuid = req.body?.data?.uuid as string | undefined;
+    await logPaymentEvent(null, `nautt_webhook_${event ?? 'unknown'}`, nauttOrderUuid ?? null, req.body);
+    if (!nauttOrderUuid) return res.status(200).json({ received: true });
+
+    const ours = await findOrderByNauttOrderUuid(nauttOrderUuid);
+    if (!ours) {
+      await logPaymentEvent(null, 'nautt_webhook_no_match', nauttOrderUuid, {});
+      return res.status(200).json({ received: true, note: 'no matching order' });
+    }
+    // syncOrderWithNautt re-consulta el estado real a Nautt y lo aplica (idempotente).
+    await syncOrderWithNautt(ours.public_id);
+    res.status(200).json({ received: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── GET /api/checkout/orders/:publicId ───────────────────
 // Endpoint público para que las páginas de retorno muestren info del pago.
 // No expone datos sensibles, solo lo necesario para el "thanks" page.
@@ -699,6 +1034,10 @@ checkoutRouter.get('/orders/:publicId', async (req, res, next) => {
         customer_email: order.customer_email,
         customer_name: order.customer_name,
         payment_method: order.payment_method,
+        // Datos del cobro PIX (solo presentes en órdenes de PIX) para la página de pago.
+        pix_qrcode: order.pix_qrcode,
+        pix_expires_at: order.pix_expires_at,
+        pix_fiat_amount_brl: order.pix_fiat_amount_brl,
       },
     });
   } catch (err) {
@@ -761,11 +1100,17 @@ checkoutRouter.post('/orders/:publicId/sync', async (req, res, next) => {
       return res.status(404).json({ error: 'Not found' });
     }
 
-    // Ya confirmada con payment_id → no hace falta consultar MP.
+    // Ya confirmada con payment_id → no hace falta consultar el gateway.
     if (order.status === 'paid' && order.mp_payment_id) {
       return res.json({ data: { status: 'paid', synced: false } });
     }
-    // El efectivo no pasa por MP.
+    // PIX (Nautt): consultamos la orden Nautt por su uuid.
+    if (order.payment_method === 'pix') {
+      try { await syncOrderWithNautt(publicId); } catch { /* dejamos el estado actual */ }
+      const fresh = await findOrderByPublicId(publicId);
+      return res.json({ data: { status: fresh?.status ?? order.status, synced: true } });
+    }
+    // El efectivo no pasa por ningún gateway.
     if (order.payment_method !== 'mercadopago') {
       return res.json({ data: { status: order.status, synced: false } });
     }
@@ -777,6 +1122,35 @@ checkoutRouter.post('/orders/:publicId/sync', async (req, res, next) => {
     next(err);
   }
 });
+
+// Verificación de firma de webhook estándar (Svix / "Standard Webhooks"), que es lo que usa
+// Nautt (secreto con prefijo whsec_). Headers: webhook-id, webhook-timestamp, webhook-signature.
+// Firma esperada = base64(HMAC_SHA256(secretBytes, bytes(`${id}.${ts}.` + rawBody))). El header
+// trae una o más firmas separadas por espacio, cada una como "v1,<firma>". Tolerancia ±5 min
+// contra replays. Devuelve false ante cualquier header faltante o inválido (nunca tira).
+function verifyStandardWebhookSignature(req: Request, rawBody: Buffer | undefined, secret: string): boolean {
+  try {
+    const id = req.header('webhook-id');
+    const ts = req.header('webhook-timestamp');
+    const sigHeader = req.header('webhook-signature');
+    if (!id || !ts || !sigHeader || !rawBody) return false;
+    const tsNum = Number(ts);
+    if (!Number.isFinite(tsNum) || Math.abs(Math.floor(Date.now() / 1000) - tsNum) > 300) return false;
+    // El secreto viene como (nautt_)?whsec_<base64>. La parte base64 son los bytes de la clave.
+    const secretBytes = Buffer.from(secret.replace(/^(nautt_)?whsec_/, ''), 'base64');
+    const signed = Buffer.concat([Buffer.from(`${id}.${ts}.`), rawBody]);
+    const expected = crypto.createHmac('sha256', secretBytes).update(signed).digest('base64');
+    const expectedBuf = Buffer.from(expected);
+    for (const part of sigHeader.split(' ')) {
+      const sig = part.includes(',') ? part.slice(part.indexOf(',') + 1) : part;
+      const sigBuf = Buffer.from(sig);
+      if (sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 // HMAC-SHA256 según docs MP: el manifest es `id:{data.id};request-id:{x-request-id};ts:{ts}`
 // donde ts y v1 vienen en el header x-signature como "ts=...,v1=..."

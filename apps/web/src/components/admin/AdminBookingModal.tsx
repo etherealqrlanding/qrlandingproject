@@ -372,7 +372,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
               option={booking.option}
               allowCash={selectedSeller.is_permanent}
               submitting={false}
-              submitLabels={{ cash: 'Revisar y confirmar', mercadopago: 'Revisar y confirmar' }}
+              submitLabels={{ cash: 'Revisar y confirmar', mercadopago: 'Revisar y confirmar', pix: 'Revisar y confirmar' }}
               onValidSubmit={handleValidSubmit}
               contextBanner={(
                 <div className="rounded-lg border border-gold/20 bg-gold/5 p-3 md:p-4 flex gap-3">
@@ -408,7 +408,11 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                   />
                   <SummaryRow
                     label="Pago"
-                    value={pending.payload.payment_method === 'cash' ? 'Efectivo (lo cobra el vendedor)' : 'Mercado Pago (link al pasajero)'}
+                    value={pending.payload.payment_method === 'cash'
+                      ? 'Efectivo (lo cobra el vendedor)'
+                      : pending.payload.payment_method === 'pix'
+                        ? 'PIX en reales (link al pasajero)'
+                        : 'Mercado Pago (link al pasajero)'}
                   />
                   <SummaryRow label="Total" value={`USD ${pending.totals.totalUsd}`} strong />
                 </dl>

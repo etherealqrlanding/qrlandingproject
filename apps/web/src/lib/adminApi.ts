@@ -255,7 +255,7 @@ export interface AdminSellerOrder {
   net_settled_at: string | null;
   cash_collected_at: string | null;
   cash_collected_currency: 'ARS' | 'USD' | null;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   created_at: string;
 }
 
@@ -286,7 +286,7 @@ export interface AdminOrderListItem {
   net_total_usd: number | null;
   paid_to_seller_at: string | null;
   net_settled_at: string | null;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   created_at: string;
   paid_at: string | null;
   admin_viewed_at: string | null;
@@ -310,7 +310,7 @@ export interface AdminBookingInput {
     nationality?: string | null;
     dni?: string | null;
   };
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   transfer_requested?: boolean;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
@@ -318,7 +318,7 @@ export interface AdminBookingInput {
 
 export interface AdminBookingResult {
   order_public_id: string;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   total_usd: number;
   total_ars?: number;
   seller: { id: number; code: string; name: string };
@@ -399,7 +399,7 @@ export interface SellerFaqContent {
 
 export interface PendingAddon {
   public_id: string;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   extra_adults: number;
   extra_children: number;
   charge_usd: number;
@@ -427,7 +427,7 @@ export interface AdminNewOrderPaidEvent {
   customer_name: string;
   option_name: string | null;
   total_ars: number;
-  payment_method: 'mercadopago' | 'cash';
+  payment_method: 'mercadopago' | 'cash' | 'pix';
   seller_name: string | null;
 }
 

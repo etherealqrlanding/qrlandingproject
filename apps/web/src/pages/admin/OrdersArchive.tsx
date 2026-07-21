@@ -52,7 +52,7 @@ function ArchivedOrderExtraDetails({ o }: Readonly<{ o: ArchivedOrderItem }>) {
       {o.adults != null && (
         <DetailRow label="Pasajeros">{o.adults} ad.{o.children ? ` · ${o.children} men.` : ''}</DetailRow>
       )}
-      <DetailRow label="Medio de pago">{o.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</DetailRow>
+      <DetailRow label="Medio de pago">{o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'pix' ? 'PIX' : 'Mercado Pago'}</DetailRow>
       {o.payment_method !== 'cash' && o.commission_amount_ars != null && (
         <DetailRow label="Comisión">{fmtArs(o.commission_amount_ars)}</DetailRow>
       )}

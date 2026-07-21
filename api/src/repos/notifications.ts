@@ -301,7 +301,7 @@ export async function createOrderCreatedByAdminNotification(input: {
   sellerId: number;
   orderId: number;
   orderPublicId: string;
-  paymentMethod: 'cash' | 'mercadopago';
+  paymentMethod: 'cash' | 'mercadopago' | 'pix';
   customerName: string;
   optionName: string;
   serviceDate: string;

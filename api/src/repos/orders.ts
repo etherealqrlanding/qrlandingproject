@@ -32,7 +32,7 @@ export interface CreateOrderInput {
   total_ars: number;
   exchange_rate_used: number;
   ref_code: string | null;
-  payment_method?: 'mercadopago' | 'cash';
+  payment_method?: 'mercadopago' | 'cash' | 'pix';
   utm?: { source?: string | null; medium?: string | null; campaign?: string | null };
   // Capacidad efectiva de la opción para el día: se usa para el chequeo autoritativo
   // de cupo (con lock) dentro de la transacción, evitando sobreventa por concurrencia.
@@ -167,6 +167,38 @@ export async function setOrderPreferenceId(orderId: number, preferenceId: string
     `UPDATE orders SET mp_preference_id = $1, mp_init_point = COALESCE($2, mp_init_point), updated_at = NOW() WHERE id = $3`,
     [preferenceId, initPoint ?? null, orderId],
   );
+}
+
+/**
+ * Guarda (o refresca) los datos del cobro PIX de Nautt en la orden: el uuid de la orden
+ * Nautt (clave de mapeo del webhook), el "copia e cola" y su expiración. Se llama al crear
+ * la orden PIX y también al regenerar el QR cuando venció (pix-refresh).
+ */
+export async function setOrderPixCharge(orderId: number, pix: {
+  nauttOrderUuid: string;
+  pixQrcode: string;
+  pixExpiresAt: Date | null;
+  fiatAmountBrl: number;
+}): Promise<void> {
+  await pool.query(
+    `UPDATE orders
+        SET nautt_order_uuid = $1,
+            pix_qrcode = $2,
+            pix_expires_at = $3,
+            pix_fiat_amount_brl = $4,
+            updated_at = NOW()
+      WHERE id = $5`,
+    [pix.nauttOrderUuid, pix.pixQrcode, pix.pixExpiresAt, pix.fiatAmountBrl, orderId],
+  );
+}
+
+/** Mapeo inverso para el webhook de Nautt: de la orden Nautt a nuestra orden. */
+export async function findOrderByNauttOrderUuid(nauttOrderUuid: string): Promise<{ id: number; public_id: string; status: string } | null> {
+  const { rows } = await pool.query<{ id: number; public_id: string; status: string }>(
+    `SELECT id, public_id, status::text AS status FROM orders WHERE nautt_order_uuid = $1 LIMIT 1`,
+    [nauttOrderUuid],
+  );
+  return rows[0] ?? null;
 }
 
 /**
@@ -715,11 +747,17 @@ export async function findOrderByPublicId(publicId: string): Promise<{
   mp_preference_id: string | null;
   mp_payment_id: string | null;
   payment_method: string;
+  nautt_order_uuid: string | null;
+  pix_qrcode: string | null;
+  pix_expires_at: string | null;
+  pix_fiat_amount_brl: number | null;
 } | null> {
   const { rows } = await pool.query(
     `SELECT id, status::text AS status, total_usd::float AS total_usd,
             total_ars::float AS total_ars, customer_email, customer_name,
-            mp_preference_id, mp_payment_id, payment_method
+            mp_preference_id, mp_payment_id, payment_method,
+            nautt_order_uuid, pix_qrcode, pix_expires_at,
+            pix_fiat_amount_brl::float AS pix_fiat_amount_brl
        FROM orders WHERE public_id = $1 LIMIT 1`,
     [publicId],
   );

@@ -67,7 +67,6 @@ export default function PaymentMethods({ variant = 'compact', className = '' }: 
           <span className="inline-flex items-center gap-1.5 rounded-full border border-[#32BCAD]/30 bg-[#32BCAD]/10 px-2.5 py-1 text-[11px] font-medium text-[#5fd9cb]">
             <PixIcon className="h-3 w-3" />
             PIX
-            <span className="text-[#5fd9cb]/60">({t('payment_methods.pix_soon')})</span>
           </span>
         </div>
       </div>
@@ -91,7 +90,7 @@ export default function PaymentMethods({ variant = 'compact', className = '' }: 
         <span className="inline-flex items-center gap-2">
           <PixIcon className="h-5 w-5 text-[#5fd9cb]" />
           <b className="font-medium text-cream/80">PIX</b>
-          <span className="text-cream/40">({t('payment_methods.pix_soon')})</span>
+          <span className="hidden sm:inline text-cream/40">· {t('payment_methods.pix_reais')}</span>
         </span>
       </div>
       <p className="mt-2 text-center text-xs text-cream/40">{t('payment_methods.currency_note')}</p>

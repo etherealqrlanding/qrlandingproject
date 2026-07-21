@@ -54,7 +54,7 @@ function orderTotalDisplay(o: AdminOrderListItem): string {
 // Detalle inline de la orden — solo lectura. Las acciones (reintegrar, modificar,
 // confirmar cobro, etc.) siguen viviendo únicamente en el detalle completo ("Ver →");
 // esto es para monitorear sin salir del listado.
-const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo' };
+const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo', pix: 'PIX' };
 
 function OrderExtraDetails({ o, twoColumns }: Readonly<{ o: AdminOrderListItem; twoColumns?: boolean }>) {
   return (
