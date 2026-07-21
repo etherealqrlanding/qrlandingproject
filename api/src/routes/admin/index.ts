@@ -84,6 +84,38 @@ adminRouter.get('/me', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// GET /api/admin/preview-link — código interno para que el equipo vea el sitio público
+// ya "adentro" del muro de exclusividad, sin tener que pedirle el código a un vendedor
+// real. Reutiliza el mismo mecanismo que ya usan los clientes referidos (?ref=CODE +
+// cookie), pero contra un vendedor "casa" dedicado (is_house = TRUE, comisión 0) que no
+// se usa para ventas — se crea solo la primera vez que se pide este link.
+const PREVIEW_SELLER_CODE = 'ADMINPREVIEW';
+
+adminRouter.get('/preview-link', async (_req, res, next) => {
+  try {
+    const { rows } = await pool.query<{ id: number }>(
+      `SELECT id FROM sellers WHERE code = $1 LIMIT 1`,
+      [PREVIEW_SELLER_CODE],
+    );
+    if (rows[0]) {
+      // Por si alguna vez quedó desactivado a mano, nos aseguramos de que siga sirviendo.
+      await pool.query(`UPDATE sellers SET is_active = TRUE WHERE id = $1`, [rows[0].id]);
+    } else {
+      await pool.query(
+        `INSERT INTO sellers (code, name, commission_percent, is_active, is_house, notes)
+         VALUES ($1, $2, 0, TRUE, TRUE, $3)
+         ON CONFLICT (code) DO NOTHING`,
+        [
+          PREVIEW_SELLER_CODE,
+          'Vista previa (equipo)',
+          'Código interno para que el equipo revise el sitio público como si fuera un cliente. No se usa para ventas reales — excluido de estadísticas de vendedores.',
+        ],
+      );
+    }
+    res.json({ data: { ref_code: PREVIEW_SELLER_CODE } });
+  } catch (err) { next(err); }
+});
+
 // GET /api/admin/categories — para el dropdown del form de productos
 adminRouter.get('/categories', async (_req, res, next) => {
   try {

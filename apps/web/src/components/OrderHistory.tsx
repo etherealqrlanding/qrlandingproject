@@ -107,6 +107,16 @@ function detailAddonCreated(payload: Record<string, unknown>): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+function detailCreatedByAdmin(payload: Record<string, unknown>): string | null {
+  const adminEmail = strVal(payload.admin_email);
+  const sellerName = strVal(payload.seller_name);
+  const sellerCode = strVal(payload.seller_code);
+  const parts: string[] = [];
+  if (adminEmail) parts.push(`por ${adminEmail}`);
+  if (sellerName) parts.push(`a nombre de ${sellerName}${sellerCode ? ` (${sellerCode})` : ''}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 function detailAddonCollected(payload: Record<string, unknown>): string | null {
   const parts: string[] = [];
   const a = Number(payload.extra_adults ?? payload.new_adults ?? 0);
@@ -125,6 +135,7 @@ function eventDetail(type: string, payload: Record<string, unknown> | null | und
   if (type === 'refund_processed') return detailRefund(payload, false);
   if (type === 'refund_partial_processed') return detailRefund(payload, true);
   if (type === 'addon_cash_created') return detailAddonCreated(payload);
+  if (type === 'cash_order_created_by_admin' || type === 'preference_created_by_admin') return detailCreatedByAdmin(payload);
   if (type === 'addon_cash_collected' || type === 'addon_paid' || type === 'order_increased_cash') {
     return detailAddonCollected(payload);
   }

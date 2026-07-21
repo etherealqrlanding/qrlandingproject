@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
-import { getAdminNotificationStreamUrl, type AdminNewOrderPaidEvent } from '../../lib/adminApi';
+import { adminApi, getAdminNotificationStreamUrl, type AdminNewOrderPaidEvent } from '../../lib/adminApi';
 import BottomNavAdmin from './BottomNavAdmin';
 import Logo from '../Logo';
 
@@ -26,9 +26,26 @@ export default function AdminLayout() {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const [toast, setToast] = useState<AdminNewOrderPaidEvent | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const esRef = useRef<EventSource | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Abre el sitio público en otra pestaña ya "adentro" del muro de exclusividad, sin
+  // tener que pedirle el código a un vendedor real (ver GET /api/admin/preview-link).
+  const handlePreviewSite = async () => {
+    setPreviewLoading(true);
+    try {
+      const { ref_code } = await adminApi.previewLink();
+      const url = new URL('/', window.location.origin);
+      url.searchParams.set('ref', ref_code);
+      window.open(url.toString(), '_blank', 'noopener');
+    } catch {
+      alert('No se pudo abrir la vista previa del sitio. Probá de nuevo en un momento.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -143,6 +160,14 @@ export default function AdminLayout() {
         </nav>
 
         <div className="px-3 py-4 border-t border-gold/10">
+          <button
+            type="button"
+            onClick={handlePreviewSite}
+            disabled={previewLoading}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-3 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition disabled:opacity-50"
+          >
+            {previewLoading ? 'Abriendo...' : <>Ver sitio ↗</>}
+          </button>
           {me && (
             <div className="px-3 mb-3">
               <p className="text-xs text-cream/50">Conectado como</p>
@@ -164,8 +189,17 @@ export default function AdminLayout() {
         {/* Header móvil */}
         <header className="md:hidden sticky top-0 z-30 bg-ink-soft/90 backdrop-blur border-b border-gold/10 flex items-center justify-between px-4 h-12">
           <Logo className="h-8 w-auto" />
-          <div className="flex items-center gap-4">
-            {me && <p className="text-xs text-cream/50 truncate max-w-[140px]">{me.admin.email}</p>}
+          <div className="flex items-center gap-3">
+            {me && <p className="text-xs text-cream/50 truncate max-w-[100px]">{me.admin.email}</p>}
+            <button
+              type="button"
+              onClick={handlePreviewSite}
+              disabled={previewLoading}
+              aria-label="Ver sitio"
+              className="text-xs text-gold-soft hover:text-gold transition disabled:opacity-50"
+            >
+              {previewLoading ? '...' : 'Ver sitio ↗'}
+            </button>
             <button
               type="button"
               onClick={handleSignOut}

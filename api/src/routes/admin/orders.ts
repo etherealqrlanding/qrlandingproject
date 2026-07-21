@@ -3,17 +3,18 @@ import { z } from 'zod';
 import type { PoolClient } from 'pg';
 import { pool } from '../../db.js';
 import { RouteValidationError } from '../../errors.js';
-import { refundPayment } from '../../services/mercadopago.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError } from '../../repos/orders.js';
+import { refundPayment, createPreference } from '../../services/mercadopago.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendPaymentLinkEmail } from '../../services/email.js';
+import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
 import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon, cancelPendingAddonsForOrder } from '../../repos/addons.js';
 import { syncOrderWithMp } from '../checkout.js';
-import { getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
-import { checkAvailabilityTxLocked } from '../../repos/availability.js';
-import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNotification } from '../../repos/notifications.js';
+import { getModifyWindow, getCancelWindow, checkOperationWindow, getExchangeRate, convertUsdToArs } from '../../services/settings.js';
+import { checkAvailabilityTxLocked, checkSingleDateAvailability } from '../../repos/availability.js';
+import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNotification, createOrderCreatedByAdminNotification } from '../../repos/notifications.js';
+import { config } from '../../config.js';
 
 export const adminOrdersRouter = Router();
 
@@ -28,6 +29,258 @@ const listQuery = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   search: z.string().max(120).optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
+});
+
+// POST /api/admin/orders — reserva manual cargada por el equipo y asignada a un
+// vendedor puntual (ej. el vendedor le pidió al equipo que se la cargue). Mirror
+// de sellerRouter.post('/me/checkout', ...) pero el vendedor viene del body (elegido
+// en el admin) en vez de req.seller, y la trazabilidad queda en payment_events con
+// email del admin + datos del vendedor asignado — así el histórico de la orden deja
+// claro que no la cargó ni el cliente ni el propio vendedor.
+const adminCreateOrderSchema = z.object({
+  seller_id: z.number().int().positive(),
+  option_id: z.number().int().positive(),
+  service_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'service_date must be YYYY-MM-DD'),
+  adults: z.number().int().min(1).max(20),
+  children: z.number().int().min(0).max(20),
+  customer: z.object({
+    name: z.string().min(2).max(120),
+    email: z.string().email().max(160),
+    phone: z.string().max(40).optional().nullable(),
+    nationality: z.string().min(1, 'La nacionalidad es obligatoria').max(80),
+    dni: z.string().max(40).optional().nullable(),
+  }),
+  payment_method: z.enum(['mercadopago', 'cash']),
+  transfer_requested: z.boolean().optional(),
+  transfer_hotel: z.string().max(200).optional().nullable(),
+  transfer_room: z.string().max(80).optional().nullable(),
+});
+
+adminOrdersRouter.post('/', async (req, res, next) => {
+  try {
+    const parsed = adminCreateOrderSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const input = parsed.data;
+
+    // Revalidamos el vendedor server-side: el selector del admin solo lista activos,
+    // pero no podemos confiar únicamente en lo que mandó el cliente.
+    const { rows: sellerRows } = await pool.query<{ id: number; code: string; name: string; is_permanent: boolean }>(
+      `SELECT id, code, name, is_permanent FROM sellers WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+      [input.seller_id],
+    );
+    const seller = sellerRows[0];
+    if (!seller) return res.status(404).json({ error: 'Vendedor no encontrado o inactivo' });
+
+    // Mismo gate que el portal del vendedor: efectivo solo si es permanente.
+    if (input.payment_method === 'cash' && !seller.is_permanent) {
+      return res.status(403).json({
+        error: 'Ese vendedor no tiene habilitado el cobro en efectivo. Usá Mercado Pago para esta reserva.',
+      });
+    }
+
+    const { rows: optionRows } = await pool.query<{
+      id: number; product_id: number;
+      name_es: string; name_en: string;
+      price_adult_usd: string; price_child_usd: string | null;
+      transfer_price_usd: string;
+      net_price_adult_usd: string | null; net_price_child_usd: string | null;
+      net_transfer_price_usd: string | null; net_price_currency: string;
+      net_price_adult_ars: string | null; net_price_child_ars: string | null;
+      net_transfer_price_ars: string | null;
+      available_days: number[];
+      default_capacity_per_day: number;
+      product_name: string; product_slug: string;
+      is_active: boolean; product_active: boolean;
+    }>(
+      `SELECT
+         o.id, o.product_id, o.name_es, o.name_en,
+         o.price_adult_usd::text AS price_adult_usd,
+         o.price_child_usd::text  AS price_child_usd,
+         o.transfer_price_usd::text AS transfer_price_usd,
+         o.net_price_adult_usd::text    AS net_price_adult_usd,
+         o.net_price_child_usd::text    AS net_price_child_usd,
+         o.net_transfer_price_usd::text AS net_transfer_price_usd,
+         o.net_price_currency,
+         o.net_price_adult_ars::text    AS net_price_adult_ars,
+         o.net_price_child_ars::text    AS net_price_child_ars,
+         o.net_transfer_price_ars::text AS net_transfer_price_ars,
+         o.available_days, o.default_capacity_per_day, o.is_active,
+         p.name AS product_name, p.slug AS product_slug,
+         p.is_active AS product_active
+       FROM product_options o
+       JOIN products p ON p.id = o.product_id
+      WHERE o.id = $1 LIMIT 1`,
+      [input.option_id],
+    );
+    const option = optionRows[0];
+    if (!option || !option.is_active || !option.product_active) {
+      return res.status(404).json({ error: 'Opción no encontrada o inactiva' });
+    }
+
+    const date = new Date(`${input.service_date}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return res.status(400).json({ error: 'Fecha inválida' });
+    if (date.getTime() < Date.now() - 86_400_000) return res.status(400).json({ error: 'La fecha no puede ser pasada' });
+    const isoDow = date.getDay() === 0 ? 7 : date.getDay();
+    if (option.available_days.length > 0 && !option.available_days.includes(isoDow)) {
+      return res.status(400).json({ error: 'La opción no opera ese día', available_days: option.available_days });
+    }
+
+    const availCheck = await checkSingleDateAvailability(
+      option.id, option.default_capacity_per_day, input.service_date, input.adults + input.children,
+    );
+    if (!availCheck.ok) {
+      return res.status(409).json({ error: availCheck.message ?? 'Fecha no disponible' });
+    }
+
+    const priceAdult = Number.parseFloat(option.price_adult_usd);
+    const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
+    if (input.children > 0 && option.price_child_usd == null) {
+      return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
+    }
+    const transferPriceUsd = Number.parseFloat(option.transfer_price_usd ?? '0');
+    const transferSubtotal = (input.transfer_requested && transferPriceUsd > 0)
+      ? Math.round(transferPriceUsd * (input.adults + input.children) * 100) / 100
+      : 0;
+    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
+
+    const rate = await getExchangeRate();
+    const totalArs = convertUsdToArs(subtotalUsd, rate);
+
+    const pax = input.adults + input.children;
+    const transferReq = (input.transfer_requested && transferPriceUsd > 0);
+    const netCurrency = option.net_price_currency ?? 'USD';
+    let netTotalUsd: number | null = null;
+    if (netCurrency === 'USD') {
+      const netAdult = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
+      const netChild = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
+      const netTransfer = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+      if (netAdult != null) {
+        netTotalUsd = Math.round((
+          input.adults * netAdult
+          + input.children * (netChild ?? netAdult)
+          + (transferReq && netTransfer != null ? netTransfer * pax : 0)
+        ) * 100) / 100;
+      }
+    } else {
+      const netAdultArs = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
+      const netChildArs = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
+      const netTransferArs = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+      if (netAdultArs != null && rate > 0) {
+        const netTotalArs = Math.round((
+          input.adults * netAdultArs
+          + input.children * (netChildArs ?? netAdultArs)
+          + (transferReq && netTransferArs != null ? netTransferArs * pax : 0)
+        ) * 100) / 100;
+        netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
+      }
+    }
+
+    const order = await createPendingOrder({
+      customer: input.customer,
+      item: {
+        product_id: option.product_id,
+        option_id: option.id,
+        product_name_snapshot: option.product_name,
+        option_name_snapshot: option.name_es,
+        service_date: input.service_date,
+        adults: input.adults,
+        children: input.children,
+        unit_price_adult_usd: priceAdult,
+        unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
+        subtotal_usd: subtotalUsd,
+        transfer_requested: input.transfer_requested ?? false,
+        transfer_hotel: input.transfer_hotel ?? null,
+        transfer_room: (input.transfer_requested && input.transfer_room) ? input.transfer_room : null,
+        net_total_usd: netTotalUsd,
+      },
+      total_usd: subtotalUsd,
+      total_ars: totalArs,
+      exchange_rate_used: rate,
+      ref_code: seller.code,
+      payment_method: input.payment_method,
+      default_capacity_per_day: option.default_capacity_per_day,
+      utm: { source: 'admin_manual', medium: seller.code, campaign: null },
+    });
+
+    const eventPayload = {
+      admin_email: req.admin!.email,
+      admin_id: req.admin!.id,
+      seller_code: seller.code,
+      seller_name: seller.name,
+    };
+
+    if (input.payment_method === 'cash') {
+      await logPaymentEvent(order.id, 'cash_order_created_by_admin', null, eventPayload);
+      sendCashOrderNotifications(order.id).catch((err) =>
+        console.error('[email] sendCashOrderNotifications failed for admin-created order', order.id, err),
+      );
+      createOrderCreatedByAdminNotification({
+        sellerId: seller.id,
+        orderId: order.id,
+        orderPublicId: order.public_id,
+        paymentMethod: 'cash',
+        customerName: input.customer.name,
+        optionName: option.name_es,
+        serviceDate: input.service_date,
+        totalArs,
+      }).catch((err) => console.error('[notif] createOrderCreatedByAdminNotification failed', order.id, err));
+
+      return res.status(201).json({
+        data: {
+          order_public_id: order.public_id, payment_method: 'cash', total_usd: subtotalUsd,
+          seller: { id: seller.id, code: seller.code, name: seller.name },
+        },
+      });
+    }
+
+    const pref = await createPreference({
+      orderPublicId: order.public_id,
+      title: `${option.name_es} — ${option.product_name}`,
+      totalArs,
+      quantityAdults: input.adults,
+      quantityChildren: input.children,
+      customer: {
+        name: input.customer.name,
+        email: input.customer.email,
+        phone: input.customer.phone ?? undefined,
+      },
+      metadata: {
+        order_id: order.id,
+        seller_ref: seller.code,
+        option_id: option.id,
+        product_slug: option.product_slug,
+        service_date: input.service_date,
+      },
+      webOrigin: config.WEB_ORIGIN,
+    });
+
+    await setOrderPreferenceId(order.id, pref.id, pref.init_point);
+    await logPaymentEvent(order.id, 'preference_created_by_admin', pref.id, { ...eventPayload, init_point: pref.init_point });
+
+    sendPaymentLinkEmail(order.id, pref.init_point).catch((err) =>
+      console.error('[email] sendPaymentLinkEmail failed for admin-created order', order.id, err),
+    );
+    createOrderCreatedByAdminNotification({
+      sellerId: seller.id,
+      orderId: order.id,
+      orderPublicId: order.public_id,
+      paymentMethod: 'mercadopago',
+      customerName: input.customer.name,
+      optionName: option.name_es,
+      serviceDate: input.service_date,
+      totalArs,
+    }).catch((err) => console.error('[notif] createOrderCreatedByAdminNotification failed', order.id, err));
+
+    res.status(201).json({
+      data: {
+        order_public_id: order.public_id, payment_method: 'mercadopago',
+        total_usd: subtotalUsd, total_ars: totalArs,
+        seller: { id: seller.id, code: seller.code, name: seller.name },
+      },
+    });
+  } catch (err) { next(err); }
 });
 
 adminOrdersRouter.get('/', async (req, res, next) => {

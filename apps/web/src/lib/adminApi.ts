@@ -293,6 +293,37 @@ export interface AdminOrderListItem {
   cash_collected_currency: 'ARS' | 'USD' | null;
 }
 
+// Payload de reserva manual creada por el admin a nombre de un vendedor puntual —
+// mismos campos que SellerBookingInput (portal del vendedor) + seller_id, porque el
+// backend hace exactamente la misma validación de disponibilidad/precio/atribución,
+// solo que el vendedor viene elegido a mano en vez de salir del token de sesión.
+export interface AdminBookingInput {
+  seller_id: number;
+  option_id: number;
+  service_date: string;
+  adults: number;
+  children: number;
+  customer: {
+    name: string;
+    email: string;
+    phone?: string | null;
+    nationality?: string | null;
+    dni?: string | null;
+  };
+  payment_method: 'mercadopago' | 'cash';
+  transfer_requested?: boolean;
+  transfer_hotel?: string | null;
+  transfer_room?: string | null;
+}
+
+export interface AdminBookingResult {
+  order_public_id: string;
+  payment_method: 'mercadopago' | 'cash';
+  total_usd: number;
+  total_ars?: number;
+  seller: { id: number; code: string; name: string };
+}
+
 export interface ArchivedOrderItem {
   id: number;
   public_id: string;
@@ -402,6 +433,10 @@ export interface AdminNewOrderPaidEvent {
 
 export const adminApi = {
   me: () => request<AdminMe>('/api/admin/me'),
+  // Código de un vendedor "casa" reservado, creado la primera vez que se pide, para
+  // que el equipo pueda abrir el sitio público ya adentro del muro de exclusividad
+  // (sin pedirle el código a un vendedor real).
+  previewLink: () => request<{ ref_code: string }>('/api/admin/preview-link'),
   categories: {
     list: () => request<AdminCategory[]>('/api/admin/categories'),
   },
@@ -526,6 +561,11 @@ export const adminApi = {
       `${(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000'}/api/admin/sellers/${id}/qr?format=${format}&size=${size}`,
   },
   orders: {
+    create: (input: AdminBookingInput) =>
+      request<AdminBookingResult>('/api/admin/orders', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     list: (filters?: { status?: string; ref?: string; from?: string; to?: string; search?: string; limit?: number }) => {
       const qs = filters
         ? '?' + Object.entries(filters).filter(([_, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')

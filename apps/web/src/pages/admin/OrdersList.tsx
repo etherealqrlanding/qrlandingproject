@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
 import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
+import AdminBookingModal from '../../components/admin/AdminBookingModal';
 import Checkbox from '../../components/Checkbox';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
@@ -268,6 +269,7 @@ export default function OrdersList() {
   // Acordeón: qué orden está desplegada mostrando más detalle inline (solo lectura —
   // las acciones siguen viviendo en el detalle completo vía "Ver →").
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
   const reload = (currentFilters = filters) => {
     setOrders(null);
@@ -536,11 +538,24 @@ export default function OrdersList() {
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Ventas</p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Órdenes</h1>
         </div>
-        <Link to="/admin/orders/archivo"
-          className="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gold/15 text-xs text-cream/50 hover:text-cream/80 hover:border-gold/30 transition">
-          📁 Archivo
-        </Link>
+        <div className="flex items-center gap-2 mt-1">
+          <button
+            type="button"
+            onClick={() => setBookingModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gold text-ink text-xs font-semibold hover:bg-gold/90 transition"
+          >
+            + Nueva reserva
+          </button>
+          <Link to="/admin/orders/archivo"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gold/15 text-xs text-cream/50 hover:text-cream/80 hover:border-gold/30 transition">
+            📁 Archivo
+          </Link>
+        </div>
       </header>
+
+      {bookingModalOpen && (
+        <AdminBookingModal onClose={() => setBookingModalOpen(false)} onCreated={() => reload()} />
+      )}
 
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4 md:mb-6">

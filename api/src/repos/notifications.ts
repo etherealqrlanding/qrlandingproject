@@ -293,6 +293,35 @@ export async function createCashAddonCreatedByAdminNotification(input: {
   });
 }
 
+// Notifica al vendedor cuando el equipo carga una reserva manual a su nombre (porque
+// se la pidió y no la cargó él mismo desde el portal). A diferencia de
+// createCashBookingNotification (que avisa de una reserva de un cliente directo), acá
+// el actor es el equipo, así que el tono deja claro que fue el equipo quien la ingresó.
+export async function createOrderCreatedByAdminNotification(input: {
+  sellerId: number;
+  orderId: number;
+  orderPublicId: string;
+  paymentMethod: 'cash' | 'mercadopago';
+  customerName: string;
+  optionName: string;
+  serviceDate: string;
+  totalArs: number;
+}): Promise<void> {
+  const isCash = input.paymentMethod === 'cash';
+  await createNotification({
+    seller_id: input.sellerId,
+    type: 'order_created_by_admin',
+    title: isCash ? '💵 El equipo te cargó una reserva' : '✎ El equipo te cargó una reserva',
+    body: isCash
+      ? `Ingresamos una reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}) a tu nombre, por ${fmtArs(input.totalArs)}. Coordiná el cobro con el pasajero y marcala como Cobrada desde "Mis ventas".`
+      : `Ingresamos una reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}) a tu nombre, por ${fmtArs(input.totalArs)}. Le enviamos el link de pago al pasajero — la comisión te queda acreditada cuando pague.`,
+    metadata: {
+      order_id: input.orderId, order_public_id: input.orderPublicId,
+      payment_method: input.paymentMethod, total_ars: input.totalArs, service_date: input.serviceDate,
+    },
+  });
+}
+
 // Crea notificación cuando el admin marca comisiones como liquidadas.
 export async function createCommissionPaidNotification(
   sellerId: number,

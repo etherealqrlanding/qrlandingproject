@@ -8,6 +8,8 @@ const LABELS: Record<string, { label: string; tone: EventTone }> = {
   preference_created_by_seller: { label: 'Link de pago generado (vendedor)', tone: 'neutral' },
   cash_order_created: { label: 'Reserva registrada (efectivo)', tone: 'neutral' },
   cash_order_created_by_seller: { label: 'Reserva registrada por el vendedor (efectivo)', tone: 'neutral' },
+  cash_order_created_by_admin: { label: 'Reserva creada por el equipo (efectivo, a nombre de vendedor)', tone: 'neutral' },
+  preference_created_by_admin: { label: 'Link de pago generado por el equipo (a nombre de vendedor)', tone: 'neutral' },
   order_paid: { label: 'Pago confirmado', tone: 'good' },
   order_pending: { label: 'Pago pendiente', tone: 'warn' },
   order_failed: { label: 'Pago rechazado', tone: 'bad' },
