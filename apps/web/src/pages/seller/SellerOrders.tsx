@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { sellerApi, SellerApiError, type SellerOrder, type SellerPendingAddon } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerOrder, type SellerPendingAddon } from '../../lib/sellerApi';
 import DetailRow from '../../components/DetailRow';
 
 function isWindowBlocked(hours: number | null, serviceDate: string): boolean {
@@ -341,18 +341,33 @@ export default function SellerOrders() {
 
   // Traemos todas las órdenes y filtramos en el cliente por estado derivado
   // (Cobrada/Rendida son sub-estados de 'paid', no se pueden filtrar server-side).
-  useEffect(() => {
-    setLoading(true);
+  const loadOrders = (showSpinner: boolean) => {
+    if (showSpinner) setLoading(true);
     setError(null);
     Promise.all([sellerApi.orders(), sellerApi.operationWindows()])
       .then(([data, windows]) => {
         setOrders(data);
-        setExpanded(null);
         setModifyWindow(windows.modify);
         setCancelWindow(windows.cancel);
+        if (showSpinner) setExpanded(null);
       })
       .catch((err) => setError((err as SellerApiError).message))
-      .finally(() => setLoading(false));
+      .finally(() => { if (showSpinner) setLoading(false); });
+  };
+
+  useEffect(() => {
+    loadOrders(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Push en vivo: cualquier notificación (venta nueva, ampliación, rendición, reserva
+  // modificada por el equipo) puede afectar esta lista — la refrescamos sola en vez
+  // de esperar a que el vendedor recargue a mano. Sin spinner para no interrumpir
+  // si está mirando/expandiendo una fila.
+  useEffect(() => {
+    const handler = () => loadOrders(false);
+    window.addEventListener(SELLER_NOTIFICATION_EVENT, handler);
+    return () => window.removeEventListener(SELLER_NOTIFICATION_EVENT, handler);
   }, []);
 
   const visible = useMemo(

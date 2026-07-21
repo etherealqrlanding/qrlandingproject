@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
-import { sellerApi, getNotificationStreamUrl, type SellerNotification } from '../../lib/sellerApi';
+import { sellerApi, getNotificationStreamUrl, SELLER_NOTIFICATION_EVENT, type SellerNotification } from '../../lib/sellerApi';
 import BottomNavSeller from './BottomNavSeller';
 import Logo from '../Logo';
 
@@ -67,6 +67,7 @@ export default function SellerLayout() {
         const notif = JSON.parse(e.data) as SellerNotification;
         bumpUnread();
         showToast(notif);
+        window.dispatchEvent(new CustomEvent(SELLER_NOTIFICATION_EVENT, { detail: notif }));
       } catch { /* ignore parse error */ }
     });
 

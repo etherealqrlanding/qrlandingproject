@@ -284,6 +284,13 @@ export interface SellerNotification {
   created_at: string;
 }
 
+// Nombre del evento global (window) que se dispara cuando llega una notificación en
+// vivo por SSE — las pantallas de datos (Mis Ventas, Liquidaciones, el balance del
+// header) lo escuchan para refrescarse solas en vez de esperar a que el vendedor
+// recargue a mano. Vive acá (no en SellerLayout) para que useSellerAuth pueda
+// escucharlo sin crear un import circular con el layout.
+export const SELLER_NOTIFICATION_EVENT = 'seller:notification';
+
 // Devuelve la URL del stream SSE con el token actual como query param
 export async function getNotificationStreamUrl(): Promise<string | null> {
   try {

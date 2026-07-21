@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { sellerApi, SellerApiError, type SellerCommission, type SellerCommissionOrder } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerCommission, type SellerCommissionOrder } from '../../lib/sellerApi';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 
 const PAGE_SIZE = 10;
@@ -185,6 +185,19 @@ export default function SellerCommissions() {
       .then(setCommissions)
       .catch((err) => setError((err as SellerApiError).message))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Push en vivo: cuando el equipo liquida comisiones o registra una rendición de
+  // efectivo, esta pantalla se refresca sola en vez de esperar a que se recargue a mano.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const type = (e as CustomEvent).detail?.type;
+      if (type === 'commission_paid' || type === 'net_settled') {
+        sellerApi.commissions().then(setCommissions).catch(() => {});
+      }
+    };
+    window.addEventListener(SELLER_NOTIFICATION_EVENT, handler);
+    return () => window.removeEventListener(SELLER_NOTIFICATION_EVENT, handler);
   }, []);
 
   const toggleRow = (date: string) => {

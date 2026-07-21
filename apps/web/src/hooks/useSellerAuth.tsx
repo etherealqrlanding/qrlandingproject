@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { sellerApi, SellerApiError, type SellerMe } from '../lib/sellerApi';
+import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerMe } from '../lib/sellerApi';
 
 type LoadMeStatus = 'ok' | 'auth_error' | 'transient_error';
 
@@ -89,6 +89,16 @@ export function SellerAuthProvider({ children }: { children: ReactNode }) {
     if (!session) return;
     const id = window.setInterval(() => { loadMe(session); }, ME_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(id);
+  }, [session, loadMe]);
+
+  // Push en vivo: cualquier notificación (venta, ampliación, liquidación, rendición)
+  // puede cambiar los saldos que se muestran en el resumen del vendedor — los
+  // refrescamos solos en vez de esperar el poll de 5 min o el foco de ventana.
+  useEffect(() => {
+    if (!session) return;
+    const handler = () => { loadMe(session); };
+    window.addEventListener(SELLER_NOTIFICATION_EVENT, handler);
+    return () => window.removeEventListener(SELLER_NOTIFICATION_EVENT, handler);
   }, [session, loadMe]);
 
   useEffect(() => {
