@@ -109,10 +109,19 @@ actionRouter.post('/:token', async (req, res, next) => {
       const parsedCurrency = collectCurrencySchema.safeParse(req.body ?? {});
       const currency = parsedCurrency.success ? parsedCurrency.data.currency : 'ARS';
 
-      await pool.query(
-        `UPDATE orders SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW(), cash_collected_currency = $2 WHERE id = $1`,
+      // El token ya se consumió de forma atómica arriba (no se puede reusar el mismo
+      // link dos veces), pero igual guardamos el mismo status = 'pending' que usa el
+      // portal del vendedor: si la orden cambió de estado por otra vía justo en el medio
+      // (ej. el admin la canceló), preferimos un 409 claro antes que pisarla en silencio.
+      const { rowCount } = await pool.query(
+        `UPDATE orders
+            SET status = 'paid', paid_at = NOW(), cash_collected_at = NOW(), cash_collected_currency = $2
+          WHERE id = $1 AND status = 'pending'`,
         [row.order_id, currency],
       );
+      if (!rowCount) {
+        return res.status(409).json({ error: 'order_not_actionable' });
+      }
       await logPaymentEvent(row.order_id, 'cash_collected_by_seller', null, {
         seller_id: row.seller_id, via: 'email_token', currency,
       });
