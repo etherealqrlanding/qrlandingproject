@@ -73,7 +73,7 @@ export default function ProductForm() {
   };
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <Link to="/admin/products" className="text-sm text-gold-soft hover:text-gold">
         ← Volver al listado
       </Link>
@@ -103,13 +103,13 @@ export default function ProductForm() {
       {!loading && (
         <>
           {!isNew && (
-            <div className="flex gap-1 border-b border-gold/10 mb-6">
+            <div className="flex gap-1 border-b border-gold/10 mb-6 overflow-x-auto">
               {(['general', 'options', 'availability', 'images'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTab(t)}
-                  className={`px-4 py-2.5 text-sm transition border-b-2 -mb-px ${
+                  className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm transition border-b-2 -mb-px ${
                     tab === t
                       ? 'border-gold text-gold'
                       : 'border-transparent text-cream/60 hover:text-cream'
