@@ -218,10 +218,16 @@ export default function ProductPage() {
             <p className="mt-2 text-cream/60 text-sm">{t('product.options_subtitle')}</p>
 
             <div className="mt-6 grid gap-4">
-              {product.options.map((opt) => (
+              {product.options.map((opt, i) => (
                 <OptionCard
                   key={opt.id}
                   option={opt}
+                  // Las opciones no tienen fotos propias — se recorren las de la casa
+                  // (en el mismo orden que el carrusel de arriba) para que cada card
+                  // se vea distinta en vez de repetir siempre la misma.
+                  imageUrl={product.images.length > 0
+                    ? product.images[i % product.images.length].url
+                    : product.hero_image}
                   selected={opt.id === selectedOptionId}
                   onSelect={() => setSelectedOptionId(opt.id)}
                   onBook={() => {
@@ -262,9 +268,10 @@ export default function ProductPage() {
 }
 
 function OptionCard({
-  option, selected, onSelect, onBook, lang,
+  option, imageUrl, selected, onSelect, onBook, lang,
 }: {
   option: ProductOption;
+  imageUrl: string | null;
   selected: boolean;
   onSelect: () => void;
   onBook: () => void;
@@ -294,17 +301,27 @@ function OptionCard({
           : 'border-gold/10 bg-ink-soft hover:border-gold/30'
       }`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-display text-xl text-cream">{name}</h3>
-          {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-xl font-display text-gold">USD {option.price_adult_usd}</p>
-          {priceArs != null && (
-            <p className="text-xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</p>
-          )}
-          <p className="mt-0.5 text-xs text-cream/50">{t('product.per_adult')}</p>
+      <div className="flex items-start gap-4">
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt=""
+            loading="lazy"
+            className="h-20 w-28 sm:h-24 sm:w-32 shrink-0 rounded-md object-cover border border-gold/10"
+          />
+        )}
+        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-4">
+          <div>
+            <h3 className="font-display text-xl text-cream">{name}</h3>
+            {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
+          </div>
+          <div className="sm:text-right shrink-0">
+            <p className="text-xl font-display text-gold">USD {option.price_adult_usd}</p>
+            {priceArs != null && (
+              <p className="text-xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</p>
+            )}
+            <p className="mt-0.5 text-xs text-cream/50">{t('product.per_adult')}</p>
+          </div>
         </div>
       </div>
 
