@@ -23,6 +23,7 @@ export interface SellerWithStats {
   commission_percent: string;            // numeric viene como string
   notes: string | null;
   is_active: boolean;
+  is_permanent: boolean;                 // puede cobrar en efectivo (vendedor permanente)
   is_house: boolean;                     // cuenta propia de la agencia (no es afiliado externo)
   created_at: string;
   // stats agregados
@@ -45,7 +46,7 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
     `SELECT
        s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
        s.commission_percent::text AS commission_percent,
-       s.notes, s.is_active, s.is_house, s.created_at,
+       s.notes, s.is_active, s.is_permanent, s.is_house, s.created_at,
        COALESCE(stats.orders_total, 0)::int AS orders_total,
        COALESCE(stats.orders_paid, 0)::int AS orders_paid,
        COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
