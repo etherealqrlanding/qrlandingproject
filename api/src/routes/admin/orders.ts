@@ -504,11 +504,11 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
     await client.query('BEGIN');
 
     const { rows: orderRows } = await client.query<{
-      id: number; status: string; mp_payment_id: string | null;
+      id: number; status: string; mp_payment_id: string | null; payment_method: string;
       total_usd: number; total_ars: number; exchange_rate_used: number;
       service_date: string | Date; commission_percent: number | null;
     }>(
-      `SELECT o.id, o.status::text AS status, o.mp_payment_id,
+      `SELECT o.id, o.status::text AS status, o.mp_payment_id, o.payment_method,
               o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
               o.exchange_rate_used::float AS exchange_rate_used,
               oi.service_date,
@@ -523,6 +523,15 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
     );
     const order = orderRows[0];
     if (!order) throw new RouteValidationError(404, 'Not found');
+
+    // PIX no tiene refund automático (Nautt no lo expone): el reintegro se hace a mano por
+    // off-ramp desde el panel de Nautt. Cortamos acá para no llamar a MP con el uuid de
+    // Nautt (que vive en mp_payment_id) y devolver un error confuso de Mercado Pago.
+    if (order.payment_method === 'pix') {
+      throw new RouteValidationError(400,
+        'Los reintegros de PIX no se procesan automáticamente. Hacé la devolución manualmente desde el panel de Nautt (transferencia PIX a la clave del cliente) y, si corresponde, marcá la orden como "cancelled" desde el detalle.',
+      );
+    }
 
     const cancelCheck = checkOperationWindow(await getCancelWindow(), order.service_date);
     if (cancelCheck.blocked) throw new RouteValidationError(409, cancelCheck.message ?? 'Fuera de la ventana permitida.');
@@ -734,7 +743,9 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       throw new RouteValidationError(400, `Solo se pueden modificar reservas pagadas. Estado actual: ${row.status}`);
     }
     if (row.payment_method !== 'mercadopago') {
-      throw new RouteValidationError(400, 'Esta reserva es en efectivo. La devolución en efectivo se gestiona desde su vía correspondiente.');
+      throw new RouteValidationError(400, row.payment_method === 'pix'
+        ? 'Las reservas de PIX no se pueden modificar automáticamente (PIX no tiene reintegro ni link incremental). Gestioná el cambio manualmente y, si hay que devolver, hacé la transferencia PIX desde el panel de Nautt.'
+        : 'Esta reserva es en efectivo. La devolución en efectivo se gestiona desde su vía correspondiente.');
     }
     if (!row.mp_payment_id) {
       throw new RouteValidationError(400, 'La orden no tiene un pago de Mercado Pago confirmado. Sincronizala con MP primero.');

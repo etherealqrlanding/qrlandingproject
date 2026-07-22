@@ -798,8 +798,8 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
     );
     const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
-    if (row.payment_method === 'mercadopago') {
-      return res.status(403).json({ error: 'Las reservas de Mercado Pago las cancela el administrador. Pedile al cliente que se contacte con nosotros.' });
+    if (row.payment_method !== 'cash') {
+      return res.status(403).json({ error: 'Las reservas online (tarjeta o PIX) las cancela el administrador — implican un reintegro al cliente. Pedile que se contacte con nosotros.' });
     }
     if (!['pending', 'paid'].includes(row.status)) {
       return res.status(400).json({ error: `No se puede cancelar una reserva en estado "${row.status}".` });
@@ -893,8 +893,8 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
     );
     const row = rows[0];
     if (!row) throw new RouteValidationError(404, 'Reserva no encontrada');
-    if (row.payment_method === 'mercadopago') {
-      throw new RouteValidationError(403, 'Las reservas de Mercado Pago las reprograma el administrador. Pedile al cliente que se contacte con nosotros.');
+    if (row.payment_method !== 'cash') {
+      throw new RouteValidationError(403, 'Las reservas online (tarjeta o PIX) las reprograma el administrador. Pedile al cliente que se contacte con nosotros.');
     }
     if (!['pending', 'paid'].includes(row.status)) {
       throw new RouteValidationError(400, `No se puede reprogramar una reserva en estado "${row.status}".`);

@@ -732,7 +732,7 @@ export default function SellerOrders() {
                               : <span className="text-cream/30">—</span>}
                         </DetailRow>
                       )}
-                      {o.status === 'pending' && o.payment_method === 'mercadopago' && (
+                      {o.status === 'pending' && o.payment_method !== 'cash' && (
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <p className="text-[10px] text-cream/40">
                             Le enviamos el link de pago al pasajero por email. Si no lo recibió, decile que nos escriba por WhatsApp.
@@ -750,9 +750,9 @@ export default function SellerOrders() {
                           </button>
                         </div>
                       )}
-                      {o.payment_method === 'mercadopago' && (o.status === 'pending' || o.status === 'paid') && (
+                      {o.payment_method !== 'cash' && (o.status === 'pending' || o.status === 'paid') && (
                         <p className="mt-3 pt-3 border-t border-gold/10 text-[10px] text-cream/40">
-                          Esta reserva es de Mercado Pago: cualquier cambio o cancelación lo gestiona el administrador. El cliente puede contactarnos directamente.
+                          Esta reserva es online (tarjeta o PIX): cualquier cambio o cancelación lo gestiona el administrador. El cliente puede contactarnos directamente.
                         </p>
                       )}
                       {o.payment_method === 'cash' && o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (
@@ -971,7 +971,7 @@ export default function SellerOrders() {
                                 <DetailRow label="N° orden"><span className="font-mono text-cream/50">{o.public_id.slice(0, 12).toUpperCase()}</span></DetailRow>
                               </div>
                             </div>
-                            {o.status === 'pending' && o.payment_method === 'mercadopago' && (
+                            {o.status === 'pending' && o.payment_method !== 'cash' && (
                               <div className="mt-4 pt-4 border-t border-gold/10 max-w-md">
                                 <p className="text-xs text-cream/40">
                                   Le enviamos el link de pago al pasajero por email. Si no lo recibió, decile que nos escriba por WhatsApp.
@@ -990,9 +990,9 @@ export default function SellerOrders() {
                                 <p className="mt-1.5 text-xs text-cream/35 text-center">Confirmar envía el email al pasajero</p>
                               </div>
                             )}
-                            {o.payment_method === 'mercadopago' && (o.status === 'pending' || o.status === 'paid') && (
+                            {o.payment_method !== 'cash' && (o.status === 'pending' || o.status === 'paid') && (
                               <p className="mt-4 pt-4 border-t border-gold/10 text-xs text-cream/40">
-                                Esta reserva es de Mercado Pago: cualquier cambio o cancelación lo gestiona el administrador. El cliente puede contactarnos directamente.
+                                Esta reserva es online (tarjeta o PIX): cualquier cambio o cancelación lo gestiona el administrador. El cliente puede contactarnos directamente.
                               </p>
                             )}
                             {o.payment_method === 'cash' && o.net_settled_at && (o.status === 'pending' || o.status === 'paid') && (
