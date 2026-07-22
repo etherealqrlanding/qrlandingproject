@@ -170,7 +170,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     const waUrl = phoneDigits ? `https://wa.me/${phoneDigits}?text=${encodeURIComponent(waMsg)}` : `https://wa.me/?text=${encodeURIComponent(waMsg)}`;
     return (
       <Overlay>
-        <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-7 text-center">
+        <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-7 text-center animate-modal-panel">
           <h2 className="font-display text-2xl text-cream mb-2">Link de ampliación generado</h2>
           <p className="text-sm text-cream/70 mb-5">
             Enviale este link al pasajero para que pague la diferencia (<strong className="text-gold">{fmtArs(preview.deltaArs)}</strong>).
@@ -196,7 +196,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
   return (
     <Overlay>
-      <div className="w-full max-w-lg rounded-2xl bg-ink-soft border border-gold/20 my-8">
+      <div className="w-full max-w-lg rounded-2xl bg-ink-soft border border-gold/20 my-8 animate-modal-panel">
         <header className="p-6 border-b border-gold/10">
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Modificar reserva</p>
           <h2 className="mt-2 font-display text-2xl text-cream">{item.option_name_snapshot}</h2>
@@ -314,7 +314,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
 function Overlay({ children }: { children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 bg-ink/85 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
       {children}
     </div>
   );

@@ -50,10 +50,10 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
     return (
       <div
         ref={backdropRef}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
         onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
       >
-        <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-amber-500/20 bg-[#0d0a0a] shadow-2xl overflow-hidden">
+        <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-amber-500/20 bg-[#0d0a0a] shadow-2xl overflow-hidden animate-modal-panel">
           <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-amber-500/60 to-transparent" />
           <div className="p-6 pb-8 sm:pb-6">
             <div className="flex items-center justify-between mb-5">
@@ -96,10 +96,10 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
   return (
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
       onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
-      <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-gold/20 bg-[#0d0a0a] shadow-2xl overflow-hidden">
+      <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-gold/20 bg-[#0d0a0a] shadow-2xl overflow-hidden animate-modal-panel">
         {/* Barra superior dorada */}
         <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
 

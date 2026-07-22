@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import type { AboutContent } from '../types/api';
 import { LoadingBlock } from '../components/Spinner';
+import Reveal from '../components/Reveal';
 
 export default function About() {
   const { t, i18n } = useTranslation();
@@ -40,11 +41,11 @@ export default function About() {
       )}
 
       {content && paragraphs.length > 0 && (
-        <div className="mt-8 max-w-2xl space-y-5 text-lg leading-relaxed text-cream/80">
+        <Reveal className="mt-8 max-w-2xl space-y-5 text-lg leading-relaxed text-cream/80">
           {paragraphs.map((p, i) => (
             <p key={i} className="whitespace-pre-line">{p}</p>
           ))}
-        </div>
+        </Reveal>
       )}
 
       {content && paragraphs.length === 0 && !error && (

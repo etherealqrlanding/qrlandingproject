@@ -6,6 +6,7 @@ import AdminBookingModal from '../../components/admin/AdminBookingModal';
 import Checkbox from '../../components/Checkbox';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
+import { useCountUp } from '../../hooks/useCountUp';
 
 
 
@@ -90,14 +91,18 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
   const label = {
     paid: 'Pagada', pending: 'Pendiente', failed: 'Fallida', cancelled: 'Cancelada', expired: 'Caducada', refunded: 'Reintegrada',
   }[status] ?? status;
-  return <span className={`text-[10px] px-2 py-0.5 rounded-full border ${color}`}>{label}</span>;
+  return <span className={`text-[10px] px-2.5 py-1 rounded-full border whitespace-nowrap ${color}`}>{label}</span>;
 }
 
-function SummaryCard({ label, value, sub, highlight }: Readonly<{ label: string; value: string; sub?: string; highlight?: boolean }>) {
+function SummaryCard({ label, value, format, sub, highlight }: Readonly<{
+  label: string; value: number; format?: (n: number) => string; sub?: string; highlight?: boolean;
+}>) {
+  const animated = useCountUp(value);
+  const display = format ? format(animated) : Math.round(animated).toLocaleString('es-AR');
   return (
-    <div className={`rounded-lg border p-3 md:p-4 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
+    <div className={`rounded-lg border p-3 md:p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
       <p className="text-[10px] uppercase tracking-widest text-gold-soft">{label}</p>
-      <p className={`mt-0.5 font-display text-xl md:text-2xl ${highlight ? 'text-gold' : 'text-cream'}`}>{value}</p>
+      <p className={`mt-0.5 font-display text-xl md:text-2xl tabular-nums ${highlight ? 'text-gold' : 'text-cream'}`}>{display}</p>
       {sub && <p className="mt-0.5 text-[11px] text-cream/40 hidden sm:block">{sub}</p>}
     </div>
   );
@@ -414,9 +419,9 @@ export default function OrdersList() {
         {/* ── Desktop: tabla ── */}
         <div className="hidden md:block rounded-lg border border-gold/10 overflow-hidden mb-4">
           <table className="w-full text-sm">
-            <thead className="bg-ink-soft/60 text-cream/60 text-xs uppercase tracking-wider">
+            <thead className="bg-ink-soft/60 text-cream/60 text-[10px] uppercase tracking-wider">
               <tr>
-                <th className="py-3 px-3 w-8">
+                <th className="py-2 px-2 w-8">
                   <Checkbox
                     checked={allPageSelected}
                     indeterminate={somePageSelected && !allPageSelected}
@@ -424,14 +429,14 @@ export default function OrdersList() {
                     aria-label="Seleccionar todas las órdenes de esta página"
                   />
                 </th>
-                <th className="text-left py-3 px-3 whitespace-nowrap">Fecha</th>
-                <th className="text-left py-3 px-3">Cliente</th>
-                <th className="text-left py-3 px-3">Servicio</th>
-                <th className="text-left py-3 px-3">Vendedor</th>
-                <th className="text-center py-3 px-3">Estado</th>
-                <th className="text-right py-3 px-3">Total / Neto</th>
-                <th className="text-right py-3 px-3">Comisión</th>
-                <th className="py-3 px-3" />
+                <th className="text-left py-2 px-2 whitespace-nowrap">Fecha</th>
+                <th className="text-left py-2 px-2">Cliente</th>
+                <th className="text-left py-2 px-2">Servicio</th>
+                <th className="text-left py-2 px-2">Vendedor</th>
+                <th className="text-center py-2 px-2">Estado</th>
+                <th className="text-right py-2 px-2">Total / Neto</th>
+                <th className="text-right py-2 px-2">Comisión</th>
+                <th className="py-2 px-2" />
               </tr>
             </thead>
             <tbody>
@@ -446,57 +451,63 @@ export default function OrdersList() {
                   }`}
                   onClick={() => toggleSelect(o.public_id)}
                 >
-                  <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
+                  <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selected.has(o.public_id)}
                       onChange={() => toggleSelect(o.public_id)}
                       aria-label={`Seleccionar orden de ${o.customer_name}`}
                     />
                   </td>
-                  <td className="py-2.5 px-3 text-cream/60 text-xs tabular-nums whitespace-nowrap">
+                  <td className="py-2 px-2 text-cream/60 text-[11px] tabular-nums whitespace-nowrap">
                     <p>{fmtShortDate(o.created_at)}</p>
                     <p className="text-[10px] text-cream/35">{fmtTime(o.created_at)}</p>
                   </td>
-                  <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
-                    <Link to={`/admin/orders/${o.public_id}`} className="text-cream hover:text-gold text-xs font-medium">
+                  <td className="py-2 px-2" onClick={(e) => e.stopPropagation()}>
+                    <Link to={`/admin/orders/${o.public_id}`} className="text-cream hover:text-gold text-[11px] font-medium">
                       {o.customer_name}
                     </Link>
-                    <p className="text-xs text-cream/40 truncate max-w-[140px]">{o.customer_email}</p>
+                    <p className="text-[10px] text-cream/40 truncate max-w-[140px]">{o.customer_email}</p>
                   </td>
-                  <td className="py-2.5 px-3 text-cream/80 text-xs">
+                  <td className="py-2 px-2 text-cream/80 text-[11px]">
                     {o.option_name}
-                    <p className="text-cream/40">{o.product_name}{o.service_date ? ` · ${o.service_date}` : ''}</p>
+                    <p className="text-[10px] text-cream/40">{o.product_name}{o.service_date ? ` · ${o.service_date}` : ''}</p>
                   </td>
-                  <td className="py-2.5 px-3 text-xs" onClick={(e) => e.stopPropagation()}>
+                  <td className="py-2 px-2 text-[11px]" onClick={(e) => e.stopPropagation()}>
                     {o.seller_name ? (
                       <>
                         <Link to={`/admin/sellers/${o.seller_id}`} className="text-cream/80 hover:text-gold">{o.seller_name}</Link>
-                        <p className="font-mono text-cream/40">{o.seller_code}</p>
+                        <p className="font-mono text-[10px] text-cream/40">{o.seller_code}</p>
                       </>
                     ) : <span className="text-cream/30">—</span>}
                   </td>
-                  <td className="py-2.5 px-3 text-center">
-                    <StatusBadge status={o.status} />
-                    {o.payment_method === 'cash' && (
-                      <span className="ml-1 text-xs px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5">
-                        Ef.{o.cash_collected_currency ? ` ${o.cash_collected_currency}` : ''}
-                      </span>
-                    )}
-                    {!o.admin_viewed_at && (
-                      <span className="ml-1 text-xs px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold">🆕 Nueva</span>
-                    )}
+                  <td className="py-2 px-2 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <StatusBadge status={o.status} />
+                      {(o.payment_method === 'cash' || !o.admin_viewed_at) && (
+                        <div className="flex items-center gap-1">
+                          {o.payment_method === 'cash' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5 whitespace-nowrap">
+                              Ef.{o.cash_collected_currency ? ` ${o.cash_collected_currency}` : ''}
+                            </span>
+                          )}
+                          {!o.admin_viewed_at && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold whitespace-nowrap">🆕 Nueva</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </td>
-                  <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs whitespace-nowrap">
+                  <td className="py-2 px-2 text-right text-cream/80 tabular-nums text-[11px] whitespace-nowrap">
                     {orderTotalDisplay(o)}
                   </td>
-                  <td className="py-2.5 px-3 text-right text-gold tabular-nums text-xs whitespace-nowrap">
+                  <td className="py-2 px-2 text-right text-gold tabular-nums text-[11px] whitespace-nowrap">
                     {o.payment_method !== 'cash' && o.commission_amount_ars != null
                       ? `ARS ${Math.round(o.commission_amount_ars).toLocaleString('es-AR')}`
                       : <span className="text-cream/30">—</span>}
                   </td>
-                  <td className="py-2.5 px-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-3">
-                      <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-xs">Ver →</Link>
+                  <td className="py-2 px-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-2">
+                      <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-[11px]">Ver →</Link>
                       <ExpandToggle
                         open={expandedRow === o.public_id}
                         onClick={() => setExpandedRow(expandedRow === o.public_id ? null : o.public_id)}
@@ -506,7 +517,7 @@ export default function OrdersList() {
                 </tr>
                 {expandedRow === o.public_id && (
                   <tr className="border-t border-gold/5 bg-ink-soft/20">
-                    <td colSpan={9} className="px-6 py-3">
+                    <td colSpan={9} className="px-6 py-2.5">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
                       <div className="max-w-xl">
                         <OrderExtraDetails o={o} twoColumns />
@@ -559,13 +570,25 @@ export default function OrdersList() {
 
       {summary && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4 md:mb-6">
-          <SummaryCard label="Total" value={`${summary.count}`} sub="órdenes en este listado" />
-          <SummaryCard label="Pagadas" value={`${summary.paidCount}`} sub="confirmadas, MP o efectivo" />
-          <SummaryCard label="Facturación MP" value={`ARS ${Math.round(summary.revenue).toLocaleString('es-AR')}`} sub="cobrado por Mercado Pago (no incluye efectivo)" />
-          <SummaryCard label="Comisiones" value={`ARS ${Math.round(summary.commission).toLocaleString('es-AR')}`} sub="a liquidar, solo ventas por MP" highlight />
+          <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" />
+          <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, MP o efectivo" />
+          <SummaryCard
+            label="Facturación MP"
+            value={summary.revenue}
+            format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+            sub="cobrado por Mercado Pago (no incluye efectivo)"
+          />
+          <SummaryCard
+            label="Comisiones"
+            value={summary.commission}
+            format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+            sub="a liquidar, solo ventas por MP"
+            highlight
+          />
           <SummaryCard
             label="Neto por cobrar"
-            value={`ARS ${Math.round(summary.netPending).toLocaleString('es-AR')}`}
+            value={summary.netPending}
+            format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
             sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
             highlight
           />

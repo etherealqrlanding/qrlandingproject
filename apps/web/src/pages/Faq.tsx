@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import type { FaqContent } from '../types/api';
 import { LoadingBlock } from '../components/Spinner';
+import Reveal from '../components/Reveal';
 
 export default function Faq() {
   const { t, i18n } = useTranslation();
@@ -46,7 +47,7 @@ export default function Faq() {
       )}
 
       {items.length > 0 && (
-        <div className="mt-8 max-w-2xl divide-y divide-gold/10 rounded-2xl border border-gold/15 bg-ink-soft/40">
+        <Reveal className="mt-8 max-w-2xl divide-y divide-gold/10 rounded-2xl border border-gold/15 bg-ink-soft/40">
           {items.map((it, i) => {
             const isOpen = open === i;
             return (
@@ -68,7 +69,7 @@ export default function Faq() {
               </div>
             );
           })}
-        </div>
+        </Reveal>
       )}
     </section>
   );

@@ -64,7 +64,7 @@ export default function PlatformShowcase() {
           {benefits.map((benefit, i) => (
             <div
               key={benefit.title}
-              className="rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 transition hover:border-gold/30"
+              className="rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 transition duration-300 hover:border-gold/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/20"
             >
               <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-gold/30 bg-gold/10 text-gold">
                 {ICONS[i % ICONS.length]}

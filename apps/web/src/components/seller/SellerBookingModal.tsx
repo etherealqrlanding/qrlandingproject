@@ -50,8 +50,8 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
     const isOnline = result.payment_method !== 'cash';
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm">
-        <div className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-8 text-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
+        <div className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-8 text-center animate-modal-panel">
           <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-gold" aria-hidden>
               <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -120,10 +120,10 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   // ── Formulario ────────────────────────────────────────────
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm"
+      className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop"
     >
       <div className="min-h-full flex items-start justify-center p-4 py-8">
-        <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20">
+        <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20 animate-modal-panel">
           <button
             type="button"
             onClick={onClose}

@@ -211,9 +211,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
       <div className="min-h-full flex items-start justify-center p-4 py-8">
-      <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20">
+      <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20 animate-modal-panel">
         <button
           type="button"
           onClick={onClose}

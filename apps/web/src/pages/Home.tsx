@@ -9,6 +9,7 @@ import QuickSelect from '../components/QuickSelect';
 import PaymentMethods from '../components/PaymentMethods';
 import PlatformShowcase from '../components/PlatformShowcase';
 import ShareButton from '../components/ShareButton';
+import Reveal from '../components/Reveal';
 import { api } from '../lib/api';
 import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
@@ -217,7 +218,7 @@ export default function Home() {
           <PaymentMethods variant="compact" className="mt-6" />
 
           {/* Cómo funciona: guía para el cliente que recién llega por el QR del vendedor */}
-          <div className="mt-16 w-full text-left rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 md:p-8">
+          <Reveal className="mt-16 w-full text-left rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 md:p-8">
             <p className="font-display text-2xl text-cream">{t('hero.how_title')}</p>
             <p className="mt-1 text-sm text-cream/60 max-w-2xl">{t('hero.how_subtitle')}</p>
 
@@ -241,11 +242,11 @@ export default function Home() {
             <div className="mt-7">
               <Link to="/shows" className="btn-primary">{t('hero.cta_primary')}</Link>
             </div>
-          </div>
+          </Reveal>
         </div>
       </section>
 
-      <section id="shows" className="container-narrow py-20">
+      <Reveal as="section" id="shows" className="container-narrow py-20">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
@@ -281,9 +282,11 @@ export default function Home() {
             {t('home.view_all_cta')}{houses.length > 0 ? ` (${houses.length})` : ''} →
           </Link>
         </div>
-      </section>
+      </Reveal>
 
-      <PlatformShowcase />
+      <Reveal>
+        <PlatformShowcase />
+      </Reveal>
     </>
   );
 }

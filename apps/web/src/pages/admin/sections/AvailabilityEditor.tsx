@@ -75,8 +75,8 @@ export default function AvailabilityEditor({ option, onClose }: Props) {
   const upcomingCapacity = entries?.filter((e) => !e.is_closed && e.date >= today) ?? [];
 
   return (
-    <div className="fixed inset-0 z-50 bg-ink/80 backdrop-blur-sm overflow-y-auto p-4 flex items-start justify-center">
-      <div className="bg-ink-soft border border-gold/20 rounded-2xl w-full max-w-3xl my-8">
+    <div className="fixed inset-0 z-50 bg-ink/80 backdrop-blur-sm overflow-y-auto p-4 flex items-start justify-center animate-modal-backdrop">
+      <div className="bg-ink-soft border border-gold/20 rounded-2xl w-full max-w-3xl my-8 animate-modal-panel">
         <header className="p-6 border-b border-gold/10 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Disponibilidad por fecha</p>

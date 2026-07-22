@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
+import { useNavIndicator } from '../../hooks/useNavIndicator';
 import { adminApi, getAdminNotificationStreamUrl, type AdminNewOrderPaidEvent } from '../../lib/adminApi';
 import BottomNavAdmin from './BottomNavAdmin';
 import Logo from '../Logo';
@@ -27,6 +28,13 @@ export default function AdminLayout() {
   const mainRef = useRef<HTMLElement>(null);
   const [toast, setToast] = useState<AdminNewOrderPaidEvent | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // Sidebar colapsable — preferencia persistida para que no se resetee al navegar/recargar.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('admin_sidebar_collapsed') === '1');
+  useEffect(() => {
+    localStorage.setItem('admin_sidebar_collapsed', collapsed ? '1' : '0');
+  }, [collapsed]);
+  const navRef = useRef<HTMLElement>(null);
+  const navIndicator = useNavIndicator(navRef, [location.pathname, collapsed]);
   const esRef = useRef<EventSource | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,7 +111,7 @@ export default function AdminLayout() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-6 right-4 md:bottom-6 md:right-6 z-50 max-w-sm rounded-xl border border-gold/30 bg-ink-soft shadow-xl px-4 py-3 flex items-start gap-3 animate-in slide-in-from-bottom-4 duration-300"
+          className="fixed bottom-6 right-4 md:bottom-6 md:right-6 z-50 max-w-sm rounded-xl border border-gold/30 bg-ink-soft shadow-xl px-4 py-3 flex items-start gap-3 animate-toast-in"
         >
           <span className="text-xl leading-none mt-0.5">🎉</span>
           <div className="flex-1 min-w-0">
@@ -133,28 +141,52 @@ export default function AdminLayout() {
         </div>
       )}
       {/* Sidebar — solo desktop */}
-      <aside className="hidden md:flex w-64 shrink-0 border-r border-gold/10 bg-ink-soft/40 flex-col">
-        <div className="px-6 py-5 border-b border-gold/10">
-          <Logo className="h-9 w-auto" />
-          <p className="text-xs text-cream/50 mt-2">Panel administrativo</p>
+      <aside className={`hidden md:flex ${collapsed ? 'w-[72px]' : 'w-64'} shrink-0 border-r border-gold/10 bg-ink-soft/40 flex-col relative transition-[width] duration-200`}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          title={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+          className="absolute -right-3 top-6 z-10 flex h-6 w-6 items-center justify-center rounded-full border border-gold/30 bg-ink-soft text-cream/60 hover:text-gold hover:border-gold/50 shadow transition"
+        >
+          <span className={`inline-block text-xs transition-transform ${collapsed ? 'rotate-180' : ''}`}>‹</span>
+        </button>
+
+        <div className={`border-b border-gold/10 ${collapsed ? 'px-3 py-5 flex justify-center' : 'px-6 py-5'}`}>
+          {collapsed ? (
+            <img src="/icon-512.png" alt="" className="h-8 w-8 object-contain" />
+          ) : (
+            <>
+              <Logo className="h-9 w-auto" />
+              <p className="text-xs text-cream/50 mt-2">Panel administrativo</p>
+            </>
+          )}
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav ref={navRef} className="flex-1 px-3 py-4 space-y-1 relative">
+          {navIndicator && (
+            <div
+              aria-hidden
+              className="absolute inset-x-0 rounded-md bg-gold/15 transition-[top,height] duration-300 ease-out"
+              style={{ top: navIndicator.top, height: navIndicator.height }}
+            />
+          )}
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
+              title={collapsed ? item.label : undefined}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${
+                `relative z-10 flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${collapsed ? 'justify-center' : ''} ${
                   isActive
-                    ? 'bg-gold/15 text-gold'
+                    ? 'text-gold'
                     : 'text-cream/70 hover:bg-gold/5 hover:text-cream'
                 }`
               }
             >
-              <span className="w-5 text-center">{item.icon}</span>
-              <span className="flex-1">{item.label}</span>
+              <span className="w-5 text-center shrink-0">{item.icon}</span>
+              {!collapsed && <span className="flex-1">{item.label}</span>}
             </NavLink>
           ))}
         </nav>
@@ -164,11 +196,12 @@ export default function AdminLayout() {
             type="button"
             onClick={handlePreviewSite}
             disabled={previewLoading}
+            title={collapsed ? 'Ver sitio' : undefined}
             className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-3 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition disabled:opacity-50"
           >
-            {previewLoading ? 'Abriendo...' : <>Ver sitio ↗</>}
+            {collapsed ? '↗' : (previewLoading ? 'Abriendo...' : <>Ver sitio ↗</>)}
           </button>
-          {me && (
+          {me && !collapsed && (
             <div className="px-3 mb-3">
               <p className="text-xs text-cream/50">Conectado como</p>
               <p className="text-sm text-cream truncate">{me.admin.email}</p>
@@ -178,9 +211,10 @@ export default function AdminLayout() {
           <button
             type="button"
             onClick={handleSignOut}
-            className="w-full text-left px-3 py-2 rounded-md text-sm text-cream/60 hover:bg-bordeaux-deep/30 hover:text-cream transition"
+            title={collapsed ? 'Cerrar sesión' : undefined}
+            className={`w-full px-3 py-2 rounded-md text-sm text-cream/60 hover:bg-bordeaux-deep/30 hover:text-cream transition ${collapsed ? 'text-center' : 'text-left'}`}
           >
-            Cerrar sesión
+            {collapsed ? '⏻' : 'Cerrar sesión'}
           </button>
         </div>
       </aside>
@@ -211,7 +245,9 @@ export default function AdminLayout() {
         </header>
 
         <main ref={mainRef} className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden pb-24 md:pb-0">
-          <Outlet />
+          <div key={location.pathname} className="animate-page-enter">
+            <Outlet />
+          </div>
         </main>
       </div>
 

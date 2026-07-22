@@ -47,17 +47,76 @@
   .animate-kenburns {
     animation: kenburns 18s ease-in-out infinite alternate;
   }
+
+  /* Transición de entrada al cambiar de ruta (público, admin, vendedor). Se
+     dispara re-montando el contenedor con key={pathname} en cada layout.
+     IMPORTANTE: sin "both"/"forwards" — cualquier transform que quede aplicado
+     después de terminar la animación (aunque sea translateY(0), visualmente
+     un no-op) convierte a este contenedor en el "containing block" de sus
+     descendientes position:fixed. Como los modales (fixed inset-0) se renderizan
+     adentro de este wrapper, quedaban "fijos" respecto a él en vez del viewport
+     real y perdían el scroll. Sin fill-mode, al terminar la animación el
+     transform se libera solo (el resultado visual es idéntico: to { } ya
+     coincide con el estado de reposo). */
+  @keyframes page-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-page-enter {
+    animation: page-enter 0.35s ease-out;
+  }
+
+  /* Modales: el backdrop se desvanece y el panel entra con un leve fade+scale.
+     Solo animación de entrada — los modales de este sitio se desmontan de
+     golpe (sin estado "cerrando"), así que no hay salida animada. */
+  @keyframes modal-backdrop-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-modal-backdrop {
+    animation: modal-backdrop-in 0.2s ease-out both;
+  }
+  @keyframes modal-panel-in {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  /* Mismo motivo que .animate-page-enter: sin fill-mode, para no dejar un
+     transform colgado que rompa el scroll de contenido fixed/absolute anidado
+     dentro del panel (ej. la pantalla de confirmación superpuesta). */
+  .animate-modal-panel {
+    animation: modal-panel-in 0.25s ease-out;
+  }
+
+  /* Toasts (notificaciones push de admin/vendedor): entran con fade + slide
+     desde abajo. Sin descendientes fixed/absolute propios, pero se deja sin
+     fill-mode por la misma razón e higiene general. */
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-toast-in {
+    animation: toast-in 0.3s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-page-enter,
+    .animate-modal-backdrop,
+    .animate-modal-panel,
+    .animate-toast-in {
+      animation: none;
+    }
+  }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center px-6 py-3 rounded-md bg-gold text-ink font-medium tracking-wide transition hover:bg-gold-soft focus:outline-none focus:ring-2 focus:ring-gold/60;
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-md bg-gold text-ink font-medium tracking-wide transition hover:bg-gold-soft active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-gold/60;
   }
   .btn-ghost {
-    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-md border border-gold/40 text-cream hover:bg-gold/10 transition;
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-md border border-gold/40 text-cream hover:bg-gold/10 active:scale-[0.97] transition;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center px-6 py-3 rounded-md bg-navy text-cream font-medium tracking-wide transition hover:bg-navy-light focus:outline-none focus:ring-2 focus:ring-navy/60;
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-md bg-navy text-cream font-medium tracking-wide transition hover:bg-navy-light active:scale-[0.97] focus:outline-none focus:ring-2 focus:ring-navy/60;
   }
   .container-narrow {
     @apply mx-auto max-w-6xl px-6;

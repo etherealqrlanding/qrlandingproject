@@ -422,9 +422,9 @@ export default function SellerOrders() {
       />
     )}
     {confirmPublicId && pendingOrder && (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
         <div className="min-h-full flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-6 md:p-8">
+          <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-6 md:p-8 animate-modal-panel">
             <h2 className="font-display text-2xl text-cream mb-2">Confirmar cobro</h2>
             <p className="text-sm text-cream/60 mb-5">
               ¿Confirmás que recibiste el dinero del pasajero para la siguiente reserva?
@@ -511,9 +511,9 @@ export default function SellerOrders() {
       </div>
     )}
     {cancelConfirmOrder && (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
         <div className="min-h-full flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-red-500/20 p-6 md:p-8">
+          <div className="w-full max-w-md rounded-2xl bg-ink-soft border border-red-500/20 p-6 md:p-8 animate-modal-panel">
             <h2 className="font-display text-2xl text-cream mb-1">Cancelar reserva</h2>
             <p className="text-sm text-cream/50 mb-5">
               Esta acción no se puede deshacer. Se notificará al pasajero y al administrador.
@@ -822,16 +822,16 @@ export default function SellerOrders() {
           <div className="hidden md:block rounded-xl border border-gold/10 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gold/10 text-cream/50 text-xs uppercase tracking-wider">
-                  <th className="text-left px-4 py-3">Fecha servicio</th>
-                  <th className="text-left px-4 py-3">Cliente</th>
-                  <th className="text-left px-4 py-3">Show / Opción</th>
-                  <th className="text-left px-4 py-3">Pasajeros</th>
-                  <th className="text-left px-4 py-3">Estado</th>
-                  <th className="text-right px-4 py-3">Venta</th>
-                  <th className="text-right px-4 py-3">Comisión / Neto</th>
-                  <th className="text-center px-4 py-3">Liquidado</th>
-                  <th className="w-8 px-3 py-3" />
+                <tr className="border-b border-gold/10 text-cream/50 text-[10px] uppercase tracking-wider">
+                  <th className="text-left px-3 py-2">Fecha servicio</th>
+                  <th className="text-left px-3 py-2">Cliente</th>
+                  <th className="text-left px-3 py-2">Show / Opción</th>
+                  <th className="text-left px-3 py-2">Pasajeros</th>
+                  <th className="text-left px-3 py-2">Estado</th>
+                  <th className="text-right px-3 py-2">Venta</th>
+                  <th className="text-right px-3 py-2">Comisión / Neto</th>
+                  <th className="text-center px-3 py-2">Liquidado</th>
+                  <th className="w-8 px-2 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -846,61 +846,61 @@ export default function SellerOrders() {
                         onClick={() => setExpanded(isOpen ? null : o.order_id)}
                         className={`border-b border-gold/5 cursor-pointer select-none transition ${isOpen ? 'bg-gold/5' : 'hover:bg-ink-soft/30'} ${isHighlighted ? 'ring-1 ring-inset ring-gold/40' : ''}`}
                       >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <p className="text-cream/70 text-xs">{fmtDate(o.service_date || o.created_at)}</p>
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <p className="text-cream/70 text-[11px]">{fmtDate(o.service_date || o.created_at)}</p>
                           <p className="text-[10px] text-cream/35 mt-0.5">{fmtDateTime(o.created_at)}</p>
                         </td>
-                        <td className="px-4 py-3">
-                          <p className="text-cream text-sm truncate max-w-[160px]">{o.customer_name}</p>
-                          <p className="text-xs text-cream/40 truncate max-w-[160px]">{o.customer_email}</p>
+                        <td className="px-3 py-2">
+                          <p className="text-cream text-[11px] truncate max-w-[160px]">{o.customer_name}</p>
+                          <p className="text-[10px] text-cream/40 truncate max-w-[160px]">{o.customer_email}</p>
                         </td>
-                        <td className="px-4 py-3">
-                          <p className="text-cream text-sm">{o.product_name}</p>
-                          <p className="text-xs text-cream/50">{o.option_name}</p>
+                        <td className="px-3 py-2">
+                          <p className="text-cream text-[11px]">{o.product_name}</p>
+                          <p className="text-[10px] text-cream/50">{o.option_name}</p>
                         </td>
-                        <td className="px-4 py-3 text-cream/70 text-xs whitespace-nowrap">{paxLabel(o.adults ?? 0, o.children ?? 0)}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-1">
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${derivedStatus(o).cls}`}>
+                        <td className="px-3 py-2 text-cream/70 text-[11px] whitespace-nowrap">{paxLabel(o.adults ?? 0, o.children ?? 0)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] whitespace-nowrap ${derivedStatus(o).cls}`}>
                               {derivedStatus(o).label}
                             </span>
                             {o.utm_source === 'seller_portal' && (
-                              <span className="px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">Manual</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-gold/30 bg-gold/5 text-gold-soft whitespace-nowrap">Manual</span>
                             )}
                             {o.payment_method === 'cash' && (
-                              <span className="px-2 py-0.5 rounded-full text-xs border border-cream/15 bg-cream/5 text-cream/40">Efectivo</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-cream/15 bg-cream/5 text-cream/40 whitespace-nowrap">Efectivo</span>
                             )}
                             {o.was_reduced && (
-                              <span className="px-2 py-0.5 rounded-full text-xs border border-sky-500/30 bg-sky-950/20 text-sky-300">↓ Reducida</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-sky-500/30 bg-sky-950/20 text-sky-300 whitespace-nowrap">↓ Reducida</span>
                             )}
                             {o.has_paid_addon && (
-                              <span className="px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">↑ Ampliada</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-gold/30 bg-gold/5 text-gold-soft whitespace-nowrap">↑ Ampliada</span>
                             )}
                             {o.restored_at && (
-                              <span className="px-2 py-0.5 rounded-full text-xs border border-emerald-500/30 bg-emerald-950/20 text-emerald-300">↺ Restaurada</span>
+                              <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-emerald-500/30 bg-emerald-950/20 text-emerald-300 whitespace-nowrap">↺ Restaurada</span>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-xs">
+                        <td className="px-3 py-2 text-right font-mono whitespace-nowrap text-[11px]">
                           {o.payment_method === 'cash'
                             ? <span className="text-cream/30">—</span>
                             : <span className="text-cream">{fmtArs(o.total_ars)}</span>}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono whitespace-nowrap text-xs">
+                        <td className="px-3 py-2 text-right font-mono whitespace-nowrap text-[11px]">
                           {(o.status === 'paid' || o.status === 'pending')
                             ? (o.payment_method === 'cash'
                                 ? <span className="text-cream/80">{netDisplay(o)}</span>
                                 : <span className="text-gold">{fmtArs(effectiveCommissionArs(o))}</span>)
                             : <span className="text-cream/30">—</span>}
                         </td>
-                        <td className="px-4 py-3 text-center text-xs">
+                        <td className="px-3 py-2 text-center text-[11px]">
                           {(o.payment_method === 'cash' ? o.net_settled_at : o.paid_to_seller_at)
                             ? <span className="text-emerald-400">✓</span>
                             : o.status === 'paid'
                               ? <span className="text-amber-400">Pdte.</span>
                               : <span className="text-cream/30">—</span>}
                         </td>
-                        <td className="px-3 py-3 text-right">
+                        <td className="px-2 py-2 text-right">
                           <span className={`text-gold/50 text-xs inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                         </td>
                       </tr>

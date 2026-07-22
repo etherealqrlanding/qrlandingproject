@@ -691,8 +691,8 @@ export default function OrderDetail() {
 
       {/* Modal de confirmación de refund */}
       {refundOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl bg-ink-soft border border-bordeaux-light/40 my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
+          <div className="w-full max-w-lg rounded-2xl bg-ink-soft border border-bordeaux-light/40 my-8 animate-modal-panel">
             <header className="p-6 border-b border-gold/10">
               <p className="text-xs uppercase tracking-[0.3em] text-bordeaux-light">Reintegro vía Mercado Pago</p>
               <h2 className="mt-2 font-display text-2xl text-cream">Reintegrar reserva</h2>

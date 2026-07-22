@@ -201,19 +201,21 @@ function PublicApp() {
     <div className="min-h-screen flex flex-col pb-24 md:pb-0">
       <Navbar />
       <main className="flex-1">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/shows" element={<ShowsList />} />
-          <Route path="/shows/:slug" element={<ProductPage />} />
-          <Route path="/nosotros" element={<About />} />
-          <Route path="/preguntas-frecuentes" element={<Faq />} />
-          <Route path="/verificar/:publicId" element={<VerifyOrder />} />
-          <Route path="/checkout/pix" element={<PixCheckoutPage />} />
-          <Route path="/checkout/success" element={<CheckoutReturn variant="success" />} />
-          <Route path="/checkout/pending" element={<CheckoutReturn variant="pending" />} />
-          <Route path="/checkout/failure" element={<CheckoutReturn variant="failure" />} />
-          <Route path="/checkout/cash" element={<CheckoutReturn variant="cash" />} />
-        </Routes>
+        <div key={location.pathname} className="animate-page-enter">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/shows" element={<ShowsList />} />
+            <Route path="/shows/:slug" element={<ProductPage />} />
+            <Route path="/nosotros" element={<About />} />
+            <Route path="/preguntas-frecuentes" element={<Faq />} />
+            <Route path="/verificar/:publicId" element={<VerifyOrder />} />
+            <Route path="/checkout/pix" element={<PixCheckoutPage />} />
+            <Route path="/checkout/success" element={<CheckoutReturn variant="success" />} />
+            <Route path="/checkout/pending" element={<CheckoutReturn variant="pending" />} />
+            <Route path="/checkout/failure" element={<CheckoutReturn variant="failure" />} />
+            <Route path="/checkout/cash" element={<CheckoutReturn variant="cash" />} />
+          </Routes>
+        </div>
       </main>
       <Footer />
       {welcomeCode && (

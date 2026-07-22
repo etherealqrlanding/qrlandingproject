@@ -31,7 +31,7 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
       ref={ref}
       to={`/shows/${product.slug}`}
       onClick={onNavigate}
-      className={`group block rounded-lg overflow-hidden border bg-ink-soft transition duration-500 sm:relative sm:aspect-[4/5] ${
+      className={`group block rounded-lg overflow-hidden border bg-ink-soft transition duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30 active:translate-y-0 active:scale-[0.99] sm:relative sm:aspect-[4/5] ${
         highlighted
           ? 'border-gold ring-2 ring-gold ring-offset-2 ring-offset-ink shadow-[0_0_28px_rgba(200,168,90,0.35)]'
           : 'border-gold/10 hover:border-gold/40'

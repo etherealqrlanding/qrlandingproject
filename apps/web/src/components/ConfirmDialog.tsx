@@ -54,14 +54,14 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-modal-backdrop"
       onClick={() => { if (!loading) onCancel(); }}
     >
       <div
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
-        className="w-full max-w-md rounded-xl border border-bordeaux-light/30 bg-ink-soft shadow-2xl"
+        className="w-full max-w-md rounded-xl border border-bordeaux-light/30 bg-ink-soft shadow-2xl animate-modal-panel"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">

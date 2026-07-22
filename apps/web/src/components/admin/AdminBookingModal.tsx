@@ -133,8 +133,8 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
   // ── Éxito ──────────────────────────────────────────────────
   if (result) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm">
-        <div className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-8 text-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
+        <div className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-8 text-center animate-modal-panel">
           <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" className="text-gold" aria-hidden>
               <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -172,9 +172,9 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
   // ── Paso 1: elegir vendedor ────────────────────────────────
   if (!selectedSeller) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
         <div className="min-h-full flex items-start justify-center p-4 py-8">
-          <div className="relative w-full max-w-lg rounded-2xl bg-ink-soft border border-gold/20 p-7">
+          <div className="relative w-full max-w-lg rounded-2xl bg-ink-soft border border-gold/20 p-7 animate-modal-panel">
             <button
               type="button" onClick={onClose} aria-label="Cerrar"
               className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
@@ -255,9 +255,9 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
   // ── Paso 2: elegir show/opción ─────────────────────────────
   if (!booking) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
         <div className="min-h-full flex items-start justify-center p-4 py-8">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20 p-7">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20 p-7 animate-modal-panel">
             <button
               type="button" onClick={onClose} aria-label="Cerrar"
               className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
@@ -344,9 +344,9 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
 
   // ── Paso 3: formulario + confirmación ──────────────────────
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
       <div className="min-h-full flex items-start justify-center p-4 py-8">
-        <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20">
+        <div className="relative w-full max-w-2xl rounded-2xl bg-ink-soft border border-gold/20 animate-modal-panel">
           <button
             type="button" onClick={onClose} aria-label="Cerrar"
             className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
@@ -387,8 +387,8 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
           </div>
 
           {pending && (
-            <div className="absolute inset-0 z-10 flex items-start justify-center overflow-y-auto rounded-2xl bg-ink/95 backdrop-blur-sm p-4 py-8">
-              <div className="w-full max-w-md rounded-xl border border-gold/30 bg-ink-soft p-6">
+            <div className="absolute inset-0 z-10 flex items-start justify-center overflow-y-auto rounded-2xl bg-ink/95 backdrop-blur-sm p-4 py-8 animate-modal-backdrop">
+              <div className="w-full max-w-md rounded-xl border border-gold/30 bg-ink-soft p-6 animate-modal-panel">
                 <p className="text-xs uppercase tracking-widest text-gold-soft mb-3">Confirmá antes de crear la reserva</p>
 
                 <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-3">
