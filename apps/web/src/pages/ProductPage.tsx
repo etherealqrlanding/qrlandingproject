@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { api, type SellerPublicInfo } from '../lib/api';
+import { api, type SellerPublicInfo, type AvailabilityDay } from '../lib/api';
 import type { ProductDetail, ProductOption } from '../types/api';
 import { localized, localizedArray } from '../lib/i18nFields';
 import { getStoredRef, clearRef } from '../lib/referral';
@@ -52,6 +52,7 @@ export default function ProductPage() {
   const requestedOptionId = searchParams.get('option');
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
+  const exchangeRate = useExchangeRate();
 
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,7 +135,7 @@ export default function ProductPage() {
   const selectedOption = product.options.find((o) => o.id === selectedOptionId) ?? null;
 
   return (
-    <article className="container-narrow py-12">
+    <article className="container-narrow py-12 pb-32 md:pb-12">
       <Link to="/shows" className="text-sm text-gold-soft hover:text-gold">
         ← {t('product.back_to_list')}
       </Link>
@@ -255,6 +256,34 @@ export default function ProductPage() {
         </aside>
       </div>
 
+      {/* Barra de reserva fija — solo mobile/tablet (el aside ya es sticky desde lg).
+          Sin ella, en mobile había que scrollear hasta el resumen para reservar. */}
+      {selectedOption && !checkoutOpen && (
+        <div
+          className="md:hidden fixed inset-x-0 z-40 border-t border-gold/20 bg-ink/95 backdrop-blur-xl px-4 py-3 flex items-center justify-between gap-3"
+          style={{ bottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="min-w-0">
+            <p className="text-xs text-cream/50 truncate">{localized(selectedOption, 'name', lang)}</p>
+            <p className="font-display text-lg text-gold leading-tight">
+              USD {selectedOption.price_adult_usd}
+              {exchangeRate != null && (
+                <span className="ml-1.5 text-xs font-sans text-cream/40">
+                  · ARS {Math.round(selectedOption.price_adult_usd * exchangeRate).toLocaleString('es-AR')}
+                </span>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setCheckoutPaymentMethod('mercadopago'); setCheckoutOpen(true); }}
+            className="btn-primary shrink-0 px-5 py-2.5 text-sm"
+          >
+            {t('product.book_cta')}
+          </button>
+        </div>
+      )}
+
       {checkoutOpen && selectedOption && (
         <CheckoutForm
           product={product}
@@ -367,6 +396,30 @@ function BookingSummary({
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
+  // Disponibilidad de los próximos días — para mostrar la urgencia real (si la hay)
+  // acá mismo, antes de que el cliente abra el checkout y tenga que elegir una
+  // fecha para recién ahí enterarse de que quedan pocos lugares.
+  const [urgentDay, setUrgentDay] = useState<AvailabilityDay | null>(null);
+
+  useEffect(() => {
+    if (!option) { setUrgentDay(null); return; }
+    let cancelled = false;
+    const today = new Date();
+    const horizon = new Date();
+    horizon.setDate(horizon.getDate() + 14);
+    api.availability.forOption(
+      option.id,
+      today.toISOString().slice(0, 10),
+      horizon.toISOString().slice(0, 10),
+    )
+      .then((days) => {
+        if (cancelled) return;
+        setUrgentDay(days.find((d) => d.status === 'low') ?? null);
+      })
+      .catch(() => { if (!cancelled) setUrgentDay(null); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [option?.id]);
 
   if (!option) return null;
 
@@ -374,6 +427,9 @@ function BookingSummary({
   const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
   const priceChildArs = (exchangeRate != null && option.price_child_usd != null)
     ? Math.round(option.price_child_usd * exchangeRate) : null;
+  const urgentDayLabel = urgentDay
+    ? new Date(`${urgentDay.date}T00:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+    : null;
 
   return (
     <div className="rounded-lg border border-gold/20 bg-ink-soft/80 p-6">
@@ -390,6 +446,14 @@ function BookingSummary({
         )}
         <span className="text-sm text-cream/50">/ {t('product.per_adult_short')}</span>
       </div>
+
+      {urgentDayLabel && (
+        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs text-gold-soft">
+          ⚡ Pocos lugares el {urgentDayLabel}
+          {urgentDay?.remaining != null ? ` (quedan ${urgentDay.remaining})` : ''}
+        </p>
+      )}
+
       {option.price_child_usd != null && (
         <p className="mt-2 text-sm text-cream/60">
           {t('product.children')}:{' '}

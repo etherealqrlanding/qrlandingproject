@@ -51,6 +51,12 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
+  // Validación en tiempo real: se marca "touched" recién al salir del campo (blur),
+  // para no tirarle un error en la cara al pasajero mientras todavía está escribiendo.
+  const [touched, setTouched] = useState<Record<'name' | 'phone' | 'email' | 'nationality', boolean>>({
+    name: false, phone: false, email: false, nationality: false,
+  });
+  const markTouched = (field: keyof typeof touched) => setTouched((prev) => ({ ...prev, [field]: true }));
 
   const today = new Date().toISOString().slice(0, 10);
   const horizonDate = useMemo(() => {
@@ -168,17 +174,28 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
   };
 
+  // Errores por campo — se usan para el feedback en vivo (debajo de cada input,
+  // recién visible una vez que el campo fue "touched") y también los reutiliza
+  // validate() de abajo para el cartel de error al enviar.
+  const nameError = form.name.trim().length < 2 ? t('checkout.name_required') : null;
+  const phoneError = !form.phone.trim() ? t('checkout.phone_required') : null;
+  const emailError = !form.email.trim()
+    ? t('checkout.email_required')
+    : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+      ? t('checkout.email_invalid')
+      : null;
+  const nationalityError = !form.nationality ? t('checkout.nationality_required') : null;
+
   // Validación manual en vez de la nativa del navegador (los popups por defecto no
   // se pueden estilizar y quedan inconsistentes entre navegadores) — el form usa
   // noValidate y este chequeo decide qué mensaje mostrar en el cartel de error ya
   // existente, en el mismo orden visual en que aparecen los campos.
   const validate = (): string | null => {
-    if (form.name.trim().length < 2) return t('checkout.name_required');
-    if (!form.phone.trim()) return t('checkout.phone_required');
-    if (!form.email.trim()) return t('checkout.email_required');
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return t('checkout.email_invalid');
+    if (nameError) return nameError;
+    if (phoneError) return phoneError;
+    if (emailError) return emailError;
     if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) return t('checkout.email_mismatch');
-    if (!form.nationality) return t('checkout.nationality_required');
+    if (nationalityError) return nationalityError;
     if (isDateBlocked) return selectedDateStatus === 'closed' ? t('checkout.date_closed') : t('checkout.date_full');
     return null;
   };
@@ -188,6 +205,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     const validationError = validate();
     if (validationError) {
       setError(validationError);
+      setTouched({ name: true, phone: true, email: true, nationality: true });
       return;
     }
     setError(null);
@@ -243,18 +261,26 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               <input
                 type="text" maxLength={120}
                 value={form.name} onChange={(e) => updateField('name', e.target.value)}
-                className="input"
+                onBlur={() => markTouched('name')}
+                className={`input ${touched.name && nameError ? 'border-bordeaux-light/60' : ''}`}
                 autoComplete="name"
               />
+              {touched.name && nameError && (
+                <p className="mt-1 text-xs text-bordeaux-light">⚠ {nameError}</p>
+              )}
             </Field>
             <Field label={t('checkout.phone')} required>
               <input
                 type="tel" maxLength={40}
                 value={form.phone} onChange={(e) => updateField('phone', e.target.value)}
-                className="input"
+                onBlur={() => markTouched('phone')}
+                className={`input ${touched.phone && phoneError ? 'border-bordeaux-light/60' : ''}`}
                 placeholder="+54 9 11 1234 5678"
                 autoComplete="tel"
               />
+              {touched.phone && phoneError && (
+                <p className="mt-1 text-xs text-bordeaux-light">⚠ {phoneError}</p>
+              )}
             </Field>
             <Field label={t('checkout.dni')} hint={t('checkout.dni_hint')}>
               <input
@@ -269,9 +295,13 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               <input
                 type="email" maxLength={160}
                 value={form.email} onChange={(e) => updateField('email', e.target.value)}
-                className="input"
+                onBlur={() => markTouched('email')}
+                className={`input ${touched.email && emailError ? 'border-bordeaux-light/60' : ''}`}
                 autoComplete="email"
               />
+              {touched.email && emailError && (
+                <p className="mt-1 text-xs text-bordeaux-light">⚠ {emailError}</p>
+              )}
             </Field>
             <Field label={t('checkout.email_confirm')} required>
               <input
@@ -292,11 +322,15 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             <Field label={t('checkout.nationality')} required>
               <select
                 value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
-                className="input"
+                onBlur={() => markTouched('nationality')}
+                className={`input ${touched.nationality && nationalityError ? 'border-bordeaux-light/60' : ''}`}
               >
                 <option value="">{t('checkout.select')}</option>
                 {NATIONALITIES.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
+              {touched.nationality && nationalityError && (
+                <p className="mt-1 text-xs text-bordeaux-light">⚠ {nationalityError}</p>
+              )}
             </Field>
             <Field label={t('checkout.service_date')} required>
               <input
