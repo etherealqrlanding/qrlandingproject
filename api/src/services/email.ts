@@ -108,6 +108,11 @@ export interface OrderEmailData {
   adults: number;
   children: number;
   mp_payment_id: string | null;
+  // Medio de pago y, si es PIX, el monto real en reales que pagó el cliente. Los emails
+  // al cliente muestran el total en la moneda que realmente vio (reales para PIX, pesos
+  // para el resto) en vez del total_ars (que para PIX es solo una referencia interna).
+  payment_method?: string | null;
+  pix_fiat_amount_brl?: number | null;
   // Campos extendidos (opcionales) para el detalle completo de la reserva.
   customer_phone?: string | null;
   customer_nationality?: string | null;
@@ -199,8 +204,26 @@ function fmtArs(n: number): string {
 function fmtUsd(n: number): string {
   return `USD ${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+function fmtBrl(n: number): string {
+  return `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 function arsOf(usd: number | null | undefined, rate: number): string {
   return fmtArs((usd ?? 0) * rate);
+}
+
+// El cliente de PIX pagó en REALES; los demás medios, en pesos. Estos helpers muestran el
+// monto en la moneda que el cliente realmente vio, así el email no le muestra "ARS 150.000"
+// cuando en verdad pagó "R$ 512".
+function isPixOrder(d: OrderEmailData): boolean {
+  return d.payment_method === 'pix' && d.pix_fiat_amount_brl != null;
+}
+function chargedTotalStr(d: OrderEmailData): string {
+  return isPixOrder(d) ? fmtBrl(d.pix_fiat_amount_brl as number) : fmtArs(d.total_ars);
+}
+// Precio unitario: para PIX no tenemos el desglose por pax en reales (solo el total),
+// así que se muestra en USD como referencia; para el resto, en pesos.
+function perPaxStr(usd: number, d: OrderEmailData): string {
+  return isPixOrder(d) ? fmtUsd(usd) : arsOf(usd, d.exchange_rate_used);
 }
 
 // Neto que el vendedor nos rinde en una venta en EFECTIVO = total − comisión.
@@ -233,11 +256,11 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
 
   const showAmounts = opts?.showAmounts !== false;
   let pax = `${d.adults} adulto(s)`;
-  if (showAmounts && d.unit_price_adult_usd != null) pax += ` · ${arsOf(d.unit_price_adult_usd, d.exchange_rate_used)} c/u`;
+  if (showAmounts && d.unit_price_adult_usd != null) pax += ` · ${perPaxStr(d.unit_price_adult_usd, d)} c/u`;
   rows.push(emailRow('Adultos', pax));
   if (d.children > 0) {
     let ch = `${d.children} menor(es)`;
-    if (showAmounts && d.unit_price_child_usd != null) ch += ` · ${arsOf(d.unit_price_child_usd, d.exchange_rate_used)} c/u`;
+    if (showAmounts && d.unit_price_child_usd != null) ch += ` · ${perPaxStr(d.unit_price_child_usd, d)} c/u`;
     rows.push(emailRow('Menores', ch));
   }
 
@@ -249,7 +272,7 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   }
 
   if (showAmounts) {
-    rows.push(emailRow('Total', fmtArs(d.total_ars), true));
+    rows.push(emailRow('Total', chargedTotalStr(d), true));
   }
   rows.push(`<div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${d.public_id}</span></div>`);
 
@@ -275,7 +298,7 @@ function htmlForCustomer(data: OrderEmailData): string {
   ${reservationCard(data, { showContact: true })}
   ${voucherButtonBlock(data.public_id)}
   <div style="background:rgba(200,168,90,0.08);border:1px solid rgba(200,168,90,0.25);border-radius:10px;padding:16px 18px;margin:20px 0">
-    <p style="margin:0;font-size:13px;line-height:1.6"><strong style="color:#c8a85a">¿Necesitás cancelar o modificar tu reserva?</strong> Como pagaste con Mercado Pago, cualquier gestión relacionada con tu cobro (cancelación, cambio de fecha, sumar o quitar pasajeros, reintegros) la manejamos nosotros directamente — escribinos por WhatsApp con tu número de referencia y te ayudamos al instante.</p>
+    <p style="margin:0;font-size:13px;line-height:1.6"><strong style="color:#c8a85a">¿Necesitás cancelar o modificar tu reserva?</strong> Como pagaste online (${isPixOrder(data) ? 'PIX' : 'Mercado Pago'}), cualquier gestión relacionada con tu cobro (cancelación, cambio de fecha, sumar o quitar pasajeros, reintegros) la manejamos nosotros directamente — escribinos por WhatsApp con tu número de referencia y te ayudamos al instante.</p>
   </div>
   <p>Guardá este email como comprobante. Si tenés cualquier consulta, respondé este mismo correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
@@ -296,8 +319,9 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(data.option_name)} — ${escapeHtml(data.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${data.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${data.adults} ad · ${data.children} men</strong></div>
-    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(data.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>MP Payment</span><span style="font-family:monospace;font-size:11px">${data.mp_payment_id ?? '—'}</span></div>
+    <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${chargedTotalStr(data)}${isPixOrder(data) ? ` <span style="opacity:.55;font-size:11px">(≈ ${fmtArs(data.total_ars)})</span>` : ''}</strong></div>
+    <div style="${baseStyles.row}"><span>Método</span><strong>${data.payment_method === 'pix' ? 'PIX (reales)' : data.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</strong></div>
+    <div style="${baseStyles.row}"><span>${isPixOrder(data) ? 'Orden Nautt' : 'MP Payment'}</span><span style="font-family:monospace;font-size:11px">${data.mp_payment_id ?? '—'}</span></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
   ${data.seller_name ? `
@@ -390,7 +414,8 @@ export const ORDER_EMAIL_SELECT = `
        o.public_id, o.customer_name, o.customer_email, o.customer_phone, o.customer_nationality,
        o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
        o.exchange_rate_used::float AS exchange_rate_used,
-       o.mp_payment_id, o.payment_method, o.cash_collected_at, o.cash_collected_currency,
+       o.mp_payment_id, o.payment_method, o.pix_fiat_amount_brl::float AS pix_fiat_amount_brl,
+       o.cash_collected_at, o.cash_collected_currency,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot AS option_name,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
@@ -428,6 +453,8 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
     adults: (data.adults as number) ?? 1,
     children: (data.children as number) ?? 0,
     mp_payment_id: (data.mp_payment_id as string) ?? null,
+    payment_method: (data.payment_method as string) ?? null,
+    pix_fiat_amount_brl: (data.pix_fiat_amount_brl as number) ?? null,
     customer_phone: (data.customer_phone as string) ?? null,
     customer_nationality: (data.customer_nationality as string) ?? null,
     unit_price_adult_usd: (data.unit_price_adult_usd as number) ?? null,
@@ -447,10 +474,10 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
 }
 
 // ─── Link de pago pendiente (pre-pago) ──────────────────────
-// Se manda al cliente apenas se crea una orden por Mercado Pago que todavía no pagó
-// (ej. reserva armada por un vendedor). Es la ÚNICA vía para que el cliente reciba el
-// link — el vendedor no ve ni reenvía links de MP, así que si el cliente lo pierde,
-// tiene que pedirnos a nosotros que se lo reenviemos (no al vendedor).
+// Se manda al cliente apenas se crea una orden online (Mercado Pago o PIX) que todavía no
+// pagó (ej. reserva armada por un vendedor). Es la ÚNICA vía para que el cliente reciba el
+// link — el vendedor no ve ni reenvía links, así que si el cliente lo pierde, tiene que
+// pedirnos a nosotros que se lo reenviemos (no al vendedor). El medio (PIX/MP) sale de la orden.
 export async function sendPaymentLinkEmail(orderId: number, initPoint: string): Promise<void> {
   if (!isEnabled()) return;
 
@@ -459,14 +486,19 @@ export async function sendPaymentLinkEmail(orderId: number, initPoint: string): 
   if (!data) return;
 
   const orderData = toOrderData(data);
+  // El medio surge de la orden (PIX o MP): así el email dice el método correcto sin que el
+  // caller tenga que pasarlo. Para PIX el link va a la página con el QR/clave en reales.
+  const isPix = orderData.payment_method === 'pix';
+  const payLabel = isPix ? 'PIX' : 'Mercado Pago';
+  const payColor = isPix ? '#32BCAD' : '#009ee3';
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Completá tu pago</h1>
-  <p>Hola ${escapeHtml(orderData.customer_name)}, ¡ya casi! Para confirmar tu reserva de ${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}, pagá con Mercado Pago acá:</p>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, ¡ya casi! Para confirmar tu reserva de ${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}, pagá con ${payLabel}${isPix ? ' (en reales)' : ''} acá:</p>
   <div style="text-align:center;margin:24px 0">
-    <a href="${initPoint}" style="display:inline-block;background:#009ee3;color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px">Pagar con Mercado Pago</a>
+    <a href="${initPoint}" style="display:inline-block;background:${payColor};color:#fff;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:700;font-size:15px">Pagar con ${payLabel}</a>
   </div>
   ${reservationCard(orderData, { showContact: true })}
   <p style="font-size:13px;color:rgba(245,239,230,0.6)">El lugar queda reservado hasta que completes el pago; si no lo hacés a tiempo, la reserva caduca. Si necesitás que te reenviemos este link, escribinos por WhatsApp con tu número de referencia.</p>
