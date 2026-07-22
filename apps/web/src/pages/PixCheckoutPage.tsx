@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import QRCode from 'qrcode';
 import { api } from '../lib/api';
 import type { OrderStatus } from '../lib/api';
-import Spinner from '../components/Spinner';
+import Spinner, { BrandSpinner } from '../components/Spinner';
 
 // Página de pago con PIX (reales). Muestra el QR + "copia e cola" que devolvió Nautt y
 // confirma el pago con polling a /sync (respaldo del webhook). El QR vence a los ~15 min:
@@ -115,7 +115,7 @@ export default function PixCheckoutPage() {
   if (loading) {
     return (
       <section className="container-narrow py-24 text-center">
-        <Spinner size="lg" className="mx-auto" />
+        <BrandSpinner size="lg" className="mx-auto" />
         <p className="mt-4 text-cream/60">{t('pix.loading')}</p>
       </section>
     );
