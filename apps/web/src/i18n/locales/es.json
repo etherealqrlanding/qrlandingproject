@@ -107,10 +107,10 @@
     "your_selection": "Tu elección",
     "book_cta": "Reservar ahora",
     "book_option": "Reservar esta opción",
-    "secure_payment": "Pago 100% seguro con tarjeta: crédito, débito o dinero en cuenta. PIX próximamente.",
+    "secure_payment": "Pago 100% seguro: tarjeta (crédito, débito o dinero en cuenta) en pesos, o PIX en reales.",
     "back_to_list": "Volver al listado",
     "error": "No pudimos cargar este servicio",
-    "currency_notice": "Los cargos se procesarán en pesos argentinos (ARS) y serán convertidos al tipo de cambio que determine el operador.",
+    "currency_notice": "Con tarjeta (Mercado Pago) el cobro se procesa en pesos argentinos (ARS); con PIX, en reales (BRL). Los precios en USD son de referencia y se convierten al tipo de cambio vigente.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
@@ -156,7 +156,7 @@
     "choose_another_date": "Elegí otra fecha",
     "cutoff_notice": "Reservas para hoy se toman hasta las {{time}} hs (hora Buenos Aires)",
     "capacity_max_reached": "Cupo máximo alcanzado para esta fecha",
-    "currency_notice": "Los precios se muestran en dólares (USD) y pesos argentinos (ARS). El cargo se procesa en ARS al tipo de cambio que determine el operador; el monto en ARS es estimativo.",
+    "currency_notice": "Los precios se muestran en dólares (USD) como referencia. Con tarjeta (Mercado Pago) el cobro se procesa en pesos (ARS); con PIX, en reales (BRL). El monto en la moneda local es estimativo hasta confirmar el pago.",
     "ars_estimate": "≈ ARS {{amount}} (estimado a tasa actual)"
   },
   "return": {
@@ -183,7 +183,7 @@
   },
   "payment_methods": {
     "secure_note": "Pagos 100% seguros",
-    "currency_note": "Los precios se muestran en USD como referencia — el cobro se procesa en pesos argentinos (ARS)",
+    "currency_note": "Los precios se muestran en USD como referencia. El cobro se procesa en pesos (ARS) con tarjeta/Mercado Pago, o en reales (BRL) con PIX.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",
     "mp_wallet": "Dinero en cuenta",

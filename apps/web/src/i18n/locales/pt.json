@@ -107,10 +107,10 @@
     "your_selection": "Sua escolha",
     "book_cta": "Reservar agora",
     "book_option": "Reservar esta opção",
-    "secure_payment": "Pagamento 100% seguro com cartão: crédito, débito ou saldo em conta. PIX em breve.",
+    "secure_payment": "Pagamento 100% seguro: cartão (crédito, débito ou saldo em conta) em pesos, ou PIX em reais.",
     "back_to_list": "Voltar à lista",
     "error": "Não foi possível carregar este serviço",
-    "currency_notice": "Os valores serão processados em pesos argentinos (ARS) e convertidos pela taxa de câmbio que o operador determinar.",
+    "currency_notice": "Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). Os preços em USD são de referência e convertidos pela taxa de câmbio vigente.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
@@ -156,7 +156,7 @@
     "choose_another_date": "Escolha outra data",
     "cutoff_notice": "Reservas para hoje são aceitas até as {{time}} h (horário de Buenos Aires)",
     "capacity_max_reached": "Capacidade máxima atingida para esta data",
-    "currency_notice": "Os preços são exibidos em dólares (USD) e pesos argentinos (ARS). A cobrança é processada em ARS pela taxa de câmbio que o operador determinar; o valor em ARS é estimado.",
+    "currency_notice": "Os preços são exibidos em dólares (USD) como referência. Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
     "ars_estimate": "≈ ARS {{amount}} (estimado pela taxa atual)"
   },
   "return": {
@@ -183,7 +183,7 @@
   },
   "payment_methods": {
     "secure_note": "Pagamentos 100% seguros",
-    "currency_note": "Os preços são exibidos em USD como referência — a cobrança é processada em pesos argentinos (ARS)",
+    "currency_note": "Os preços são exibidos em USD como referência. A cobrança é processada em pesos argentinos (ARS) com cartão/Mercado Pago, ou em reais (BRL) com PIX.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",
     "mp_wallet": "Saldo em conta",
