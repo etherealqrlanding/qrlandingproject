@@ -6,6 +6,9 @@ interface Props extends React.HTMLAttributes<HTMLElement> {
   delay?: number;
   /** Tag a renderizar (default 'div') — ej. 'section' para mantener el id de anclaje. */
   as?: 'div' | 'section';
+  /** Variante más marcada (sube más + arranca levemente achicada) — para elementos
+   * puntuales tipo tarjetas, donde el fade sutil por defecto pasa desapercibido. */
+  pop?: boolean;
 }
 
 // Fade + leve subida cuando la sección entra en el viewport (una sola vez —
@@ -14,7 +17,7 @@ interface Props extends React.HTMLAttributes<HTMLElement> {
 // dejar un transform colgado (aunque sea translate-y-0) rompe el scroll de
 // cualquier modal fixed que se abra más adelante en la página (ver
 // project_modal_transform_fixed_bug en memoria).
-export default function Reveal({ children, className = '', delay = 0, as = 'div', ...rest }: Readonly<Props>) {
+export default function Reveal({ children, className = '', delay = 0, as = 'div', pop = false, ...rest }: Readonly<Props>) {
   const ref = useRef<HTMLElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -39,11 +42,12 @@ export default function Reveal({ children, className = '', delay = 0, as = 'div'
   }, []);
 
   const Tag = as;
+  const hiddenClasses = pop ? 'opacity-0 translate-y-8 scale-95' : 'opacity-0 translate-y-6';
   return (
     <Tag
       ref={ref as React.Ref<never>}
       style={delay ? { transitionDelay: `${delay}ms` } : undefined}
-      className={`transition-all duration-700 ease-out ${visible ? 'opacity-100' : 'opacity-0 translate-y-6'} ${className}`}
+      className={`transition-all ${pop ? 'duration-500' : 'duration-700'} ease-out ${visible ? 'opacity-100' : hiddenClasses} ${className}`}
       {...rest}
     >
       {children}

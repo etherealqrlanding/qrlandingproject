@@ -2,8 +2,10 @@ import { forwardRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { ProductSummary } from '../types/api';
-import { localized } from '../lib/i18nFields';
+import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate } from '../lib/useExchangeRate';
+
+const MAX_OPTION_TAGS = 2;
 
 interface Props {
   product: ProductSummary;
@@ -23,6 +25,7 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
   const description = localized(product, 'short_description', lang);
+  const optionNames = localizedArray(product, 'option_names', lang);
   const startingArs = (exchangeRate != null && product.starting_price_usd != null)
     ? Math.round(product.starting_price_usd * exchangeRate) : null;
 
@@ -60,6 +63,23 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
         </h3>
         {description && (
           <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-cream/70 line-clamp-2">{description}</p>
+        )}
+        {optionNames.length > 0 && (
+          <div className="mt-1.5 sm:mt-2 flex flex-wrap gap-1">
+            {optionNames.slice(0, MAX_OPTION_TAGS).map((name) => (
+              <span
+                key={name}
+                className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full border border-gold/20 bg-gold/5 text-gold-soft truncate max-w-[110px] sm:max-w-[140px]"
+              >
+                {name}
+              </span>
+            ))}
+            {optionNames.length > MAX_OPTION_TAGS && (
+              <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full border border-gold/10 text-cream/40">
+                +{optionNames.length - MAX_OPTION_TAGS}
+              </span>
+            )}
+          </div>
         )}
         <div className="mt-2 sm:mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
           {product.starting_price_usd != null && (

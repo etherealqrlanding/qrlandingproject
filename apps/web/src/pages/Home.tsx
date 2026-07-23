@@ -273,7 +273,9 @@ export default function Home() {
                 />
               ))
             : featured.map((p, i) => (
-                <ProductCard key={p.id} product={p} className={i === 8 ? 'hidden lg:block' : undefined} />
+                <Reveal key={p.id} pop delay={i * 60} className={i === 8 ? 'hidden lg:block' : undefined}>
+                  <ProductCard product={p} />
+                </Reveal>
               ))}
         </div>
 

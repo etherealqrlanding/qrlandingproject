@@ -316,6 +316,9 @@ function OptionCard({
   const dinner = localized(option, 'dinner_time', lang);
   const show = localized(option, 'show_time', lang);
   const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
+  const priceChildArs = (exchangeRate != null && option.price_child_usd != null)
+    ? Math.round(option.price_child_usd * exchangeRate) : null;
+  const hasTimes = Boolean(pickup || dinner || show);
 
   return (
     <div
@@ -340,38 +343,81 @@ function OptionCard({
             className="h-20 w-28 sm:h-24 sm:w-32 shrink-0 rounded-md object-cover border border-gold/10"
           />
         )}
-        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-4">
-          <div>
+        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
             <h3 className="font-display text-xl text-cream">{name}</h3>
             {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
+            {(option.has_dinner || option.has_transfer) && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {option.has_dinner && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
+                    🍽 {t('product.dinner_included')}
+                  </span>
+                )}
+                {option.has_transfer && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
+                    🚐 {t('product.transfer_included')}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-          <div className="sm:text-right shrink-0">
-            <p className="text-xl font-display text-gold">USD {option.price_adult_usd}</p>
+          <div className="self-start shrink-0 rounded-lg border border-gold/15 bg-gold/5 px-4 py-3 sm:text-right">
+            <p className="text-xl font-display text-gold leading-tight">USD {option.price_adult_usd}</p>
             {priceArs != null && (
-              <p className="text-xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</p>
+              <p className="text-sm font-display text-gold/80">ARS {priceArs.toLocaleString('es-AR')}</p>
             )}
             <p className="mt-0.5 text-xs text-cream/50">{t('product.per_adult')}</p>
+            {option.price_child_usd != null && (
+              <p className="mt-1.5 pt-1.5 border-t border-gold/10 text-xs text-cream/60">
+                {t('product.children')}: <span className="text-cream/85">USD {option.price_child_usd}</span>
+                {priceChildArs != null && (
+                  <span className="text-cream/40"> · ARS {priceChildArs.toLocaleString('es-AR')}</span>
+                )}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
-      {(pickup || dinner || show) && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-cream/60">
+      {hasTimes && (
+        <div className="mt-4 rounded-lg border border-gold/10 bg-ink/30 px-3 py-2 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-cream/60">
           {pickup && <span>🚐 {pickup}</span>}
           {dinner && <span>🍽 {dinner}</span>}
           {show && <span>🎭 {show}</span>}
         </div>
       )}
 
-      {includes.length > 0 && (
-        <ul className="mt-4 space-y-1">
-          {includes.map((it, i) => (
-            <li key={i} className="text-sm text-cream/75 flex gap-2">
-              <span className="text-gold mt-0.5">✓</span>
-              <span>{it}</span>
-            </li>
+      {option.available_days.length > 0 && (
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] text-cream/35 uppercase tracking-wider mr-1">{t('product.days_available')}</span>
+          {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+            <span
+              key={d}
+              className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                option.available_days.includes(d)
+                  ? 'bg-gold/20 text-gold border border-gold/30'
+                  : 'bg-ink/40 text-cream/15 border border-cream/10'
+              }`}
+            >
+              {t(`product.day_${d}`)}
+            </span>
           ))}
-        </ul>
+        </div>
+      )}
+
+      {includes.length > 0 && (
+        <div className="mt-4">
+          <p className="text-[10px] uppercase tracking-wider text-cream/35 mb-1.5">{t('product.includes_title')}</p>
+          <ul className="space-y-1">
+            {includes.map((it, i) => (
+              <li key={i} className="text-sm text-cream/75 flex gap-2">
+                <span className="text-gold mt-0.5">✓</span>
+                <span>{it}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <button
