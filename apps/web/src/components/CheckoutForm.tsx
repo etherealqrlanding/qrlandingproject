@@ -442,8 +442,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                     : 'border-gold/20 text-cream/50 hover:border-gold/40'
                 }`}
               >
-                <span className="flex items-center gap-1.5 font-medium">{CreditCardIcon}{t('payment_methods.card_label')}</span>
-                <span className="text-xs opacity-70">{t('payment_methods.mp_types_short')}</span>
+                <span className="flex items-center gap-1.5 font-medium">{CreditCardIcon}{t('payment_methods.card_brands')}</span>
               </button>
               <button
                 type="button"

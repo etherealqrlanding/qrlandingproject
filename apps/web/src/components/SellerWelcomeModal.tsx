@@ -2,21 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api, ApiError, type SellerPublicInfo } from '../lib/api';
 import { clearRef } from '../lib/referral';
+import { SELLER_KINDS, sellerKindIcon } from '../lib/sellerKinds';
 import PaymentMethods from './PaymentMethods';
 
 interface Props {
   code: string;
   onClose: () => void;
 }
-
-const KIND_ICONS: Record<string, string> = {
-  uber: '🚗',
-  hotel: '🏨',
-  concierge: '🔑',
-  agency: '✈️',
-  guide: '🗺️',
-  influencer: '📱',
-};
 
 export default function SellerWelcomeModal({ code, onClose }: Props) {
   const { t } = useTranslation();
@@ -44,13 +36,21 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  // Bloquea el scroll del fondo mientras el modal está abierto — el que tiene
+  // que scrollear es el cartel (si no entra completo), no la página de atrás.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   if (failed) return null;
 
   if (inactive) {
     return (
       <div
         ref={backdropRef}
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
+        className="fixed inset-0 z-50 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
         onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
       >
         <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-amber-500/20 bg-[#0d0a0a] shadow-2xl overflow-hidden animate-modal-panel">
@@ -88,29 +88,33 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
     );
   }
 
-  const icon = info?.kind ? (KIND_ICONS[info.kind] ?? '🌟') : '🌟';
-  const kindLabel = info?.kind
-    ? t(`seller_welcome.kind.${info.kind}`, t('seller_welcome.kind.other'))
-    : t('seller_welcome.kind.other');
+  const icon = sellerKindIcon(info?.kind);
+  // Perfil reconocido (uno de los 6 definidos) → mensaje/pasos a medida. Vendedor
+  // sin perfil asignado o con un valor viejo/no reconocido → mensaje genérico.
+  const isKnownKind = Boolean(info?.kind) && SELLER_KINDS.some((k) => k.value === info?.kind);
+  const profileKey = isKnownKind ? (info?.kind as string) : 'default';
+  const kindLabel = isKnownKind ? t(`seller_welcome.kind.${profileKey}`) : null;
+  const trustBadge = isKnownKind ? t(`seller_welcome.trust_badge.${profileKey}`) : null;
 
   return (
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
+      className="fixed inset-0 z-50 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
       onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
       <div className="relative w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl border border-gold/20 bg-[#0d0a0a] shadow-2xl overflow-hidden animate-modal-panel">
         {/* Barra superior dorada */}
         <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
 
-        <div className="p-6 pb-8 sm:pb-6">
-          {/* Badge verificado */}
-          <div className="flex items-center justify-between mb-5">
+        <div className="p-5 pb-6 sm:pb-5">
+          {/* Badge — a medida del perfil (ej. "Recomendado por tu Hotel"); si el
+              vendedor no tiene un perfil reconocido, cae al genérico "Vendedor Verificado". */}
+          <div className="flex items-center justify-between mb-3">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs font-medium text-gold">
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
                 <path d="M2 5l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              {t('seller_welcome.badge')}
+              {trustBadge ?? t('seller_welcome.badge')}
             </span>
             <button
               onClick={onClose}
@@ -137,44 +141,46 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
           ) : (
             <>
               {/* Identidad del vendedor */}
-              <div className="flex items-start gap-3 mb-5">
-                <span className="text-3xl leading-none mt-0.5" aria-hidden>{icon}</span>
+              <div className="flex items-start gap-2.5 mb-3">
+                <span className="text-2xl leading-none mt-0.5" aria-hidden>{icon}</span>
                 <div>
-                  <p className="font-display text-2xl text-cream leading-tight">{info.name}</p>
-                  <p className="text-xs text-gold-soft mt-1">{kindLabel}</p>
+                  <p className="font-display text-xl text-cream leading-tight">{info.name}</p>
+                  {kindLabel && <p className="text-xs text-gold-soft mt-0.5">{kindLabel}</p>}
                 </div>
               </div>
 
-              {/* Mensaje de seguridad */}
-              <p className="text-sm text-cream/70 leading-relaxed mb-5">
-                {t('seller_welcome.message', { name: info.name })}
+              {/* Mensaje de seguridad — a medida del perfil del vendedor */}
+              <p className="text-xs text-cream/70 leading-snug mb-3">
+                {t(`seller_welcome.message.${profileKey}`, { name: info.name })}
               </p>
 
               {/* Línea divisoria */}
-              <div className="border-t border-white/5 mb-5" />
+              <div className="border-t border-white/5 mb-3" />
 
-              {/* Pasos */}
-              <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft mb-3">
+              {/* Pasos — también a medida del perfil (ej. Recepción/Agencias mencionan
+                  la opción de pagar en efectivo ahí mismo) */}
+              <p className="text-[10px] uppercase tracking-[0.25em] text-gold-soft mb-2">
                 {t('seller_welcome.steps_title')}
               </p>
-              <div className="space-y-3 mb-6">
+              <div className="space-y-1.5 mb-3">
                 {(['step1', 'step2', 'step3'] as const).map((key, i) => (
-                  <div key={key} className="flex items-center gap-3">
-                    <span className="flex-shrink-0 h-5 w-5 rounded-full border border-gold/30 bg-gold/10 flex items-center justify-center text-[10px] font-semibold text-gold">
+                  <div key={key} className="flex items-center gap-2.5">
+                    <span className="flex-shrink-0 h-4 w-4 rounded-full border border-gold/30 bg-gold/10 flex items-center justify-center text-[9px] font-semibold text-gold">
                       {i + 1}
                     </span>
-                    <span className="text-sm text-cream/80">{t(`seller_welcome.${key}`)}</span>
+                    <span className="text-xs text-cream/80 leading-snug">{t(`seller_welcome.steps.${profileKey}.${key}`)}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Medios de pago */}
-              <PaymentMethods variant="detailed" className="mb-6" />
+              {/* Medios de pago — efectivo solo si este vendedor lo tiene habilitado
+                  (flag real is_permanent; el perfil solo lo sugiere en el admin). */}
+              <PaymentMethods variant="detailed" className="mb-4" showCash={info.is_permanent} />
 
               {/* CTA */}
               <button
                 onClick={onClose}
-                className="w-full rounded-lg bg-gold px-4 py-3 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
+                className="w-full rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
               >
                 {t('seller_welcome.cta')}
               </button>

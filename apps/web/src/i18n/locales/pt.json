@@ -200,6 +200,7 @@
     "mp_wallet": "Saldo em conta",
     "mp_types_short": "Crédito, débito e saldo em conta",
     "card_label": "Cartão",
+    "card_brands": "Visa / Mastercard / Amex",
     "cash_label": "Ao vendedor",
     "cash_short": "Dinheiro",
     "pix_soon": "Em breve",
@@ -251,20 +252,69 @@
   },
   "seller_welcome": {
     "badge": "Vendedor Verificado",
-    "message": "Você escaneou o QR de {{name}}, um vendedor registrado e autorizado pela Tangos y Milongas Tickets. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
     "steps_title": "O que você pode fazer?",
-    "step1": "Explore shows de tango em Buenos Aires",
-    "step2": "Escolha data, quantidades e sua experiência",
-    "step3": "Pague com segurança com cartão",
     "cta": "Explorar experiências →",
     "kind": {
-      "uber": "Motorista / Translados",
-      "hotel": "Concierge de Hotel",
-      "concierge": "Concierge",
-      "agency": "Agência de Viagens",
-      "guide": "Guia Turístico",
-      "influencer": "Influenciador",
-      "other": "Vendedor Autorizado"
+      "recepcion": "Recepção",
+      "choferes": "Motoristas",
+      "guias": "Guias",
+      "agencias": "Agências",
+      "freelance": "Freelance",
+      "comercios": "Comércios"
+    },
+    "trust_badge": {
+      "recepcion": "Recomendado pelo seu Hotel",
+      "choferes": "Recomendado no seu Traslado",
+      "guias": "Guia Oficial Verificado",
+      "agencias": "Recomendado pela sua Agência",
+      "freelance": "Promotor Verificado",
+      "comercios": "Comércio Parceiro"
+    },
+    "message": {
+      "default": "Você escaneou o QR de {{name}}, um vendedor registrado e autorizado pela Tangos y Milongas Tickets. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
+      "recepcion": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com o respaldo e a garantia oficial da Tangos y Milongas Tickets.",
+      "choferes": "Olá! Esta experiência foi recomendada por {{name}} durante a sua viagem.",
+      "guias": "Olá! Esta experiência foi selecionada e recomendada pelo seu guia {{name}}.",
+      "agencias": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tangos y Milongas Tickets.",
+      "freelance": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tangos y Milongas Tickets.",
+      "comercios": "Olá! Você encontrou esta recomendação em {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tangos y Milongas Tickets."
+    },
+    "steps": {
+      "default": {
+        "step1": "Explore shows de tango em Buenos Aires",
+        "step2": "Escolha data, quantidades e sua experiência",
+        "step3": "Pague com segurança com cartão"
+      },
+      "recepcion": {
+        "step1": "Explore shows de tango em Buenos Aires",
+        "step2": "Escolha data, quantidade de pessoas e sua experiência",
+        "step3": "Pague online com segurança ou em dinheiro na Recepção"
+      },
+      "choferes": {
+        "step1": "Explore shows de tango em Buenos Aires",
+        "step2": "Escolha data, quantidade de pessoas e sua experiência",
+        "step3": "Pague online com 100% de segurança"
+      },
+      "guias": {
+        "step1": "Explore as melhores casas de tango selecionadas",
+        "step2": "Escolha data, quantidade de pessoas e sua experiência",
+        "step3": "Pague online com 100% de segurança"
+      },
+      "agencias": {
+        "step1": "Explore shows de tango em Buenos Aires",
+        "step2": "Escolha data, quantidade de pessoas e sua experiência",
+        "step3": "Pague online com segurança ou em dinheiro na Agência"
+      },
+      "freelance": {
+        "step1": "Explore shows de tango em Buenos Aires",
+        "step2": "Escolha data, quantidade de pessoas e sua experiência",
+        "step3": "Pague online com 100% de segurança"
+      },
+      "comercios": {
+        "step1": "Explore shows de tango em Buenos Aires",
+        "step2": "Escolha data, quantidade de pessoas e sua experiência",
+        "step3": "Pague online com 100% de segurança"
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminSeller } from '../../../lib/adminApi';
+import { SELLER_KINDS, sellerKindSuggestsCash } from '../../../lib/sellerKinds';
 import InvitePortalSection from './InvitePortalSection';
 import Checkbox from '../../../components/Checkbox';
 
@@ -11,16 +12,6 @@ interface Props {
   onDelete?: () => void;
   onPermanentDelete?: () => void;
 }
-
-const SELLER_KINDS = [
-  { value: 'uber', label: 'Uber / Cabify' },
-  { value: 'hotel', label: 'Hotel' },
-  { value: 'concierge', label: 'Conserje' },
-  { value: 'agency', label: 'Agencia' },
-  { value: 'guide', label: 'Guía turístico' },
-  { value: 'influencer', label: 'Influencer / Web' },
-  { value: 'other', label: 'Otro' },
-];
 
 const empty = {
   code: '', name: '',
@@ -102,10 +93,21 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
           <input type="text" required maxLength={160}
             value={form.name} onChange={(e) => update('name', e.target.value)} className="input" />
         </Field>
-        <Field label="Tipo">
-          <select value={form.kind ?? ''} onChange={(e) => update('kind', e.target.value)} className="input">
+        <Field label="Perfil" hint="Define el mensaje de bienvenida que ve el cliente al escanear el QR.">
+          <select
+            value={form.kind ?? ''}
+            onChange={(e) => {
+              const kind = e.target.value;
+              // Sugerencia, no imposición: al elegir un perfil pre-tildamos "vendedor
+              // permanente" según lo típico de ese perfil (Recepción/Agencias sí,
+              // el resto no) — el admin puede seguir ajustándolo a mano después.
+              setForm((prev) => ({ ...prev, kind, is_permanent: sellerKindSuggestsCash(kind) }));
+              setDirty(true);
+            }}
+            className="input"
+          >
             <option value="">Sin especificar</option>
-            {SELLER_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+            {SELLER_KINDS.map((k) => <option key={k.value} value={k.value}>{k.icon} {k.label}</option>)}
           </select>
         </Field>
         <Field

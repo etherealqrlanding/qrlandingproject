@@ -3,6 +3,7 @@ import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { sellerApi } from '../../lib/sellerApi';
 import ShareButton from '../../components/ShareButton';
 import { buildShareUrl } from '../../lib/shareLinks';
+import { sellerKindLabel } from '../../lib/sellerKinds';
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -161,7 +162,7 @@ export default function SellerDashboard() {
             <InfoRow label="Código">
               <span className="font-mono text-gold-soft">{me.code}</span>
             </InfoRow>
-            {me.kind && <InfoRow label="Tipo">{me.kind}</InfoRow>}
+            {me.kind && <InfoRow label="Perfil">{sellerKindLabel(me.kind)}</InfoRow>}
             <InfoRow label="Comisión"><span className="text-gold">{commissionRate}</span></InfoRow>
             {me.contact_email && <InfoRow label="Email">{me.contact_email}</InfoRow>}
             {me.contact_phone && <InfoRow label="Teléfono">{me.contact_phone}</InfoRow>}

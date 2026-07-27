@@ -200,6 +200,7 @@
     "mp_wallet": "Account balance",
     "mp_types_short": "Credit, debit and account balance",
     "card_label": "Card",
+    "card_brands": "Visa / Mastercard / Amex",
     "cash_label": "To the seller",
     "cash_short": "Cash",
     "pix_soon": "Coming soon",
@@ -251,20 +252,69 @@
   },
   "seller_welcome": {
     "badge": "Verified Seller",
-    "message": "You scanned {{name}}'s QR code. They are a registered seller authorized by Tangos y Milongas Tickets. All your transactions are monitored and protected by our team.",
     "steps_title": "What can you do?",
-    "step1": "Explore tango shows in Buenos Aires",
-    "step2": "Choose date, guests and your experience",
-    "step3": "Pay securely with card",
     "cta": "Explore experiences →",
     "kind": {
-      "uber": "Driver / Transfers",
-      "hotel": "Hotel Concierge",
-      "concierge": "Concierge",
-      "agency": "Travel Agency",
-      "guide": "Tour Guide",
-      "influencer": "Influencer",
-      "other": "Authorized Seller"
+      "recepcion": "Reception",
+      "choferes": "Drivers",
+      "guias": "Tour Guides",
+      "agencias": "Agencies",
+      "freelance": "Freelance",
+      "comercios": "Shops"
+    },
+    "trust_badge": {
+      "recepcion": "Recommended by Your Hotel",
+      "choferes": "Recommended During Your Ride",
+      "guias": "Official Verified Guide",
+      "agencias": "Recommended by Your Agency",
+      "freelance": "Verified Promoter",
+      "comercios": "Affiliated Business"
+    },
+    "message": {
+      "default": "You scanned {{name}}'s QR code. They are a registered seller authorized by Tangos y Milongas Tickets. All your transactions are monitored and protected by our team.",
+      "recepcion": "Hi! This experience was recommended by {{name}}. Book your spot directly with the official backing and guarantee of Tangos y Milongas Tickets.",
+      "choferes": "Hi! This experience was recommended by {{name}} during your ride.",
+      "guias": "Hi! This experience was selected and recommended by your guide {{name}}.",
+      "agencias": "Hi! This experience was recommended by {{name}}. Book your spot directly at official prices with the guarantee of Tangos y Milongas Tickets.",
+      "freelance": "Hi! This experience was recommended by {{name}}. Book your spot directly at official prices with the guarantee of Tangos y Milongas Tickets.",
+      "comercios": "Hi! You found this recommendation at {{name}}. Book your spot directly at official prices with the guarantee of Tangos y Milongas Tickets."
+    },
+    "steps": {
+      "default": {
+        "step1": "Explore tango shows in Buenos Aires",
+        "step2": "Choose date, guests and your experience",
+        "step3": "Pay securely with card"
+      },
+      "recepcion": {
+        "step1": "Explore tango shows in Buenos Aires",
+        "step2": "Choose date, number of guests and your experience",
+        "step3": "Pay online securely or in cash at Reception"
+      },
+      "choferes": {
+        "step1": "Explore tango shows in Buenos Aires",
+        "step2": "Choose date, number of guests and your experience",
+        "step3": "Pay 100% securely online"
+      },
+      "guias": {
+        "step1": "Explore the best hand-picked tango venues",
+        "step2": "Choose date, number of guests and your experience",
+        "step3": "Pay 100% securely online"
+      },
+      "agencias": {
+        "step1": "Explore tango shows in Buenos Aires",
+        "step2": "Choose date, number of guests and your experience",
+        "step3": "Pay online securely or in cash at the Agency"
+      },
+      "freelance": {
+        "step1": "Explore tango shows in Buenos Aires",
+        "step2": "Choose date, number of guests and your experience",
+        "step3": "Pay 100% securely online"
+      },
+      "comercios": {
+        "step1": "Explore tango shows in Buenos Aires",
+        "step2": "Choose date, number of guests and your experience",
+        "step3": "Pay 100% securely online"
+      }
     }
   }
 }
