@@ -44,55 +44,57 @@ export default function AccessGate({
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-ink px-6 text-center">
-      <div className="absolute top-5 right-6"><LanguageSwitcher /></div>
+    <div className="h-[100dvh] overflow-y-auto bg-ink">
+      <div className="fixed top-5 right-6 z-10"><LanguageSwitcher /></div>
 
-      <Logo className="h-24 md:h-28 w-auto" />
+      <div className="min-h-full flex flex-col items-center justify-center px-6 py-8 text-center">
+        <Logo className="h-16 md:h-20 w-auto" />
 
-      <div className="mt-10 max-w-md w-full">
-        <span className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/5 px-4 py-1.5 text-xs uppercase tracking-widest text-gold-soft">
-          <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-          {t('gate.badge')}
-        </span>
+        <div className="mt-6 max-w-md w-full">
+          <span className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-gold/5 px-3 py-1 text-xs uppercase tracking-widest text-gold-soft">
+            <span className="h-1.5 w-1.5 rounded-full bg-gold" />
+            {t('gate.badge')}
+          </span>
 
-        <h1 className="mt-6 font-display text-3xl md:text-4xl text-cream leading-tight">
-          {t('gate.title')}
-        </h1>
+          <h1 className="mt-4 font-display text-2xl md:text-3xl text-cream leading-tight">
+            {t('gate.title')}
+          </h1>
 
-        <p className="mt-4 text-cream/70 leading-relaxed">
-          {t('gate.message')}
-        </p>
+          <p className="mt-3 text-sm text-cream/70 leading-relaxed">
+            {t('gate.message')}
+          </p>
 
-        {reason === 'invalid' && !error && (
-          <div className="mt-6 rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/80">
-            {t('gate.invalid')}
-          </div>
-        )}
+          {reason === 'invalid' && !error && (
+            <div className="mt-4 rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-2.5 text-sm text-cream/80">
+              {t('gate.invalid')}
+            </div>
+          )}
 
-        <form onSubmit={submit} className="mt-8">
-          <label className="block text-xs uppercase tracking-widest text-gold-soft/80">
-            {t('gate.have_code')}
-          </label>
-          <div className="mt-2 flex gap-2">
-            <input
-              value={code}
-              onChange={(e) => { setCode(e.target.value); if (error) setError(null); }}
-              placeholder={t('gate.placeholder')}
-              autoCapitalize="characters"
-              autoComplete="off"
-              className="input text-center tracking-widest"
-              aria-label={t('gate.placeholder')}
-            />
-            <button type="submit" disabled={submitting} className="btn-primary shrink-0 disabled:opacity-50">
-              {submitting ? t('gate.checking') : t('gate.enter')}
-            </button>
-          </div>
-          {error && <p className="mt-2 text-sm text-bordeaux-light">{error}</p>}
-        </form>
+          <form onSubmit={submit} className="mt-5">
+            <label className="block text-xs uppercase tracking-widest text-gold-soft/80">
+              {t('gate.have_code')}
+            </label>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={code}
+                onChange={(e) => { setCode(e.target.value); if (error) setError(null); }}
+                placeholder={t('gate.placeholder')}
+                autoCapitalize="characters"
+                autoComplete="off"
+                className="input text-center tracking-widest"
+                aria-label={t('gate.placeholder')}
+              />
+              <button type="submit" disabled={submitting} className="btn-primary shrink-0 disabled:opacity-50">
+                {submitting ? t('gate.checking') : t('gate.enter')}
+              </button>
+            </div>
+            {error && <p className="mt-2 text-sm text-bordeaux-light">{error}</p>}
+          </form>
 
-        <p className="mt-8 text-xs uppercase tracking-[0.25em] text-cream/40">
-          {t('gate.footer')}
-        </p>
+          <p className="mt-5 text-xs uppercase tracking-[0.25em] text-cream/40">
+            {t('gate.footer')}
+          </p>
+        </div>
       </div>
     </div>
   );

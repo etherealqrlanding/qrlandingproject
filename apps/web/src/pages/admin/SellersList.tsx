@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { adminApi, type AdminSeller } from '../../lib/adminApi';
 import Checkbox from '../../components/Checkbox';
 import { useReturnHighlight } from '../../hooks/useReturnHighlight';
+import { sellerKindIcon, sellerKindLabel } from '../../lib/sellerKinds';
 
 const LAST_VIEWED_KEY = 'lastViewedSellerId';
 
@@ -74,8 +75,14 @@ function SellerCard({
       </div>
 
       <div className="px-4 pb-3 space-y-1.5">
-        <div className="flex items-center gap-3 text-[10px] text-cream/50">
+        <div className="flex items-center gap-3 text-[10px] text-cream/50 flex-wrap">
           <span className="font-mono text-gold-soft">{s.code}</span>
+          {s.kind && (
+            <>
+              <span>·</span>
+              <span>{sellerKindIcon(s.kind)} {sellerKindLabel(s.kind)}</span>
+            </>
+          )}
           <span>·</span>
           <span>Com. {Number(s.commission_percent).toFixed(1)}%</span>
           {s.orders_paid != null && (
@@ -195,7 +202,7 @@ export default function SellersList() {
                 <th className="text-left py-2.5 px-3">Código</th>
                 <th className="text-right py-2.5 px-3">Com.%</th>
                 <th className="text-right py-2.5 px-3">Ventas</th>
-                <th className="text-right py-2.5 px-3">Revenue</th>
+                <th className="text-left py-2.5 px-3">Perfil</th>
                 <th className="text-right py-2.5 px-3">Pendiente</th>
                 <th className="text-center py-2.5 px-3">Estado</th>
                 <th className="text-right py-2.5 px-3" />
@@ -226,7 +233,11 @@ export default function SellersList() {
                   <td className="py-2.5 px-3 font-mono text-xs text-gold-soft whitespace-nowrap">{s.code}</td>
                   <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs">{Number(s.commission_percent).toFixed(1)}%</td>
                   <td className="py-2.5 px-3 text-right text-cream/70 tabular-nums text-xs">{s.orders_paid ?? 0}</td>
-                  <td className="py-2.5 px-3 text-right text-cream/70 tabular-nums text-xs whitespace-nowrap">ARS {(s.revenue_paid_ars ?? 0).toLocaleString()}</td>
+                  <td className="py-2.5 px-3 text-left text-xs whitespace-nowrap">
+                    {s.kind
+                      ? <span className="text-cream/80">{sellerKindIcon(s.kind)} {sellerKindLabel(s.kind)}</span>
+                      : <span className="text-cream/30">Sin especificar</span>}
+                  </td>
                   <td className="py-2.5 px-3 text-right text-gold tabular-nums text-xs whitespace-nowrap">
                     {(s.commission_pending_payment_ars ?? 0) > 0
                       ? `ARS ${(s.commission_pending_payment_ars ?? 0).toLocaleString()}`
