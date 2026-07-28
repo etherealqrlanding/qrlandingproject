@@ -9,6 +9,7 @@ import { adminProductsRouter } from './products.js';
 import { adminSellersRouter } from './sellers.js';
 import { adminOrdersRouter } from './orders.js';
 import { adminSettingsRouter } from './settings.js';
+import { adminUsersRouter } from './adminUsers.js';
 
 export const adminRouter = Router();
 
@@ -185,3 +186,4 @@ adminRouter.use('/products', adminProductsRouter);
 adminRouter.use('/sellers', adminSellersRouter);
 adminRouter.use('/orders', adminOrdersRouter);
 adminRouter.use('/settings', adminSettingsRouter);
+adminRouter.use('/admins', adminUsersRouter);

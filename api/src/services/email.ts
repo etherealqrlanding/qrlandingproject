@@ -796,6 +796,60 @@ export async function sendSellerPasswordReset(
   return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html);
 }
 
+export async function sendAdminPortalInvite(
+  adminName: string,
+  adminEmail: string,
+  inviteLink: string,
+): Promise<SendResult> {
+  const html = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Panel de administración</p>
+  <h1 style="${baseStyles.title}">¡Bienvenido al panel!</h1>
+  <p>Hola ${escapeHtml(adminName)}, te dieron acceso de administrador al panel de Tangos y Milongas Tickets.</p>
+  <div style="${baseStyles.card}">
+    <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic en el botón para crear tu contraseña e ingresar:</p>
+    <a href="${inviteLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
+      Acceder al panel
+    </a>
+  </div>
+  <p style="color:rgba(245,239,230,0.5);font-size:13px;">O copiá este enlace en tu navegador:<br/>
+    <span style="font-family:monospace;font-size:11px;word-break:break-all;">${inviteLink}</span>
+  </p>
+  <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo esperabas, podés ignorar este email.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Panel de administración</p>
+</div></body></html>`;
+  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html);
+}
+
+export async function sendAdminPasswordReset(
+  adminName: string,
+  adminEmail: string,
+  resetLink: string,
+): Promise<SendResult> {
+  const html = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Panel de administración</p>
+  <h1 style="${baseStyles.title}">Acceso al panel</h1>
+  <p>Hola ${escapeHtml(adminName)}, se agregó/actualizó tu acceso de administrador.</p>
+  <div style="${baseStyles.card}">
+    <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic para crear una contraseña (o usá la que ya tenías si es la misma cuenta):</p>
+    <a href="${resetLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
+      Ir al panel
+    </a>
+  </div>
+  <p style="color:rgba(245,239,230,0.5);font-size:13px;">O copiá este enlace en tu navegador:<br/>
+    <span style="font-family:monospace;font-size:11px;word-break:break-all;">${resetLink}</span>
+  </p>
+  <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo esperabas, podés ignorar este email.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Panel de administración</p>
+</div></body></html>`;
+  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html);
+}
+
 /**
  * Notificación al cliente, admin y vendedor (si hay atribución) cuando se reintegra una orden.
  * Se dispara desde el endpoint admin de refund.

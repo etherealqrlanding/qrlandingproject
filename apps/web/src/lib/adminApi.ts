@@ -203,6 +203,25 @@ export interface UploadSignedResponse {
   public_url: string;
 }
 
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: 'super_admin' | 'admin' | 'operator';
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface AdminInviteResult {
+  admin: AdminUserRow;
+  ok: true;
+  action: 'invite_sent' | 'password_reset_sent';
+  link: string;
+  email_sent: boolean;
+  email_error: string | null;
+}
+
 export interface AdminSeller {
   id: number;
   code: string;
@@ -507,6 +526,17 @@ export const adminApi = {
       request<UploadSignedResponse>('/api/admin/uploads/sign', {
         method: 'POST',
         body: JSON.stringify({ filename, content_type: contentType }),
+      }),
+  },
+  admins: {
+    list: () => request<AdminUserRow[]>('/api/admin/admins'),
+    invite: (input: { email: string; full_name?: string | null; role: AdminUserRow['role'] }) =>
+      request<AdminInviteResult>('/api/admin/admins', {
+        method: 'POST', body: JSON.stringify(input),
+      }),
+    update: (id: string, input: { role?: AdminUserRow['role']; is_active?: boolean }) =>
+      request<AdminUserRow>(`/api/admin/admins/${id}`, {
+        method: 'PATCH', body: JSON.stringify(input),
       }),
   },
   sellers: {

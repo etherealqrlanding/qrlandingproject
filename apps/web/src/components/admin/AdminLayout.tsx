@@ -12,7 +12,9 @@ const SSE_RECONNECT_MS = 5_000;
 // refrescar la lista en vivo si el admin ya está mirando esa pantalla.
 export const NEW_ORDER_PAID_EVENT = 'admin:new-order-paid';
 
-const NAV = [
+interface NavItem { to: string; label: string; icon: string; end?: boolean }
+
+const NAV: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: '◆', end: true },
   { to: '/admin/products', label: 'Productos', icon: '⌂' },
   { to: '/admin/sellers', label: 'Vendedores', icon: '☉' },
@@ -20,6 +22,9 @@ const NAV = [
   { to: '/admin/content', label: 'Contenido', icon: '✎' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙' },
 ];
+
+// Solo super_admin puede otorgar/quitar acceso admin — el resto ni ve el link.
+const SUPER_ADMIN_NAV: NavItem = { to: '/admin/admins', label: 'Admins', icon: '🛡' };
 
 export default function AdminLayout() {
   const { me, signOut } = useAdminAuth();
@@ -103,6 +108,7 @@ export default function AdminLayout() {
   }, []);
 
   const fmtArs = (n: number) => `ARS ${Math.round(n).toLocaleString('es-AR')}`;
+  const navItems = me?.admin.role === 'super_admin' ? [...NAV, SUPER_ADMIN_NAV] : NAV;
 
   return (
     <div className="h-[100dvh] overflow-hidden flex bg-ink text-cream">
@@ -171,7 +177,7 @@ export default function AdminLayout() {
               style={{ top: navIndicator.top, height: navIndicator.height }}
             />
           )}
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
