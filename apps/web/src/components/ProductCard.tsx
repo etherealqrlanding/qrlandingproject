@@ -25,6 +25,8 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
   const description = localized(product, 'short_description', lang);
+  const neighborhood = localized(product, 'neighborhood', lang);
+  const tagline = localized(product, 'tagline', lang);
   const optionNames = localizedArray(product, 'option_names', lang);
   const startingArs = (exchangeRate != null && product.starting_price_usd != null)
     ? Math.round(product.starting_price_usd * exchangeRate) : null;
@@ -53,11 +55,18 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
           <div className="absolute inset-0 bg-gradient-to-br from-bordeaux-deep to-ink" />
         )}
         <div className="hidden sm:block absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
+        {neighborhood && (
+          <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-md bg-ink/75 backdrop-blur-md border border-cream/10 text-cream shadow-md">
+            📍 {neighborhood}
+          </span>
+        )}
       </div>
 
       {/* Info: debajo de la foto en mobile, superpuesta abajo desde sm+ */}
       <div className="p-3 sm:absolute sm:inset-x-0 sm:bottom-0 sm:p-5">
-        <p className="text-[10px] sm:text-xs uppercase tracking-widest text-gold-soft">{product.venue_name}</p>
+        <p className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-gold-soft">
+          {tagline || product.venue_name}
+        </p>
         <h3 className="mt-0.5 sm:mt-1 font-display text-lg sm:text-2xl text-cream leading-tight">
           {product.name}
         </h3>
@@ -83,28 +92,24 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
         )}
         <div className="mt-2 sm:mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
           {product.starting_price_usd != null && (
-            <p className="text-xs sm:text-sm text-cream/80">
-              <span className="text-cream/50">{t('product.from')}</span>{' '}
-              <span className="text-gold font-medium">USD {product.starting_price_usd}</span>
-              {startingArs != null && (
-                <>
-                  <span className="text-cream/30 mx-1">·</span>
-                  <span className="text-gold font-medium">
-                    ARS {startingArs.toLocaleString('es-AR')}
+            <div>
+              <span className="text-[9px] sm:text-[10px] uppercase tracking-wide text-cream/50 font-semibold block">
+                {t('product.from')}
+              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-base sm:text-lg font-bold text-gold">USD {product.starting_price_usd}</span>
+                {startingArs != null && (
+                  <span className="text-[11px] sm:text-xs text-cream/50 font-medium">
+                    · ARS {startingArs.toLocaleString('es-AR')}
                   </span>
-                </>
-              )}
-            </p>
+                )}
+              </div>
+            </div>
           )}
-          <span className="text-[11px] sm:text-xs text-gold-soft group-hover:text-gold transition">
+          <span className="shrink-0 inline-flex items-center rounded-lg bg-gold px-3 py-1.5 sm:py-2 text-[11px] sm:text-xs font-semibold text-ink shadow-md transition group-hover:bg-gold-soft">
             {t('product.view_more')} →
           </span>
         </div>
-        {product.starting_price_usd != null && (
-          <p className="mt-1.5 sm:mt-2 text-[10px] sm:text-[11px] leading-snug text-cream/40">
-            {t('product.currency_notice')}
-          </p>
-        )}
       </div>
     </Link>
   );

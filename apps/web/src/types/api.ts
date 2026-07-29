@@ -50,6 +50,12 @@ export interface ProductSummary {
   category_slug: string;
   short_description_es: string | null;
   short_description_en: string | null;
+  address_es: string | null;
+  address_en: string | null;
+  neighborhood_es: string | null;
+  neighborhood_en: string | null;
+  tagline_es: string | null;
+  tagline_en: string | null;
   starting_price_usd: number | null;
   hero_image: string | null;
   option_names_es: string[];
@@ -59,8 +65,6 @@ export interface ProductSummary {
 export interface ProductDetail extends ProductSummary {
   long_description_es: string | null;
   long_description_en: string | null;
-  address_es: string | null;
-  address_en: string | null;
   schedule_summary_es: string | null;
   schedule_summary_en: string | null;
   video_url: string | null;

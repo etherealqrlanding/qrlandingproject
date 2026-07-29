@@ -17,6 +17,7 @@ const empty = {
   short_description_es: '', short_description_en: '',
   long_description_es: '', long_description_en: '',
   address_es: '', address_en: '',
+  neighborhood_es: '', tagline_es: '',
   schedule_summary_es: '', schedule_summary_en: '',
   video_url: '',
   starting_price_usd: null as number | null,
@@ -123,6 +124,16 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
         </Field>
       </div>
 
+      <Field label="Frase destacada (ES)" hint="Frase corta editorial que aparece arriba del título en la card, ej: 'Catedral del Tango'. Si la dejás vacía, se muestra el nombre del venue.">
+        <input
+          type="text" maxLength={120}
+          value={form.tagline_es ?? ''}
+          onChange={(e) => update('tagline_es', e.target.value)}
+          className="input"
+          placeholder="Ej: Catedral del Tango"
+        />
+      </Field>
+
       <Field label="Descripción corta (ES)" hint="Aparece en las cards del listado — el sitio traduce automáticamente al resto de los idiomas">
         <textarea
           rows={3} maxLength={500}
@@ -141,14 +152,25 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
         />
       </Field>
 
-      <Field label="Dirección" hint="Se muestra en el detalle público y en el voucher del pasajero">
-        <input
-          type="text" maxLength={300}
-          value={form.address_es ?? ''}
-          onChange={(e) => update('address_es', e.target.value)}
-          className="input"
-        />
-      </Field>
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field label="Dirección" hint="Se muestra en el detalle público y en el voucher del pasajero">
+          <input
+            type="text" maxLength={300}
+            value={form.address_es ?? ''}
+            onChange={(e) => update('address_es', e.target.value)}
+            className="input"
+          />
+        </Field>
+        <Field label="Barrio" hint="Ubicación corta para el pin sobre la foto en la card, ej: 'Barracas'">
+          <input
+            type="text" maxLength={80}
+            value={form.neighborhood_es ?? ''}
+            onChange={(e) => update('neighborhood_es', e.target.value)}
+            className="input"
+            placeholder="Ej: Barracas"
+          />
+        </Field>
+      </div>
 
       <Field label="Resumen de horarios" hint="Texto libre — ej: 'Lun a Dom, traslado 19:30-20:00...'">
         <textarea

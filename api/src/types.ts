@@ -51,6 +51,16 @@ export interface ProductSummary {
   category_slug: string;
   short_description_es: string | null;
   short_description_en: string | null;
+  address_es: string | null;
+  address_en: string | null;
+  // Barrio corto (ej. "Barracas") para el pin sobre la imagen de la card — distinto
+  // de address_* (dirección completa, usada en el detalle y el voucher).
+  neighborhood_es: string | null;
+  neighborhood_en: string | null;
+  // Frase editorial corta (ej. "Catedral del Tango") que se muestra arriba del
+  // título en la card. Si está vacía, la card cae a venue_name.
+  tagline_es: string | null;
+  tagline_en: string | null;
   starting_price_usd: number | null;
   hero_image: string | null;
   // Nombres de los product_options activos (tiers: "Cena VIP", "Solo Show", etc.)
@@ -62,8 +72,6 @@ export interface ProductSummary {
 export interface ProductDetail extends ProductSummary {
   long_description_es: string | null;
   long_description_en: string | null;
-  address_es: string | null;
-  address_en: string | null;
   schedule_summary_es: string | null;
   schedule_summary_en: string | null;
   video_url: string | null;

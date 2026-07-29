@@ -158,6 +158,8 @@ export interface AdminProductDetail {
   short_description_es: string | null; short_description_en: string | null;
   long_description_es: string | null; long_description_en: string | null;
   address_es: string | null; address_en: string | null;
+  neighborhood_es: string | null; neighborhood_en: string | null;
+  tagline_es: string | null; tagline_en: string | null;
   schedule_summary_es: string | null; schedule_summary_en: string | null;
   video_url: string | null;
   starting_price_usd: number | null;
