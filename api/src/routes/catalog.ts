@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { getProductBySlug, listCategories, listProducts } from '../repos/catalog.js';
 import { pool } from '../db.js';
-import { getSameDayCutoff, getExchangeRate, getSupportWhatsapp } from '../services/settings.js';
+import { getSameDayCutoff, getExchangeRate, getSupportWhatsapp, getBookingHorizonMonths } from '../services/settings.js';
 import { getAbout, getFaq } from '../services/content.js';
 
 export const catalogRouter = Router();
@@ -119,6 +119,14 @@ catalogRouter.get('/settings/booking-cutoff', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Horizonte de venta (hasta cuántos meses a futuro se puede reservar) — endpoint público
+catalogRouter.get('/settings/booking-horizon', async (_req, res, next) => {
+  try {
+    const months = await getBookingHorizonMonths();
+    res.json({ data: { months } });
+  } catch (err) { next(err); }
+});
+
 // Número de WhatsApp de contacto — endpoint público (solo lectura)
 catalogRouter.get('/settings/whatsapp', async (_req, res, next) => {
   try {
@@ -179,6 +187,18 @@ catalogRouter.get('/options/:optionId/availability', async (req, res, next) => {
       todayCutoffPassed = currentMin >= ch * 60 + cm;
     }
 
+    // Horizonte de venta: hasta qué fecha se puede reservar (null = sin tope).
+    // Se calcula acá y se aplica en el loop de abajo pase lo que pase con el `to`
+    // pedido, para que el tope sea real y no dependa de que el cliente lo respete.
+    const horizonMonths = await getBookingHorizonMonths();
+    const horizonDate = horizonMonths != null
+      ? (() => {
+          const d = new Date(`${todayBA}T00:00:00`);
+          d.setMonth(d.getMonth() + horizonMonths);
+          return d.toISOString().slice(0, 10);
+        })()
+      : null;
+
     // 2) Reservas confirmadas por fecha (sumamos adultos + menores de órdenes pagadas)
     const { rows: bookings } = await pool.query<{ service_date: string; total_pax: number }>(
       `SELECT to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
@@ -214,6 +234,10 @@ catalogRouter.get('/options/:optionId/availability', async (req, res, next) => {
       const iso = d.toISOString().slice(0, 10);
       const dow = d.getDay() === 0 ? 7 : d.getDay(); // 1=Lun..7=Dom
 
+      if (horizonDate && iso > horizonDate) {
+        result.push({ date: iso, status: 'closed', reason: 'beyond_horizon' });
+        continue;
+      }
       if (!option.available_days.includes(dow) || !option.product_available_days.includes(dow)) {
         result.push({ date: iso, status: 'closed', reason: 'not_operating_day' });
         continue;

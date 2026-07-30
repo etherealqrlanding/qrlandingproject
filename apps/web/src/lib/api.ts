@@ -143,6 +143,7 @@ export const api = {
   },
   settings: {
     bookingCutoff: () => request<{ time: string | null }>('/api/settings/booking-cutoff'),
+    bookingHorizon: () => request<{ months: number | null }>('/api/settings/booking-horizon'),
     exchangeRate: () => request<{ rate: number }>('/api/settings/exchange-rate'),
     whatsapp: () => request<{ number: string | null }>('/api/settings/whatsapp'),
   },

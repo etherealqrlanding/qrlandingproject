@@ -15,11 +15,17 @@ function addMonths(d: Date, n: number) { return new Date(d.getFullYear(), d.getM
 
 export default function AvailabilityCalendar({ optionId, value, currentDate, onChange }: Props) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // 3 = fallback mientras carga el valor real configurado en el admin.
+  const [horizonMonths, setHorizonMonths] = useState<number | null>(3);
+  useEffect(() => {
+    api.settings.bookingHorizon().then((d) => setHorizonMonths(d.months)).catch(() => {});
+  }, []);
   const horizon = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 90);
+    if (horizonMonths == null) d.setFullYear(d.getFullYear() + 5); // "sin tope" → ventana amplia, el server manda la disponibilidad real
+    else d.setMonth(d.getMonth() + horizonMonths);
     return d.toISOString().slice(0, 10);
-  }, []);
+  }, [horizonMonths]);
 
   const [viewDate, setViewDate] = useState<Date>(() => {
     const [y, m] = value.split('-').map(Number);

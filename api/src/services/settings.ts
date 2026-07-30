@@ -145,6 +145,34 @@ export async function setCancelWindow(hours: number | null): Promise<void> {
   );
 }
 
+const BOOKING_HORIZON_KEY = 'booking_horizon_months';
+const DEFAULT_BOOKING_HORIZON_MONTHS = 3;
+
+// Hasta cuántos meses a futuro se puede reservar (checkout público, carga manual
+// de admin/vendedor y reprogramación de reservas existentes respetan el mismo
+// tope). null = sin fila configurada todavía → default; { months: null } = sin tope.
+export async function getBookingHorizonMonths(): Promise<number | null> {
+  const { rows } = await pool.query<{ value: { months: number | null } }>(
+    `SELECT value FROM settings WHERE key = $1 LIMIT 1`,
+    [BOOKING_HORIZON_KEY],
+  );
+  if (rows.length === 0) return DEFAULT_BOOKING_HORIZON_MONTHS;
+  return rows[0].value?.months ?? null;
+}
+
+export async function setBookingHorizonMonths(months: number | null): Promise<void> {
+  await pool.query(
+    `INSERT INTO settings (key, value, description)
+     VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [
+      BOOKING_HORIZON_KEY,
+      JSON.stringify({ months }),
+      'Hasta cuántos meses a futuro se puede reservar (checkout público, carga manual y reprogramación). null = sin tope.',
+    ],
+  );
+}
+
 const MAINTENANCE_KEY = 'maintenance_mode';
 
 export async function getMaintenanceMode(): Promise<boolean> {

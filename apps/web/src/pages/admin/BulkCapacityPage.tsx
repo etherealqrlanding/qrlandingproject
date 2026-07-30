@@ -42,6 +42,32 @@ export default function BulkCapacityPage() {
     }
   };
 
+  // ── Horizonte de venta (hasta cuántos meses a futuro se puede reservar) ──
+  const [horizon, setHorizon] = useState<string>('');
+  const [horizonSaving, setHorizonSaving] = useState(false);
+  const [horizonMsg, setHorizonMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi.settings.getBookingHorizon()
+      .then((d) => setHorizon(d.months != null ? String(d.months) : ''))
+      .catch(() => { /* no bloquea el resto de la página */ });
+  }, []);
+
+  const handleSaveHorizon = async () => {
+    setHorizonSaving(true);
+    setHorizonMsg(null);
+    try {
+      const months = horizon === '' ? null : Number.parseInt(horizon, 10);
+      await adminApi.settings.updateBookingHorizon(months);
+      setHorizonMsg('✓ Guardado');
+      setTimeout(() => setHorizonMsg(null), 3000);
+    } catch (err) {
+      setHorizonMsg(`Error: ${(err as AdminApiError).message}`);
+    } finally {
+      setHorizonSaving(false);
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-6xl">
       <Link to="/admin/products" className="text-sm text-gold-soft hover:text-gold">
@@ -102,6 +128,58 @@ export default function BulkCapacityPage() {
         {cutoff && (
           <p className="mt-3 text-xs text-cream/40">
             Actualmente: reservas del día se aceptan hasta las <span className="text-cream/70">{cutoff}</span> hs.
+          </p>
+        )}
+      </section>
+
+      {/* ── Horizonte de venta ── */}
+      <section className="rounded-xl border border-gold/15 bg-ink-soft/50 p-6 mb-8">
+        <h2 className="font-display text-2xl text-cream">Horizonte de venta</h2>
+        <p className="mt-2 text-sm text-cream/60 max-w-xl">
+          Hasta cuántos meses a futuro se puede reservar — aplica al checkout público, a la carga
+          manual de admin/vendedor y a reprogramar una reserva existente. Ej: 12 = un año, 24 = dos
+          años. Dejá vacío para no aplicar tope.
+        </p>
+        <div className="mt-5 flex items-center gap-4 flex-wrap">
+          <div>
+            <label htmlFor="horizon-months" className="block text-sm text-cream/70 mb-1.5">Meses hacia adelante</label>
+            <input
+              id="horizon-months"
+              type="number" min={1} max={36}
+              value={horizon}
+              onChange={(e) => setHorizon(e.target.value)}
+              className="input w-36"
+              placeholder="Sin tope"
+            />
+          </div>
+          <div className="flex items-center gap-3 mt-5">
+            <button
+              type="button"
+              onClick={handleSaveHorizon}
+              disabled={horizonSaving}
+              className="btn-primary text-sm disabled:opacity-50"
+            >
+              {horizonSaving ? 'Guardando...' : 'Guardar'}
+            </button>
+            {horizon && (
+              <button
+                type="button"
+                onClick={() => { setHorizon(''); }}
+                className="text-xs text-cream/40 hover:text-cream/70"
+              >
+                Quitar tope
+              </button>
+            )}
+          </div>
+          {horizonMsg && (
+            <p className={`text-sm mt-5 ${horizonMsg.startsWith('Error') ? 'text-bordeaux-light' : 'text-gold'}`}>
+              {horizonMsg}
+            </p>
+          )}
+        </div>
+        {horizon && (
+          <p className="mt-3 text-xs text-cream/40">
+            Actualmente: se vende hasta <span className="text-cream/70">{horizon}</span> mes{horizon === '1' ? '' : 'es'} hacia adelante.
           </p>
         )}
       </section>

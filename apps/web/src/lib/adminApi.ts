@@ -832,6 +832,13 @@ export const adminApi = {
         method: 'PUT',
         body: JSON.stringify({ time }),
       }),
+    getBookingHorizon: () =>
+      request<{ months: number | null }>('/api/admin/settings/booking-horizon'),
+    updateBookingHorizon: (months: number | null) =>
+      request<{ months: number | null }>('/api/admin/settings/booking-horizon', {
+        method: 'PUT',
+        body: JSON.stringify({ months }),
+      }),
     getSupportWhatsapp: () =>
       request<{ number: string | null }>('/api/admin/settings/support-whatsapp'),
     updateSupportWhatsapp: (number: string) =>

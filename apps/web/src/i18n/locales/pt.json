@@ -163,9 +163,12 @@
     "date_closed": "A casa não opera nessa data. Escolha outro dia.",
     "date_closed_cutoff": "O horário limite de reservas do dia já passou. Escolha outra data.",
     "date_closed_day": "O serviço não opera nesse dia da semana. Escolha outro dia.",
+    "date_closed_horizon": "Ainda não vendemos ingressos para datas tão distantes. Escolha uma data mais próxima.",
+    "date_past": "Essa data já passou. Escolha uma data futura.",
     "date_low": "Restam poucas vagas para esta data.",
     "choose_another_date": "Escolha outra data",
     "cutoff_notice": "Reservas para hoje são aceitas até as {{time}} h (horário de Buenos Aires)",
+    "horizon_notice": "No momento vendemos ingressos até {{date}}",
     "capacity_max_reached": "Capacidade máxima atingida para esta data",
     "currency_notice": "Os preços são exibidos em dólares (USD) como referência. Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
     "ars_estimate": "≈ ARS {{amount}} (estimado pela taxa atual)"

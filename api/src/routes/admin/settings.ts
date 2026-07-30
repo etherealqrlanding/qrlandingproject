@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
-import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays, getSupportWhatsapp, setSupportWhatsapp } from '../../services/settings.js';
+import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getBookingHorizonMonths, setBookingHorizonMonths, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays, getSupportWhatsapp, setSupportWhatsapp } from '../../services/settings.js';
 import { fetchOficialVentaRate } from '../../services/exchangeRateSync.js';
 import { getAbout, setAbout, getFaq, setFaq, getSellerFaq, setSellerFaq } from '../../services/content.js';
 
@@ -77,6 +77,24 @@ adminSettingsRouter.put('/booking-cutoff', async (req, res, next) => {
     await setSameDayCutoff(parsed.data.time);
     const time = await getSameDayCutoff();
     res.json({ data: { time } });
+  } catch (err) { next(err); }
+});
+
+// ─── Horizonte de venta: hasta cuántos meses a futuro se puede reservar ───
+const bookingHorizonSchema = z.object({ months: z.number().int().min(1).max(36).nullable() });
+
+adminSettingsRouter.get('/booking-horizon', async (_req, res, next) => {
+  try {
+    res.json({ data: { months: await getBookingHorizonMonths() } });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/booking-horizon', async (req, res, next) => {
+  try {
+    const parsed = bookingHorizonSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await setBookingHorizonMonths(parsed.data.months);
+    res.json({ data: { months: await getBookingHorizonMonths() } });
   } catch (err) { next(err); }
 });
 

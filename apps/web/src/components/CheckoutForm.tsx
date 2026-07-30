@@ -7,6 +7,7 @@ import { localized } from '../lib/i18nFields';
 import TransferSection from './TransferSection';
 import { useExchangeRate } from '../lib/useExchangeRate';
 import Spinner from './Spinner';
+import AvailabilityCalendar from './AvailabilityCalendar';
 
 interface Props {
   product: ProductDetail;
@@ -59,11 +60,22 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const markTouched = (field: keyof typeof touched) => setTouched((prev) => ({ ...prev, [field]: true }));
 
   const today = new Date().toISOString().slice(0, 10);
+  // 3 = fallback mientras carga el valor real configurado en el admin.
+  const [horizonMonths, setHorizonMonths] = useState<number | null>(3);
+  useEffect(() => {
+    api.settings.bookingHorizon().then((d) => setHorizonMonths(d.months)).catch(() => {});
+  }, []);
   const horizonDate = useMemo(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 90);
+    if (horizonMonths == null) d.setFullYear(d.getFullYear() + 5); // "sin tope" → ventana amplia, el server manda la disponibilidad real
+    else d.setMonth(d.getMonth() + horizonMonths);
     return d.toISOString().slice(0, 10);
-  }, []);
+  }, [horizonMonths]);
+  const horizonDateLabel = useMemo(() => {
+    if (horizonMonths == null) return null;
+    const locale = lang === 'en' ? 'en-US' : lang === 'pt' ? 'pt-BR' : 'es-AR';
+    return new Date(`${horizonDate}T00:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+  }, [horizonDate, horizonMonths, lang]);
 
   const [form, setForm] = useState({
     name: '',
@@ -124,7 +136,8 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
 
   const selectedDay = availability.get(form.service_date);
   const selectedDateStatus = selectedDay?.status;
-  const isDateBlocked = selectedDateStatus === 'full' || selectedDateStatus === 'closed';
+  const isPastDate = form.service_date < today;
+  const isDateBlocked = isPastDate || selectedDateStatus === 'full' || selectedDateStatus === 'closed';
   const isDateLow = selectedDateStatus === 'low';
 
   const supportsChildren = option.price_child_usd != null;
@@ -196,7 +209,14 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     if (emailError) return emailError;
     if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) return t('checkout.email_mismatch');
     if (nationalityError) return nationalityError;
-    if (isDateBlocked) return selectedDateStatus === 'closed' ? t('checkout.date_closed') : t('checkout.date_full');
+    if (form.service_date < today) return t('checkout.date_past');
+    if (isDateBlocked) {
+      if (selectedDateStatus === 'full') return t('checkout.date_full');
+      if (selectedDay?.reason === 'cutoff') return t('checkout.date_closed_cutoff');
+      if (selectedDay?.reason === 'not_operating_day') return t('checkout.date_closed_day');
+      if (selectedDay?.reason === 'beyond_horizon') return t('checkout.date_closed_horizon');
+      return t('checkout.date_closed');
+    }
     return null;
   };
 
@@ -332,14 +352,18 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                 <p className="mt-1 text-xs text-bordeaux-light">⚠ {nationalityError}</p>
               )}
             </Field>
-            <Field label={t('checkout.service_date')} required>
-              <input
-                type="date" min={today} max={horizonDate}
-                value={form.service_date}
-                onChange={(e) => updateField('service_date', e.target.value)}
-                className={`input ${isDateBlocked ? 'border-bordeaux-light/60' : ''}`}
-                aria-invalid={isDateBlocked}
-              />
+            <div className="sm:col-span-2">
+              <Field
+                label={t('checkout.service_date')} required
+                hint={horizonDateLabel ? t('checkout.horizon_notice', { date: horizonDateLabel }) : undefined}
+              >
+                <AvailabilityCalendar
+                  optionId={option.id}
+                  value={form.service_date}
+                  currentDate={form.service_date}
+                  onChange={(date) => updateField('service_date', date)}
+                />
+              </Field>
               {availabilityLoading && (
                 <p className="mt-1 text-xs text-cream/40">{t('checkout.checking_availability')}</p>
               )}
@@ -352,7 +376,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                     ? t('checkout.date_closed_cutoff')
                     : selectedDay?.reason === 'not_operating_day'
                       ? t('checkout.date_closed_day')
-                      : t('checkout.date_closed')}
+                      : selectedDay?.reason === 'beyond_horizon'
+                        ? t('checkout.date_closed_horizon')
+                        : t('checkout.date_closed')}
                 </p>
               )}
               {!availabilityLoading && isDateLow && (
@@ -362,7 +388,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                     : t('checkout.date_low')}
                 </p>
               )}
-            </Field>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t('checkout.adults')} required>
                 <NumberStepper

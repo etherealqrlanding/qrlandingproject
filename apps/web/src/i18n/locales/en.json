@@ -163,9 +163,12 @@
     "date_closed": "The venue does not operate on that date. Pick another day.",
     "date_closed_cutoff": "Same-day booking cutoff has passed. Pick another date.",
     "date_closed_day": "This experience does not operate on that weekday. Pick another day.",
+    "date_closed_horizon": "We're not selling tickets that far ahead yet. Pick a closer date.",
+    "date_past": "That date has already passed. Pick a future date.",
     "date_low": "Only a few seats left for this date.",
     "choose_another_date": "Pick another date",
     "cutoff_notice": "Same-day bookings accepted until {{time}} (Buenos Aires time)",
+    "horizon_notice": "We're currently selling tickets through {{date}}",
     "capacity_max_reached": "Maximum capacity reached for this date",
     "currency_notice": "Prices are shown in US dollars (USD) as a reference. By card (Mercado Pago) the charge is processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). The local-currency amount is an estimate until the payment is confirmed.",
     "ars_estimate": "≈ ARS {{amount}} (estimated at current rate)"
