@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminDateAvailabilityRow } from '../../../lib/adminApi';
 import Checkbox from '../../../components/Checkbox';
 import InlineNumberInput from '../../../components/admin/InlineNumberInput';
@@ -12,6 +13,12 @@ interface Props {
 }
 
 interface DraftOverride { capacity: number; is_closed: boolean }
+
+const WEEKDAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+// 1=Lun..7=Dom — mismo mapeo que se usa en todo el resto del código (catalog.ts, calendario admin).
+function isoDow(dateStr: string) {
+  return new Date(`${dateStr}T00:00:00`).getDay() || 7;
+}
 
 /**
  * Editor de cupo de UNA casa para UN día, abierto desde un click en el calendario.
@@ -49,6 +56,10 @@ export default function DayCapacityModal({ date, productId, productName, onClose
     setDraft((prev) => new Map(prev).set(r.option_id, { ...effective(r), is_closed }));
 
   const dirtyRows = useMemo(() => (rows ?? []).filter(isDirty), [rows, draft]);
+
+  // Todas las filas comparten el mismo producto → mismo product_available_days.
+  const dow = useMemo(() => isoDow(date), [date]);
+  const houseClosedThisWeekday = Boolean(rows?.length) && !rows![0].product_available_days.includes(dow);
 
   const handleSave = async () => {
     setSaving(true);
@@ -93,6 +104,17 @@ export default function DayCapacityModal({ date, productId, productName, onClose
             <p className="text-sm text-cream/50">Esta casa no tiene tiers activos.</p>
           )}
 
+          {houseClosedThisWeekday && (
+            <div className="rounded-md border border-gold/25 bg-gold/5 p-3 text-sm text-gold-soft">
+              La casa no trabaja los <span className="text-gold font-medium">{WEEKDAY_NAMES[dow - 1]}</span> —
+              está configurado así para todos los tiers, no se puede abrir tier por tier desde acá. Para
+              cambiarlo, andá a{' '}
+              <Link to={`/admin/products/${productId}`} className="underline hover:text-gold" onClick={onClose}>
+                Datos generales de la casa
+              </Link>.
+            </div>
+          )}
+
           {rows && rows.length > 0 && (
             <div className="space-y-3">
               {rows.map((r) => {
@@ -106,17 +128,22 @@ export default function DayCapacityModal({ date, productId, productName, onClose
                         <p className="text-sm text-cream truncate">{r.option_name}</p>
                         <p className="text-xs text-cream/40 font-mono">{r.option_code}</p>
                       </div>
-                      <label className="flex items-center gap-1.5 text-xs text-cream/60 shrink-0">
-                        <Checkbox checked={eff.is_closed} onChange={(checked) => setClosed(r, checked)} aria-label={`Cerrar ${r.option_name} para ${date}`} />
+                      <label className={`flex items-center gap-1.5 text-xs shrink-0 ${houseClosedThisWeekday ? 'text-cream/30' : 'text-cream/60'}`}>
+                        <Checkbox
+                          checked={houseClosedThisWeekday || eff.is_closed}
+                          disabled={houseClosedThisWeekday}
+                          onChange={(checked) => setClosed(r, checked)}
+                          aria-label={`Cerrar ${r.option_name} para ${date}`}
+                        />
                         Cerrado
                       </label>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-4 text-xs text-cream/60">
                         <span>Ocupado: <span className="text-cream/80 tabular-nums">{r.booked}</span></span>
-                        <span>Disponible: <span className={`tabular-nums font-semibold ${remainingNow > 0 ? 'text-gold' : 'text-bordeaux-light'}`}>{eff.is_closed ? '—' : remainingNow}</span></span>
+                        <span>Disponible: <span className={`tabular-nums font-semibold ${remainingNow > 0 ? 'text-gold' : 'text-bordeaux-light'}`}>{houseClosedThisWeekday || eff.is_closed ? '—' : remainingNow}</span></span>
                       </div>
-                      <InlineNumberInput value={eff.capacity} min={0} dirty={dirty} onChange={(val) => setCapacity(r, val)} />
+                      <InlineNumberInput value={eff.capacity} min={0} dirty={dirty} disabled={houseClosedThisWeekday} onChange={(val) => setCapacity(r, val)} />
                     </div>
                   </div>
                 );

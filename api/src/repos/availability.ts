@@ -95,6 +95,10 @@ export interface DateAvailabilityRow {
   product_id: number;
   product_name: string;
   default_capacity_per_day: number;
+  // Días de operación de la CASA (products.available_days) — si el día de la fecha
+  // consultada no está acá, la casa no trabaja ese día sin importar los overrides
+  // puntuales de cada tier (ver DayCapacityModal en el front).
+  product_available_days: number[];
   // Fila de override en option_availability para esta opción+fecha (null = sin override,
   // usando default_capacity_per_day). Necesario para poder borrar el override y volver
   // al default desde el buscador (mismo endpoint que ya usa el editor por producto).
@@ -118,6 +122,7 @@ export async function getAvailabilityForDate(serviceDate: string): Promise<DateA
        po.is_active AS is_option_active,
        p.id AS product_id, p.name AS product_name,
        po.default_capacity_per_day,
+       p.available_days AS product_available_days,
        oa.id AS override_id,
        COALESCE(oa.is_closed, FALSE) AS is_closed,
        COALESCE(oa.capacity_override, po.default_capacity_per_day) AS capacity,

@@ -445,6 +445,7 @@ export interface AdminDateAvailabilityRow {
   product_id: number;
   product_name: string;
   default_capacity_per_day: number;
+  product_available_days: number[];
   override_id: number | null;
   is_closed: boolean;
   capacity: number;
