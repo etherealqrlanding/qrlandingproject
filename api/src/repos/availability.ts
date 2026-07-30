@@ -53,7 +53,9 @@ async function runAvailabilityCheck(
   }
 
   // Cupo ocupado = pax de órdenes pagadas/pendientes + pax extra de addons pendientes
-  // (los agregados con link de MP sin pagar todavía reservan su lugar hasta que caducan).
+  // (los agregados con link de MP sin pagar todavía reservan su lugar hasta que caducan)
+  // + pax de checkout_holds vigentes (checkout público de MP/PIX en curso, todavía sin
+  // orden creada — ver repos/checkoutHolds.ts).
   const { rows: bookingRows } = await q.query<{ total_pax: number }>(
     `SELECT (
        COALESCE((
@@ -68,6 +70,12 @@ async function runAvailabilityCheck(
            FROM order_addons ad
           WHERE ad.option_id = $1 AND ad.service_date = $2::date
             AND ad.status = 'pending'
+       ), 0)
+       + COALESCE((
+         SELECT SUM(h.pax)
+           FROM checkout_holds h
+          WHERE h.option_id = $1 AND h.service_date = $2::date
+            AND h.expires_at > NOW()
        ), 0)
      )::int AS total_pax`,
     [optionId, serviceDate],

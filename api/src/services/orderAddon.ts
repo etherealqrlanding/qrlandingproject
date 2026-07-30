@@ -121,7 +121,7 @@ export async function createAddonForOrder(params: {
       phone: row.customer_phone ?? undefined,
     },
     metadata: {
-      order_id: row.order_id,
+      order_id: String(row.order_id),
       seller_ref: row.seller_code,
       option_id: row.option_id,
       product_slug: row.product_slug,

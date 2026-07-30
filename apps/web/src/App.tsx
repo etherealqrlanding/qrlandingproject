@@ -31,6 +31,7 @@ import BulkCapacityPage from './pages/admin/BulkCapacityPage';
 import SellersList from './pages/admin/SellersList';
 import SellerForm from './pages/admin/SellerForm';
 import AdminsList from './pages/admin/AdminsList';
+import HoldsList from './pages/admin/HoldsList';
 import OrdersList from './pages/admin/OrdersList';
 import OrderDetail from './pages/admin/OrderDetail';
 import OrdersArchive from './pages/admin/OrdersArchive';
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="sellers/new" element={<SellerForm />} />
             <Route path="sellers/:id" element={<SellerForm />} />
             <Route path="admins" element={<AdminsList />} />
+            <Route path="holds" element={<HoldsList />} />
             <Route path="orders" element={<OrdersList />} />
             <Route path="orders/archivo" element={<OrdersArchive />} />
             <Route path="orders/:publicId" element={<OrderDetail />} />

@@ -205,6 +205,23 @@ export interface UploadSignedResponse {
   public_url: string;
 }
 
+export interface AdminHoldRow {
+  id: string;
+  payment_method: 'mercadopago' | 'pix';
+  service_date: string;
+  pax: number;
+  expires_at: string;
+  seconds_remaining: number;
+  created_at: string;
+  product_name: string;
+  option_name: string;
+  customer_name: string;
+  customer_email: string;
+  total_usd: number;
+  total_ars: number;
+  ref_code: string | null;
+}
+
 export interface AdminUserRow {
   id: string;
   email: string;
@@ -529,6 +546,16 @@ export const adminApi = {
         method: 'POST',
         body: JSON.stringify({ filename, content_type: contentType }),
       }),
+  },
+  holds: {
+    list: (filters?: { payment_method?: 'mercadopago' | 'pix'; search?: string; include_expired?: boolean }) => {
+      const params = new URLSearchParams();
+      if (filters?.payment_method) params.set('payment_method', filters.payment_method);
+      if (filters?.search) params.set('search', filters.search);
+      if (filters?.include_expired) params.set('include_expired', '1');
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      return request<AdminHoldRow[]>(`/api/admin/holds${qs}`);
+    },
   },
   admins: {
     list: () => request<AdminUserRow[]>('/api/admin/admins'),

@@ -74,6 +74,10 @@ export interface OrderStatus {
   pix_qrcode?: string | null;
   pix_expires_at?: string | null;
   pix_fiat_amount_brl?: number | null;
+  // Presentes mientras el pago todavía no se confirmó y lo que hay es un cupo
+  // congelado (checkout_hold), no una orden real todavía.
+  is_hold?: boolean;
+  hold_expires_at?: string | null;
 }
 
 export interface CashCheckoutResponse {

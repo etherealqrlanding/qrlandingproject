@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { to: '/admin/products', label: 'Productos', icon: '⌂' },
   { to: '/admin/sellers', label: 'Vendedores', icon: '☉' },
   { to: '/admin/orders', label: 'Órdenes', icon: '✦' },
+  { to: '/admin/holds', label: 'Cupos en espera', icon: '⏳' },
   { to: '/admin/content', label: 'Contenido', icon: '✎' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙' },
 ];

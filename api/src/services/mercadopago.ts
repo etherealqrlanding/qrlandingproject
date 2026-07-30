@@ -16,7 +16,7 @@ const paymentApi = new Payment(mpClient);
 const refundApi = new PaymentRefund(mpClient);
 
 export interface CreatePreferenceInput {
-  orderPublicId: string;             // UUID de la orden interna
+  orderPublicId: string;             // UUID del checkout_hold (o de la orden, en flujos que no pasan por hold)
   title: string;                     // descripción del producto (ej: "Cena Show VIP — Casa Emblema")
   totalArs: number;                  // monto total en pesos argentinos
   quantityAdults: number;
@@ -27,13 +27,16 @@ export interface CreatePreferenceInput {
     phone?: string;
   };
   metadata: {
-    order_id: number;
+    order_id: string;
     seller_ref: string | null;
     option_id: number;
     product_slug: string;
     service_date: string;
   };
   webOrigin: string;                  // URL de retorno del frontend
+  // Si viene, la preference deja de ser pagable pasado ese tiempo — alineado al TTL del
+  // checkout_hold que la generó, así el link de MP y nuestro cupo congelado vencen juntos.
+  expiresInMinutes?: number;
 }
 
 export async function createPreference(input: CreatePreferenceInput): Promise<{ id: string; init_point: string; sandbox_init_point: string }> {
@@ -75,6 +78,11 @@ export async function createPreference(input: CreatePreferenceInput): Promise<{ 
       statement_descriptor: 'TANGOS Y MILONGAS',
       metadata: input.metadata,
       binary_mode: false,
+      ...(input.expiresInMinutes != null ? {
+        expires: true,
+        expiration_date_from: new Date().toISOString(),
+        expiration_date_to: new Date(Date.now() + input.expiresInMinutes * 60_000).toISOString(),
+      } : {}),
     },
   });
 
