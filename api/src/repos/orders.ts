@@ -57,6 +57,77 @@ export class ConcurrentModificationError extends Error {
   }
 }
 
+/**
+ * Inserta order_items y (si vino ref_code de un vendedor activo) order_attributions con
+ * su comisión calculada. Compartido por createPendingOrder (cash/vendedor/admin) y
+ * createOrderFromHold (materialización de MP/PIX desde un checkout_hold) — la lógica de
+ * comisión es intrincada (difiere cash vs MP) y no queremos dos copias que puedan divergir.
+ */
+async function insertOrderItemAndAttribution(
+  client: PoolClient,
+  orderId: number,
+  item: CreateOrderInput['item'],
+  ctx: { total_usd: number; exchange_rate_used: number; ref_code: string | null; payment_method?: 'mercadopago' | 'cash' | 'pix' },
+): Promise<void> {
+  await client.query(
+    `INSERT INTO order_items (
+       order_id, product_id, option_id,
+       product_name_snapshot, option_name_snapshot, service_date,
+       adults, children, unit_price_adult_usd, unit_price_child_usd, subtotal_usd,
+       transfer_requested, transfer_hotel, transfer_room
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+    [
+      orderId, item.product_id, item.option_id,
+      item.product_name_snapshot, item.option_name_snapshot, item.service_date,
+      item.adults, item.children,
+      item.unit_price_adult_usd, item.unit_price_child_usd, item.subtotal_usd,
+      item.transfer_requested ?? false,
+      item.transfer_hotel ?? null,
+      item.transfer_room ?? null,
+    ],
+  );
+
+  // Atribución a vendedor si vino ref válido
+  if (ctx.ref_code) {
+    const { rows: sellerRows } = await client.query<{ id: number; commission_percent: string }>(
+      `SELECT id, commission_percent::text FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+      [ctx.ref_code],
+    );
+    const seller = sellerRows[0];
+    if (seller) {
+      let netTotalUsd = item.net_total_usd ?? null;
+      const commissionPercent = Number.parseFloat(seller.commission_percent);
+      let commissionUsd = 0;
+
+      if (ctx.payment_method === 'cash') {
+        // Efectivo: el vendedor cobra el total y se queda con (total − neto).
+        // Nos debe liquidar el neto. Su "comisión" (ganancia) = total − neto.
+        if (netTotalUsd != null) {
+          commissionUsd = Math.max(0, Math.round((ctx.total_usd - netTotalUsd) * 100) / 100);
+        } else if (commissionPercent > 0) {
+          // Sin precio neto: derivamos comisión desde el % y guardamos el neto implícito.
+          // Así las modificaciones futuras pueden recalcular via recomputeCashCommission.
+          commissionUsd = Math.max(0, Math.round((ctx.total_usd * commissionPercent / 100) * 100) / 100);
+          netTotalUsd = Math.max(0, Math.round((ctx.total_usd - commissionUsd) * 100) / 100);
+        }
+      } else {
+        // Mercado Pago / PIX: nosotros cobramos y le liquidamos su comisión = % × total.
+        commissionUsd = Math.max(0, Math.round((ctx.total_usd * commissionPercent / 100) * 100) / 100);
+      }
+
+      const commissionArs = Math.round(commissionUsd * ctx.exchange_rate_used * 100) / 100;
+      await client.query(
+        `INSERT INTO order_attributions (
+           order_id, seller_id,
+           net_total_usd_snapshot, commission_percent_snapshot,
+           commission_amount_usd, commission_amount_ars
+         ) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [orderId, seller.id, netTotalUsd, commissionPercent, commissionUsd, commissionArs],
+      );
+    }
+  }
+}
+
 export async function createPendingOrder(input: CreateOrderInput): Promise<CreatedOrder> {
   const client = await pool.connect();
   try {
@@ -93,67 +164,91 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
     );
     const order = orderRows[0];
 
-    await client.query(
-      `INSERT INTO order_items (
-         order_id, product_id, option_id,
-         product_name_snapshot, option_name_snapshot, service_date,
-         adults, children, unit_price_adult_usd, unit_price_child_usd, subtotal_usd,
-         transfer_requested, transfer_hotel, transfer_room
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [
-        order.id, input.item.product_id, input.item.option_id,
-        input.item.product_name_snapshot, input.item.option_name_snapshot, input.item.service_date,
-        input.item.adults, input.item.children,
-        input.item.unit_price_adult_usd, input.item.unit_price_child_usd, input.item.subtotal_usd,
-        input.item.transfer_requested ?? false,
-        input.item.transfer_hotel ?? null,
-        input.item.transfer_room ?? null,
-      ],
-    );
-
-    // Atribución a vendedor si vino ref válido
-    if (input.ref_code) {
-      const { rows: sellerRows } = await client.query<{ id: number; commission_percent: string }>(
-        `SELECT id, commission_percent::text FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
-        [input.ref_code],
-      );
-      const seller = sellerRows[0];
-      if (seller) {
-        let netTotalUsd = input.item.net_total_usd ?? null;
-        const commissionPercent = Number.parseFloat(seller.commission_percent);
-        let commissionUsd = 0;
-
-        if (input.payment_method === 'cash') {
-          // Efectivo: el vendedor cobra el total y se queda con (total − neto).
-          // Nos debe liquidar el neto. Su "comisión" (ganancia) = total − neto.
-          if (netTotalUsd != null) {
-            commissionUsd = Math.max(0, Math.round((input.total_usd - netTotalUsd) * 100) / 100);
-          } else if (commissionPercent > 0) {
-            // Sin precio neto: derivamos comisión desde el % y guardamos el neto implícito.
-            // Así las modificaciones futuras pueden recalcular via recomputeCashCommission.
-            commissionUsd = Math.max(0, Math.round((input.total_usd * commissionPercent / 100) * 100) / 100);
-            netTotalUsd = Math.max(0, Math.round((input.total_usd - commissionUsd) * 100) / 100);
-          }
-        } else {
-          // Mercado Pago: nosotros cobramos y le liquidamos su comisión = % × total.
-          // (Ya no se descuenta ningún fee de MP.)
-          commissionUsd = Math.max(0, Math.round((input.total_usd * commissionPercent / 100) * 100) / 100);
-        }
-
-        const commissionArs = Math.round(commissionUsd * input.exchange_rate_used * 100) / 100;
-        await client.query(
-          `INSERT INTO order_attributions (
-             order_id, seller_id,
-             net_total_usd_snapshot, commission_percent_snapshot,
-             commission_amount_usd, commission_amount_ars
-           ) VALUES ($1,$2,$3,$4,$5,$6)`,
-          [order.id, seller.id, netTotalUsd, commissionPercent, commissionUsd, commissionArs],
-        );
-      }
-    }
+    await insertOrderItemAndAttribution(client, order.id, input.item, {
+      total_usd: input.total_usd,
+      exchange_rate_used: input.exchange_rate_used,
+      ref_code: input.ref_code,
+      payment_method: input.payment_method,
+    });
 
     await client.query('COMMIT');
     return order;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Materializa un checkout_hold (MP/PIX del checkout público, pago ya confirmado) en una
+ * orden 'paid' real. Atómico: lock del hold + INSERT orden/item/atribución + DELETE del
+ * hold, todo o nada. `public_id` de la orden queda igual al `id` del hold (continuidad de
+ * links/voucher/página de gracias que el cliente ya pudo haber visto). Sin re-chequeo de
+ * disponibilidad: el hold ya reservó el cupo desde que se creó (ver checkAvailabilityTxLocked
+ * en createCheckoutHold). Si el hold ya no existe (purgado o nunca existió) devuelve null —
+ * el caller decide cómo escalarlo (log CRITICAL para reconciliación manual).
+ */
+export async function createOrderFromHold(
+  holdId: string,
+  gateway: { mp_payment_id: string | null; mp_payment_status: string | null; mp_payment_method: string | null },
+): Promise<{ id: number; public_id: string; holdExpiredBeforePayment: boolean } | null> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [holdId]);
+
+    const { rows: holdRows } = await client.query<{
+      id: string; payment_method: string; expires_at: string; payload: CreateOrderInput;
+    }>(
+      `SELECT id, payment_method, expires_at, payload FROM checkout_holds WHERE id = $1 FOR UPDATE`,
+      [holdId],
+    );
+    const hold = holdRows[0];
+    if (!hold) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const payload = hold.payload;
+    const holdExpiredBeforePayment = new Date(hold.expires_at).getTime() < Date.now();
+
+    const { rows: orderRows } = await client.query<{ id: number; public_id: string }>(
+      `INSERT INTO orders (
+         public_id, status, customer_name, customer_email, customer_phone, customer_nationality, customer_dni,
+         total_usd, total_ars, exchange_rate_used, currency,
+         ref_code, payment_method, utm_source, utm_medium, utm_campaign,
+         mp_payment_id, mp_payment_status, mp_payment_method, paid_at,
+         hold_expired_before_payment
+       ) VALUES (
+         $1::uuid, 'paid', $2, $3, $4, $5, $6, $7, $8, $9, 'ARS', $10, $11, $12, $13, $14,
+         $15, $16, $17, NOW(), $18
+       )
+       RETURNING id, public_id`,
+      [
+        holdId,
+        payload.customer.name, payload.customer.email, payload.customer.phone ?? null,
+        payload.customer.nationality ?? null, payload.customer.dni ?? null,
+        payload.total_usd, payload.total_ars, payload.exchange_rate_used,
+        payload.ref_code, payload.payment_method ?? hold.payment_method,
+        payload.utm?.source ?? null, payload.utm?.medium ?? null, payload.utm?.campaign ?? null,
+        gateway.mp_payment_id, gateway.mp_payment_status, gateway.mp_payment_method,
+        holdExpiredBeforePayment,
+      ],
+    );
+    const order = orderRows[0];
+
+    await insertOrderItemAndAttribution(client, order.id, payload.item, {
+      total_usd: payload.total_usd,
+      exchange_rate_used: payload.exchange_rate_used,
+      ref_code: payload.ref_code,
+      payment_method: payload.payment_method,
+    });
+
+    await client.query(`DELETE FROM checkout_holds WHERE id = $1`, [holdId]);
+
+    await client.query('COMMIT');
+    return { id: order.id, public_id: order.public_id, holdExpiredBeforePayment };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

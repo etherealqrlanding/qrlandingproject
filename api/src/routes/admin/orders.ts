@@ -281,7 +281,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
         phone: input.customer.phone ?? undefined,
       },
       metadata: {
-        order_id: order.id,
+        order_id: String(order.id),
         seller_ref: seller.code,
         option_id: option.id,
         product_slug: option.product_slug,
