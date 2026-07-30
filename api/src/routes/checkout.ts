@@ -31,6 +31,7 @@ import {
   findHoldById,
   findHoldOrOrderRefByNauttOrderUuid,
   releaseHold,
+  type HoldRow,
 } from '../repos/checkoutHolds.js';
 import { sendOrderPaidNotifications, sendCashOrderNotifications, sendOrderIncreasedNotifications } from '../services/email.js';
 import { createOrderPaidNotification, createCashBookingNotification, notifyAdminsNewOrderPaid } from '../repos/notifications.js';
@@ -303,6 +304,23 @@ checkoutRouter.post('/pix', checkoutLimiter, async (req, res, next) => {
 // ─── POST /api/checkout/orders/:publicId/pix-refresh ──────
 // Regenera el QR PIX de una orden pendiente cuyo "copia e cola" venció, sin recrear la
 // orden. Reutiliza el monto original (total_usd). Solo aplica a órdenes PIX pendientes.
+// Un hold vencido deja de contar en la disponibilidad (expires_at > NOW() lo filtra) —
+// mientras estuvo vencido, otro checkout pudo haber tomado ese mismo cupo. Antes de
+// revivirlo (extender su vencimiento en pix-refresh / mp-refresh) hay que re-verificar
+// que el cupo siga entrando; si no vale la pena chequear (todavía no venció), se salta.
+// Best-effort (sin lock): la ventana de una doble regeneración simultánea del MISMO
+// hold es remota — no justifica la complejidad de un advisory lock acá.
+async function checkHoldStillAvailableIfExpired(hold: HoldRow): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (new Date(hold.expires_at).getTime() >= Date.now()) return { ok: true };
+  const result = await checkSingleDateAvailability(
+    hold.option_id, hold.payload.default_capacity_per_day, hold.service_date, hold.pax,
+  );
+  if (!result.ok) {
+    return { ok: false, message: result.message ?? 'Ese cupo ya no está disponible — probá con otra fecha.' };
+  }
+  return { ok: true };
+}
+
 checkoutRouter.post('/orders/:publicId/pix-refresh', checkoutLimiter, async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
@@ -316,6 +334,9 @@ checkoutRouter.post('/orders/:publicId/pix-refresh', checkoutLimiter, async (req
     const hold = await findHoldById(publicId);
     if (!hold) return res.status(404).json({ error: 'Not found' });
     if (hold.payment_method !== 'pix') return res.status(400).json({ error: 'La orden no es de PIX' });
+
+    const availCheck = await checkHoldStillAvailableIfExpired(hold);
+    if (!availCheck.ok) return res.status(409).json({ error: availCheck.message });
 
     try {
       const charge = await createPixCharge({
@@ -341,6 +362,79 @@ checkoutRouter.post('/orders/:publicId/pix-refresh', checkoutLimiter, async (req
     } catch (err) {
       const status = err instanceof NauttError ? (err.status && err.status >= 500 ? 502 : 400) : 502;
       return res.status(status).json({ error: 'No se pudo regenerar el QR de PIX.' });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── POST /api/checkout/orders/:publicId/mp-refresh ───────
+// Mirror de /pix-refresh para Mercado Pago: si la preference venció (expiration_date_to,
+// mismo TTL que el hold), regenera una preference nueva para el MISMO hold — sin perder
+// el cupo reservado ni tener que reiniciar el checkout desde cero — y extiende el
+// vencimiento del hold al del nuevo link.
+checkoutRouter.post('/orders/:publicId/mp-refresh', checkoutLimiter, async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+
+    const existingOrder = await findOrderByPublicId(publicId);
+    if (existingOrder) return res.status(409).json({ error: 'La orden ya está pagada' });
+
+    const hold = await findHoldById(publicId);
+    if (!hold) return res.status(404).json({ error: 'Not found' });
+    if (hold.payment_method !== 'mercadopago') return res.status(400).json({ error: 'La orden no es de Mercado Pago' });
+
+    const availCheck = await checkHoldStillAvailableIfExpired(hold);
+    if (!availCheck.ok) return res.status(409).json({ error: availCheck.message });
+
+    const { rows: optionRows } = await pool.query<{ product_slug: string }>(
+      `SELECT p.slug AS product_slug FROM product_options po JOIN products p ON p.id = po.product_id WHERE po.id = $1 LIMIT 1`,
+      [hold.option_id],
+    );
+    const productSlug = optionRows[0]?.product_slug ?? '';
+
+    try {
+      const pref = await createPreference({
+        orderPublicId: publicId,
+        title: `${hold.payload.item.option_name_snapshot} — ${hold.payload.item.product_name_snapshot}`,
+        totalArs: hold.payload.total_ars,
+        quantityAdults: hold.payload.item.adults,
+        quantityChildren: hold.payload.item.children,
+        customer: {
+          name: hold.payload.customer.name,
+          email: hold.payload.customer.email,
+          phone: hold.payload.customer.phone ?? undefined,
+        },
+        metadata: {
+          order_id: publicId,
+          seller_ref: hold.payload.ref_code,
+          option_id: hold.option_id,
+          product_slug: productSlug,
+          service_date: hold.service_date,
+        },
+        webOrigin: config.WEB_ORIGIN,
+        expiresInMinutes: MP_HOLD_TTL_MINUTES,
+      });
+      const newExpiresAt = new Date(Date.now() + MP_HOLD_TTL_MINUTES * 60_000);
+      await setHoldPreference(publicId, pref.id, pref.init_point, newExpiresAt);
+      await logPaymentEvent(null, 'preference_refreshed', pref.id, { hold_id: publicId, init_point: pref.init_point });
+      res.json({
+        data: {
+          order_public_id: publicId,
+          preference_id: pref.id,
+          init_point: pref.init_point,
+          sandbox_init_point: pref.sandbox_init_point,
+          total_usd: hold.payload.total_usd,
+          total_ars: hold.payload.total_ars,
+          exchange_rate: hold.payload.exchange_rate_used,
+        },
+      });
+    } catch (err) {
+      await logPaymentEvent(null, 'preference_refresh_failed', null, {
+        hold_id: publicId, message: (err as Error).message,
+      }).catch(() => {});
+      return res.status(502).json({ error: 'No se pudo regenerar el link de pago.' });
     }
   } catch (err) {
     next(err);

@@ -16,6 +16,8 @@ export default function CheckoutReturn({ variant }: Props) {
   const orderId = params.get('order');
   const [order, setOrder] = useState<OrderStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
 
   useEffect(() => {
     if (!orderId) { setLoading(false); return; }
@@ -38,6 +40,24 @@ export default function CheckoutReturn({ variant }: Props) {
   }, [orderId, variant]);
 
   const config = VARIANTS[variant];
+
+  // El link de MP vence a los 30 min — si volvemos acá y todavía es un hold (no se
+  // pagó), le ofrecemos regenerar el link para el MISMO cupo en vez de reiniciar el
+  // checkout desde cero (mismo criterio que ya tiene PIX con su botón "regenerar QR").
+  const canRefreshMp = order?.is_hold === true && order?.payment_method === 'mercadopago';
+
+  const handleRefreshMp = async () => {
+    if (!orderId) return;
+    setRefreshing(true);
+    setRefreshError(false);
+    try {
+      const res = await api.checkout.refreshMp(orderId);
+      globalThis.location.href = res.init_point;
+    } catch {
+      setRefreshError(true);
+      setRefreshing(false);
+    }
+  };
 
   return (
     <section className="container-narrow py-24">
@@ -77,6 +97,23 @@ export default function CheckoutReturn({ variant }: Props) {
             {!loading && !order && (
               <p className="mt-3 text-sm text-cream/50">{t('return.order_not_found')}</p>
             )}
+          </div>
+        )}
+
+        {canRefreshMp && (
+          <div className="mt-8 rounded-lg border border-gold-soft/30 bg-gold-soft/5 p-5">
+            <p className="text-sm text-cream/80">{t('return.mp_expired_message')}</p>
+            {refreshError && (
+              <p className="mt-2 text-sm text-bordeaux-light">{t('return.mp_refresh_error')}</p>
+            )}
+            <button
+              type="button"
+              onClick={handleRefreshMp}
+              disabled={refreshing}
+              className="btn-primary mt-3 disabled:opacity-50"
+            >
+              {refreshing ? '…' : t('return.mp_refresh_button')}
+            </button>
           </div>
         )}
 

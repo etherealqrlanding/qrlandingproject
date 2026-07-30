@@ -174,6 +174,13 @@ export const api = {
         `/api/checkout/orders/${encodeURIComponent(publicId)}/pix-refresh`,
         { method: 'POST' },
       ),
+    // Regenera el link de Mercado Pago para el MISMO hold cuando el anterior venció —
+    // sin reiniciar el checkout ni perder el cupo (si todavía sigue disponible).
+    refreshMp: (publicId: string) =>
+      request<CheckoutResponse>(
+        `/api/checkout/orders/${encodeURIComponent(publicId)}/mp-refresh`,
+        { method: 'POST' },
+      ),
     getOrder: (publicId: string) =>
       request<OrderStatus>(`/api/checkout/orders/${encodeURIComponent(publicId)}`),
     syncOrder: (publicId: string) =>

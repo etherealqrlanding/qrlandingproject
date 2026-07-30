@@ -61,10 +61,20 @@ export async function createCheckoutHold(input: CreateHoldInput): Promise<{ id: 
   }
 }
 
-export async function setHoldPreference(holdId: string, preferenceId: string, initPoint: string): Promise<void> {
+/**
+ * Guarda los datos de la preference de MP en el hold. `expiresAt` es opcional: se pasa
+ * al regenerar el link vencido (mp-refresh) para extender `expires_at` del hold al mismo
+ * `expiration_date_to` que se le mandó a MP en la nueva preference — no se pasa al crear
+ * el hold por primera vez (ya nace con el TTL correcto desde createCheckoutHold).
+ */
+export async function setHoldPreference(
+  holdId: string, preferenceId: string, initPoint: string, expiresAt?: Date,
+): Promise<void> {
   await pool.query(
-    `UPDATE checkout_holds SET mp_preference_id = $1, mp_init_point = $2 WHERE id = $3`,
-    [preferenceId, initPoint, holdId],
+    `UPDATE checkout_holds
+        SET mp_preference_id = $1, mp_init_point = $2, expires_at = COALESCE($4, expires_at)
+      WHERE id = $3`,
+    [preferenceId, initPoint, holdId, expiresAt ?? null],
   );
 }
 
