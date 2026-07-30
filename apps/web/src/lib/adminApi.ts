@@ -217,9 +217,26 @@ export interface AdminHoldRow {
   option_name: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string | null;
+  customer_nationality: string | null;
+  customer_dni: string | null;
+  adults: number;
+  children: number;
+  transfer_requested: boolean;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
   total_usd: number;
   total_ars: number;
+  exchange_rate_used: number;
   ref_code: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  mp_preference_id: string | null;
+  mp_init_point: string | null;
+  nautt_order_uuid: string | null;
+  pix_qrcode: string | null;
+  pix_fiat_amount_brl: number | null;
 }
 
 export interface AdminUserRow {

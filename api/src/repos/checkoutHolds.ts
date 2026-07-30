@@ -163,9 +163,26 @@ export interface AdminHoldRow {
   option_name: string;
   customer_name: string;
   customer_email: string;
+  customer_phone: string | null;
+  customer_nationality: string | null;
+  customer_dni: string | null;
+  adults: number;
+  children: number;
+  transfer_requested: boolean;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
   total_usd: number;
   total_ars: number;
+  exchange_rate_used: number;
   ref_code: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  mp_preference_id: string | null;
+  mp_init_point: string | null;
+  nautt_order_uuid: string | null;
+  pix_qrcode: string | null;
+  pix_fiat_amount_brl: number | null;
 }
 
 /** Panel admin: holds activos (por default) con datos del producto/cliente para monitoreo en vivo. */
@@ -196,9 +213,23 @@ export async function listActiveHoldsForAdmin(filters?: {
        p.name AS product_name, po.name_es AS option_name,
        h.payload->'customer'->>'name' AS customer_name,
        h.payload->'customer'->>'email' AS customer_email,
+       h.payload->'customer'->>'phone' AS customer_phone,
+       h.payload->'customer'->>'nationality' AS customer_nationality,
+       h.payload->'customer'->>'dni' AS customer_dni,
+       (h.payload->'item'->>'adults')::int AS adults,
+       (h.payload->'item'->>'children')::int AS children,
+       COALESCE((h.payload->'item'->>'transfer_requested')::boolean, false) AS transfer_requested,
+       h.payload->'item'->>'transfer_hotel' AS transfer_hotel,
+       h.payload->'item'->>'transfer_room' AS transfer_room,
        (h.payload->>'total_usd')::float AS total_usd,
        (h.payload->>'total_ars')::float AS total_ars,
-       h.payload->>'ref_code' AS ref_code
+       (h.payload->>'exchange_rate_used')::float AS exchange_rate_used,
+       h.payload->>'ref_code' AS ref_code,
+       h.payload->'utm'->>'source' AS utm_source,
+       h.payload->'utm'->>'medium' AS utm_medium,
+       h.payload->'utm'->>'campaign' AS utm_campaign,
+       h.mp_preference_id, h.mp_init_point, h.nautt_order_uuid, h.pix_qrcode,
+       h.pix_fiat_amount_brl::float AS pix_fiat_amount_brl
        FROM checkout_holds h
        JOIN product_options po ON po.id = h.option_id
        JOIN products p ON p.id = po.product_id
