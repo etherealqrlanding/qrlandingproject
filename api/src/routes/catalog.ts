@@ -147,17 +147,22 @@ catalogRouter.get('/options/:optionId/availability', async (req, res, next) => {
     const parsed = availabilityQuery.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid range', details: parsed.error.flatten() });
 
-    // 1) Datos base de la option
+    // 1) Datos base de la option + días de operación de la casa (product_available_days) —
+    // un día está abierto solo si está en AMBOS conjuntos (intersección casa ∩ tier).
     const { rows: optRows } = await pool.query<{
       default_capacity_per_day: number;
       available_days: number[];
+      product_available_days: number[];
       is_active: boolean;
       low_availability_threshold: number;
       show_remaining_count: boolean;
     }>(
-      `SELECT default_capacity_per_day, available_days, is_active,
-              low_availability_threshold, show_remaining_count
-         FROM product_options WHERE id = $1 LIMIT 1`,
+      `SELECT po.default_capacity_per_day, po.available_days, po.is_active,
+              po.low_availability_threshold, po.show_remaining_count,
+              p.available_days AS product_available_days
+         FROM product_options po
+         JOIN products p ON p.id = po.product_id
+        WHERE po.id = $1 LIMIT 1`,
       [optionId],
     );
     const option = optRows[0];
@@ -209,7 +214,7 @@ catalogRouter.get('/options/:optionId/availability', async (req, res, next) => {
       const iso = d.toISOString().slice(0, 10);
       const dow = d.getDay() === 0 ? 7 : d.getDay(); // 1=Lun..7=Dom
 
-      if (!option.available_days.includes(dow)) {
+      if (!option.available_days.includes(dow) || !option.product_available_days.includes(dow)) {
         result.push({ date: iso, status: 'closed', reason: 'not_operating_day' });
         continue;
       }

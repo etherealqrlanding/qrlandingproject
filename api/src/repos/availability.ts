@@ -142,6 +142,9 @@ export interface ProductRangeAvailabilityRow {
   default_capacity_per_day: number;
   low_availability_threshold: number;
   available_days: number[];
+  // Días de operación de la CASA (products.available_days) — el día está abierto solo
+  // si está en este array Y en available_days del tier (intersección).
+  product_available_days: number[];
   override_id: number | null;
   is_closed: boolean;
   capacity: number;
@@ -204,6 +207,7 @@ export async function getAvailabilityForProductRange(
      SELECT g.option_id, g.option_name, g.option_code, g.is_option_active,
             to_char(g.date, 'YYYY-MM-DD') AS date,
             g.default_capacity_per_day, g.low_availability_threshold, g.available_days,
+            (SELECT available_days FROM products WHERE id = $1) AS product_available_days,
             oa.id AS override_id,
             COALESCE(oa.is_closed, FALSE) AS is_closed,
             COALESCE(oa.capacity_override, g.default_capacity_per_day) AS capacity,

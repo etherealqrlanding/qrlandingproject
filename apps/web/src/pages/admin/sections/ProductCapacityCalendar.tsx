@@ -71,7 +71,9 @@ export default function ProductCapacityCalendar() {
     const tiers = byDate.get(date) ?? [];
     if (tiers.length === 0) return 'closed';
     const dow = isoDow(date);
-    const operating = tiers.filter((t) => t.available_days.includes(dow) && !t.is_closed);
+    const operating = tiers.filter((t) =>
+      t.available_days.includes(dow) && t.product_available_days.includes(dow) && !t.is_closed,
+    );
     if (operating.length === 0) return 'closed';
     if (operating.every((t) => t.capacity <= 0 || t.remaining <= 0)) return 'full';
     if (operating.some((t) => t.remaining <= t.low_availability_threshold)) return 'low';

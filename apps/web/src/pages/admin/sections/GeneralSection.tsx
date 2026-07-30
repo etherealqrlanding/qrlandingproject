@@ -22,7 +22,13 @@ const empty = {
   video_url: '',
   starting_price_usd: null as number | null,
   is_active: true, display_order: 0,
+  available_days: [1, 2, 3, 4, 5, 6, 7] as number[],
 };
+
+const DAYS = [
+  { value: 1, label: 'Lun' }, { value: 2, label: 'Mar' }, { value: 3, label: 'Mié' },
+  { value: 4, label: 'Jue' }, { value: 5, label: 'Vie' }, { value: 6, label: 'Sáb' }, { value: 7, label: 'Dom' },
+];
 
 export default function GeneralSection({ product, categories, isNew, onCreated, onUpdated, onDelete, onHardDelete }: Props) {
   const [form, setForm] = useState(() => product ? { ...empty, ...product } : { ...empty });
@@ -40,6 +46,11 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
   const update = <K extends keyof typeof form>(key: K, value: typeof form[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
+  };
+
+  const toggleDay = (day: number) => {
+    const current = form.available_days ?? [];
+    update('available_days', current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort());
   };
 
   const slugify = (s: string) =>
@@ -189,6 +200,28 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
           className="input"
           placeholder="https://www.youtube.com/watch?v=..."
         />
+      </Field>
+
+      <Field label="Días de operación (toda la casa)" hint="Días en que la casa opera — se combina con los días propios de cada tier (pestaña Tiers/Opciones): si un día no está tildado acá, esa casa no opera ese día en ningún tier">
+        <div className="flex gap-2 flex-wrap">
+          {DAYS.map((d) => {
+            const active = (form.available_days ?? []).includes(d.value);
+            return (
+              <button
+                key={d.value}
+                type="button"
+                onClick={() => toggleDay(d.value)}
+                className={`px-3 py-1.5 rounded-md text-sm transition ${
+                  active
+                    ? 'bg-gold text-ink border border-gold'
+                    : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'
+                }`}
+              >
+                {d.label}
+              </button>
+            );
+          })}
+        </div>
       </Field>
 
       <div className="grid sm:grid-cols-3 gap-4">

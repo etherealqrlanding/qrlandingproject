@@ -185,6 +185,7 @@ export interface AdminProductDetail {
   video_url: string | null;
   starting_price_usd: number | null;
   is_active: boolean; display_order: number;
+  available_days: number[];
   options: AdminOption[];
   images: AdminImage[];
 }
@@ -460,6 +461,7 @@ export interface AdminProductRangeAvailabilityRow {
   default_capacity_per_day: number;
   low_availability_threshold: number;
   available_days: number[];
+  product_available_days: number[];
   override_id: number | null;
   is_closed: boolean;
   capacity: number;

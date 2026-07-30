@@ -79,6 +79,7 @@ const productSchema = z.object({
   starting_price_usd: z.number().nonnegative().optional().nullable(),
   is_active: z.boolean().optional(),
   display_order: z.number().int().optional(),
+  available_days: z.array(z.number().int().min(1).max(7)).max(7).optional(),
 });
 
 adminProductsRouter.get('/', async (_req, res, next) => {

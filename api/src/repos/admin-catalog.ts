@@ -23,6 +23,7 @@ export interface AdminProductInput {
   starting_price_usd?: number | null;
   is_active?: boolean;
   display_order?: number;
+  available_days?: number[];
 }
 
 export async function adminListProducts() {
@@ -106,8 +107,8 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        tagline_es, tagline_en,
        schedule_summary_es, schedule_summary_en,
        video_url,
-       starting_price_usd, is_active, display_order
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       starting_price_usd, is_active, display_order, available_days
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -121,6 +122,7 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.starting_price_usd ?? null,
       input.is_active ?? true,
       input.display_order ?? 0,
+      input.available_days ?? [1, 2, 3, 4, 5, 6, 7],
     ],
   );
   return rows[0].id;
