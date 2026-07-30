@@ -53,31 +53,11 @@ async function runAvailabilityCheck(
   }
 
   // Cupo ocupado = pax de órdenes pagadas/pendientes + pax extra de addons pendientes
-  // (los agregados con link de MP sin pagar todavía reservan su lugar hasta que caducan)
-  // + pax de checkout_holds vigentes (checkout público de MP/PIX en curso, todavía sin
-  // orden creada — ver repos/checkoutHolds.ts).
+  // + pax de checkout_holds vigentes. Centralizado en la función SQL option_booked_pax
+  // (migración 036) para que este chequeo y el buscador de disponibilidad del admin
+  // (getAvailabilityForDate) usen exactamente la misma cuenta.
   const { rows: bookingRows } = await q.query<{ total_pax: number }>(
-    `SELECT (
-       COALESCE((
-         SELECT SUM(oi.adults + oi.children)
-           FROM order_items oi
-           JOIN orders o ON o.id = oi.order_id
-          WHERE oi.option_id = $1 AND oi.service_date = $2::date
-            AND o.status IN ('paid', 'pending')
-       ), 0)
-       + COALESCE((
-         SELECT SUM(ad.extra_adults + ad.extra_children)
-           FROM order_addons ad
-          WHERE ad.option_id = $1 AND ad.service_date = $2::date
-            AND ad.status = 'pending'
-       ), 0)
-       + COALESCE((
-         SELECT SUM(h.pax)
-           FROM checkout_holds h
-          WHERE h.option_id = $1 AND h.service_date = $2::date
-            AND h.expires_at > NOW()
-       ), 0)
-     )::int AS total_pax`,
+    `SELECT option_booked_pax($1, $2::date) AS total_pax`,
     [optionId, serviceDate],
   );
   const booked = bookingRows[0]?.total_pax ?? 0;
@@ -105,6 +85,45 @@ export async function checkSingleDateAvailability(
   requestedPax: number,
 ): Promise<AvailabilityCheckResult> {
   return runAvailabilityCheck(pool, optionId, defaultCapacityPerDay, serviceDate, requestedPax);
+}
+
+export interface DateAvailabilityRow {
+  option_id: number;
+  option_name: string;
+  option_code: string;
+  is_option_active: boolean;
+  product_id: number;
+  product_name: string;
+  is_closed: boolean;
+  capacity: number;
+  booked: number;
+  remaining: number;
+}
+
+/**
+ * Panel admin: disponibilidad de TODAS las opciones activas para una fecha puntual,
+ * en una sola query (no una por opción). Usa la misma option_booked_pax() que el
+ * checkout, así el número que ve el admin es exactamente el que bloquea/permite una
+ * reserva en ese momento — no una foto vieja ni un cálculo distinto.
+ */
+export async function getAvailabilityForDate(serviceDate: string): Promise<DateAvailabilityRow[]> {
+  const { rows } = await pool.query<DateAvailabilityRow>(
+    `SELECT
+       po.id AS option_id, po.name_es AS option_name, po.code AS option_code,
+       po.is_active AS is_option_active,
+       p.id AS product_id, p.name AS product_name,
+       COALESCE(oa.is_closed, FALSE) AS is_closed,
+       COALESCE(oa.capacity_override, po.default_capacity_per_day) AS capacity,
+       option_booked_pax(po.id, $1::date) AS booked,
+       GREATEST(0, COALESCE(oa.capacity_override, po.default_capacity_per_day) - option_booked_pax(po.id, $1::date)) AS remaining
+       FROM product_options po
+       JOIN products p ON p.id = po.product_id
+       LEFT JOIN option_availability oa ON oa.option_id = po.id AND oa.date = $1::date
+      WHERE po.is_active = TRUE AND p.is_active = TRUE
+      ORDER BY p.display_order, p.name, po.display_order`,
+    [serviceDate],
+  );
+  return rows;
 }
 
 /**

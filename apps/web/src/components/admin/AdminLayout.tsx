@@ -17,6 +17,7 @@ interface NavItem { to: string; label: string; icon: string; end?: boolean }
 const NAV: NavItem[] = [
   { to: '/admin', label: 'Dashboard', icon: '◆', end: true },
   { to: '/admin/products', label: 'Productos', icon: '⌂' },
+  { to: '/admin/products/bulk-capacity', label: 'Cupos', icon: '▦' },
   { to: '/admin/sellers', label: 'Vendedores', icon: '☉' },
   { to: '/admin/orders', label: 'Órdenes', icon: '✦' },
   { to: '/admin/holds', label: 'Cupos en espera', icon: '⏳' },
@@ -33,6 +34,10 @@ export default function AdminLayout() {
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const [toast, setToast] = useState<AdminNewOrderPaidEvent | null>(null);
+  // Contador de órdenes nuevas sin ver — sube con cada push SSE, baja a 0 apenas el
+  // admin entra a "Órdenes" (así lo sabe aunque no haya visto el toast, ej. si estaba
+  // en otra pestaña del navegador cuando llegó el pago).
+  const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
   // Sidebar colapsable — preferencia persistida para que no se resetee al navegar/recargar.
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('admin_sidebar_collapsed') === '1');
@@ -65,6 +70,11 @@ export default function AdminLayout() {
     mainRef.current?.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [location.pathname]);
 
+  // Al entrar a Órdenes, el admin ya "vio" las nuevas — se apaga el contador.
+  useEffect(() => {
+    if (location.pathname.startsWith('/admin/orders')) setNewOrdersCount(0);
+  }, [location.pathname]);
+
   const handleSignOut = async () => {
     await signOut();
     navigate('/admin/login');
@@ -87,6 +97,11 @@ export default function AdminLayout() {
         setToast(payload);
         if (toastRef.current) clearTimeout(toastRef.current);
         toastRef.current = setTimeout(() => setToast(null), 8000);
+        // Si ya está parado en Órdenes, se considera "visto" al toque (esa pantalla se
+        // refresca sola con el mismo evento) — si no, suma al contador del sidebar.
+        if (!window.location.pathname.startsWith('/admin/orders')) {
+          setNewOrdersCount((c) => c + 1);
+        }
         window.dispatchEvent(new CustomEvent(NEW_ORDER_PAID_EVENT, { detail: payload }));
       } catch { /* ignore parse error */ }
     });
@@ -192,8 +207,24 @@ export default function AdminLayout() {
                 }`
               }
             >
-              <span className="w-5 text-center shrink-0">{item.icon}</span>
-              {!collapsed && <span className="flex-1">{item.label}</span>}
+              <span className="w-5 text-center shrink-0 relative">
+                {item.icon}
+                {collapsed && item.to === '/admin/orders' && newOrdersCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-bold text-ink leading-none">
+                    {newOrdersCount > 9 ? '9+' : newOrdersCount}
+                  </span>
+                )}
+              </span>
+              {!collapsed && (
+                <span className="flex-1 flex items-center gap-2">
+                  {item.label}
+                  {item.to === '/admin/orders' && newOrdersCount > 0 && (
+                    <span className="rounded-full bg-gold px-1.5 py-0.5 text-[10px] font-bold text-ink leading-none">
+                      {newOrdersCount > 9 ? '9+' : newOrdersCount}
+                    </span>
+                  )}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
@@ -258,7 +289,7 @@ export default function AdminLayout() {
         </main>
       </div>
 
-      <BottomNavAdmin />
+      <BottomNavAdmin newOrdersCount={newOrdersCount} />
     </div>
   );
 }

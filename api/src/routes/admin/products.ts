@@ -14,8 +14,23 @@ import {
   adminUpdateOption,
   adminUpdateProduct,
 } from '../../repos/admin-catalog.js';
+import { getAvailabilityForDate } from '../../repos/availability.js';
 
 export const adminProductsRouter = Router();
+
+// GET /api/admin/products/availability-by-date?date=YYYY-MM-DD — cupo ocupado/disponible
+// de TODAS las casas/opciones activas para una fecha puntual, para el buscador del panel
+// de cupos. No depende de un producto puntual (a diferencia de /:productId/availability).
+adminProductsRouter.get('/availability-by-date', async (req, res, next) => {
+  try {
+    const date = req.query.date;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date debe tener formato YYYY-MM-DD' });
+    }
+    const rows = await getAvailabilityForDate(date);
+    res.json({ data: rows });
+  } catch (err) { next(err); }
+});
 
 const productSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]{2,80}$/),

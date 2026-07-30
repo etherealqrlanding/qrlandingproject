@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail } from '../../lib/adminApi';
+import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail, type AdminDateAvailabilityRow } from '../../lib/adminApi';
 import Checkbox from '../../components/Checkbox';
 
 function withUpdatedCaps(
@@ -32,6 +32,7 @@ function withBulkCap(
 }
 
 export default function BulkCapacityPage() {
+  const [tab, setTab] = useState<'edit' | 'search'>('edit');
   const [products, setProducts] = useState<AdminProductDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -176,6 +177,28 @@ export default function BulkCapacityPage() {
         </p>
       </header>
 
+      <div className="flex gap-1 border-b border-gold/10 mb-8">
+        {([
+          { key: 'edit' as const, label: 'Editar cupos' },
+          { key: 'search' as const, label: 'Buscar por fecha' },
+        ]).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-sm transition border-b-2 -mb-px ${
+              tab === t.key ? 'border-gold text-gold' : 'border-transparent text-cream/60 hover:text-cream'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'search' && <DateAvailabilitySearch />}
+
+      {tab === 'edit' && (
+        <>
       {/* ── Horario límite global ── */}
       <section className="rounded-xl border border-gold/15 bg-ink-soft/50 p-6 mb-8">
         <h2 className="font-display text-2xl text-cream">Horario límite de reservas</h2>
@@ -450,7 +473,125 @@ export default function BulkCapacityPage() {
           </>
         )}
       </section>
+        </>
+      )}
     </div>
+  );
+}
+
+// ── Buscador de disponibilidad por fecha ────────────────────────────────────────
+// Todas las opciones activas para UNA fecha: cupo total, ocupado (órdenes + holds +
+// addons pendientes, vía option_booked_pax en el backend) y disponible. Misma cuenta
+// que usa el checkout en ese instante — no una foto vieja.
+function todayLocalISO(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function DateAvailabilitySearch() {
+  const [date, setDate] = useState(todayLocalISO);
+  const [rows, setRows] = useState<AdminDateAvailabilityRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!date) return;
+    setLoading(true);
+    setError(null);
+    adminApi.products.availabilityByDate(date)
+      .then(setRows)
+      .catch((err) => setError(err instanceof AdminApiError ? err.message : (err as Error).message))
+      .finally(() => setLoading(false));
+  }, [date]);
+
+  const grouped = useMemo(() => {
+    if (!rows) return [];
+    const byProduct = new Map<number, { product_name: string; rows: AdminDateAvailabilityRow[] }>();
+    for (const r of rows) {
+      if (!byProduct.has(r.product_id)) byProduct.set(r.product_id, { product_name: r.product_name, rows: [] });
+      byProduct.get(r.product_id)!.rows.push(r);
+    }
+    return [...byProduct.values()];
+  }, [rows]);
+
+  return (
+    <section>
+      <h2 className="font-display text-2xl text-cream mb-1">Cupo disponible por fecha</h2>
+      <p className="text-sm text-cream/50 mb-5">
+        Elegí una fecha y mirá, para cada casa/tier, cuánto cupo queda — se calcula en vivo
+        contra reservas confirmadas, pendientes y checkouts en curso (igual que el sitio público).
+      </p>
+
+      <div className="mb-5">
+        <label htmlFor="avail-date" className="block text-sm text-cream/70 mb-1.5">Fecha</label>
+        <input
+          id="avail-date" type="date" value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="input w-48"
+        />
+      </div>
+
+      {error && (
+        <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90 mb-4">{error}</div>
+      )}
+
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => <div key={i} className="h-14 rounded-lg bg-ink-soft/60 animate-pulse" />)}
+        </div>
+      )}
+
+      {!loading && rows && rows.length === 0 && (
+        <p className="text-cream/50 text-sm">No hay opciones activas configuradas.</p>
+      )}
+
+      {!loading && grouped.length > 0 && (
+        <div className="rounded-lg border border-gold/10 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-ink-soft/60 text-cream/40 text-xs uppercase tracking-wider">
+              <tr>
+                <th className="text-left py-3 px-3">Producto / Tier</th>
+                <th className="text-center py-3 px-3 w-28">Estado</th>
+                <th className="text-right py-3 px-3 w-24">Capacidad</th>
+                <th className="text-right py-3 px-3 w-24">Ocupado</th>
+                <th className="text-right py-3 pr-4 pl-3 w-28">Disponible</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.flatMap((g) => [
+                <tr key={`gp-${g.product_name}`} className="border-t border-gold/10 bg-ink-soft/30">
+                  <td colSpan={5} className="py-2.5 px-3">
+                    <span className="font-semibold text-cream">{g.product_name}</span>
+                  </td>
+                </tr>,
+                ...g.rows.map((r) => (
+                  <tr key={`o-${r.option_id}`} className="border-t border-gold/5 hover:bg-gold/5">
+                    <td className="py-2 px-3 pl-9">
+                      <span className={r.is_option_active ? 'text-cream' : 'text-cream/40'}>{r.option_name}</span>
+                      <span className="ml-2 text-xs text-cream/25 font-mono">{r.option_code}</span>
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      {r.is_closed
+                        ? <span className="text-xs text-bordeaux-light">Cerrado</span>
+                        : <span className="text-xs text-gold/80">Abierto</span>}
+                    </td>
+                    <td className="py-2 px-3 text-right text-cream/70 tabular-nums text-xs">{r.capacity}</td>
+                    <td className="py-2 px-3 text-right text-cream/70 tabular-nums text-xs">{r.booked}</td>
+                    <td className="py-2 pr-4 pl-3 text-right tabular-nums text-sm font-semibold">
+                      {r.is_closed ? (
+                        <span className="text-cream/30">—</span>
+                      ) : (
+                        <span className={r.remaining > 0 ? 'text-gold' : 'text-bordeaux-light'}>{r.remaining}</span>
+                      )}
+                    </td>
+                  </tr>
+                )),
+              ])}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

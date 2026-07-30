@@ -415,6 +415,19 @@ export interface ArchivePage<T> {
   limit: number;
 }
 
+export interface AdminDateAvailabilityRow {
+  option_id: number;
+  option_name: string;
+  option_code: string;
+  is_option_active: boolean;
+  product_id: number;
+  product_name: string;
+  is_closed: boolean;
+  capacity: number;
+  booked: number;
+  remaining: number;
+}
+
 export interface AdminSetting {
   key: string;
   value: Record<string, unknown>;
@@ -498,6 +511,10 @@ export const adminApi = {
   products: {
     list: () => request<AdminProductSummary[]>('/api/admin/products'),
     get: (id: number) => request<AdminProductDetail>(`/api/admin/products/${id}`),
+    // Cupo ocupado/disponible de TODAS las opciones activas para una fecha puntual —
+    // buscador del panel de cupos (distinto de products.availability, que es por producto).
+    availabilityByDate: (date: string) =>
+      request<AdminDateAvailabilityRow[]>(`/api/admin/products/availability-by-date?date=${date}`),
     create: (input: Partial<AdminProductDetail>) =>
       request<AdminProductDetail>('/api/admin/products', { method: 'POST', body: JSON.stringify(input) }),
     update: (id: number, input: Partial<AdminProductDetail>) =>
