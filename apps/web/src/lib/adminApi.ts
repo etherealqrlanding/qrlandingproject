@@ -422,6 +422,8 @@ export interface AdminDateAvailabilityRow {
   is_option_active: boolean;
   product_id: number;
   product_name: string;
+  default_capacity_per_day: number;
+  override_id: number | null;
   is_closed: boolean;
   capacity: number;
   booked: number;

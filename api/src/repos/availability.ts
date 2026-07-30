@@ -94,6 +94,11 @@ export interface DateAvailabilityRow {
   is_option_active: boolean;
   product_id: number;
   product_name: string;
+  default_capacity_per_day: number;
+  // Fila de override en option_availability para esta opción+fecha (null = sin override,
+  // usando default_capacity_per_day). Necesario para poder borrar el override y volver
+  // al default desde el buscador (mismo endpoint que ya usa el editor por producto).
+  override_id: number | null;
   is_closed: boolean;
   capacity: number;
   booked: number;
@@ -112,6 +117,8 @@ export async function getAvailabilityForDate(serviceDate: string): Promise<DateA
        po.id AS option_id, po.name_es AS option_name, po.code AS option_code,
        po.is_active AS is_option_active,
        p.id AS product_id, p.name AS product_name,
+       po.default_capacity_per_day,
+       oa.id AS override_id,
        COALESCE(oa.is_closed, FALSE) AS is_closed,
        COALESCE(oa.capacity_override, po.default_capacity_per_day) AS capacity,
        option_booked_pax(po.id, $1::date) AS booked,

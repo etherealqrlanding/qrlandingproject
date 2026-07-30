@@ -488,21 +488,28 @@ function todayLocalISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+interface DraftOverride { capacity: number; is_closed: boolean }
+
 function DateAvailabilitySearch() {
   const [date, setDate] = useState(todayLocalISO);
   const [rows, setRows] = useState<AdminDateAvailabilityRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState<Map<number, DraftOverride>>(new Map());
 
-  useEffect(() => {
+  const load = () => {
     if (!date) return;
     setLoading(true);
     setError(null);
     adminApi.products.availabilityByDate(date)
-      .then(setRows)
+      .then((data) => { setRows(data); setDraft(new Map()); })
       .catch((err) => setError(err instanceof AdminApiError ? err.message : (err as Error).message))
       .finally(() => setLoading(false));
-  }, [date]);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [date]);
 
   const grouped = useMemo(() => {
     if (!rows) return [];
@@ -514,21 +521,86 @@ function DateAvailabilitySearch() {
     return [...byProduct.values()];
   }, [rows]);
 
+  const effective = (r: AdminDateAvailabilityRow): DraftOverride =>
+    draft.get(r.option_id) ?? { capacity: r.capacity, is_closed: r.is_closed };
+
+  const isDirty = (r: AdminDateAvailabilityRow): boolean => {
+    const d = draft.get(r.option_id);
+    return d != null && (d.capacity !== r.capacity || d.is_closed !== r.is_closed);
+  };
+
+  const setCapacity = (r: AdminDateAvailabilityRow, capacity: number) =>
+    setDraft((prev) => new Map(prev).set(r.option_id, { ...effective(r), capacity }));
+
+  const setClosed = (r: AdminDateAvailabilityRow, is_closed: boolean) =>
+    setDraft((prev) => new Map(prev).set(r.option_id, { ...effective(r), is_closed }));
+
+  const dirtyRows = useMemo(() => (rows ?? []).filter(isDirty), [rows, draft]);
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await Promise.all(dirtyRows.map((r) => {
+        const d = effective(r);
+        return adminApi.options.availability.upsert(r.option_id, {
+          date, capacity_override: d.capacity, is_closed: d.is_closed,
+        });
+      }));
+      load();
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Vuelve al cupo default del tier para esta fecha (borra el override si existía).
+  const handleReset = async (r: AdminDateAvailabilityRow) => {
+    setSaving(true);
+    setError(null);
+    try {
+      if (r.override_id != null) await adminApi.options.availability.delete(r.override_id);
+      setDraft((prev) => { const n = new Map(prev); n.delete(r.option_id); return n; });
+      load();
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : (err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section>
       <h2 className="font-display text-2xl text-cream mb-1">Cupo disponible por fecha</h2>
       <p className="text-sm text-cream/50 mb-5">
         Elegí una fecha y mirá, para cada casa/tier, cuánto cupo queda — se calcula en vivo
         contra reservas confirmadas, pendientes y checkouts en curso (igual que el sitio público).
+        Editá capacidad o cerrá una fecha puntual sin entrar al producto.
       </p>
 
-      <div className="mb-5">
-        <label htmlFor="avail-date" className="block text-sm text-cream/70 mb-1.5">Fecha</label>
-        <input
-          id="avail-date" type="date" value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="input w-48"
-        />
+      <div className="mb-5 flex items-end gap-4 flex-wrap">
+        <div>
+          <label htmlFor="avail-date" className="block text-sm text-cream/70 mb-1.5">Fecha</label>
+          <input
+            id="avail-date" type="date" value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="input w-48"
+          />
+        </div>
+        {dirtyRows.length > 0 && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-gold-soft">
+              {dirtyRows.length} cambio{dirtyRows.length === 1 ? '' : 's'} pendiente{dirtyRows.length === 1 ? '' : 's'}
+            </span>
+            <button
+              type="button" onClick={handleSaveAll} disabled={saving}
+              className="btn-primary text-sm disabled:opacity-50"
+            >
+              {saving ? 'Guardando...' : 'Guardar cambios'}
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -551,41 +623,66 @@ function DateAvailabilitySearch() {
             <thead className="bg-ink-soft/60 text-cream/40 text-xs uppercase tracking-wider">
               <tr>
                 <th className="text-left py-3 px-3">Producto / Tier</th>
-                <th className="text-center py-3 px-3 w-28">Estado</th>
-                <th className="text-right py-3 px-3 w-24">Capacidad</th>
+                <th className="text-center py-3 px-3 w-24">Cerrado</th>
+                <th className="text-right py-3 px-3 w-28">Capacidad</th>
                 <th className="text-right py-3 px-3 w-24">Ocupado</th>
-                <th className="text-right py-3 pr-4 pl-3 w-28">Disponible</th>
+                <th className="text-right py-3 px-3 w-24">Disponible</th>
+                <th className="text-right py-3 pr-4 pl-3 w-24" />
               </tr>
             </thead>
             <tbody>
               {grouped.flatMap((g) => [
                 <tr key={`gp-${g.product_name}`} className="border-t border-gold/10 bg-ink-soft/30">
-                  <td colSpan={5} className="py-2.5 px-3">
+                  <td colSpan={6} className="py-2.5 px-3">
                     <span className="font-semibold text-cream">{g.product_name}</span>
                   </td>
                 </tr>,
-                ...g.rows.map((r) => (
-                  <tr key={`o-${r.option_id}`} className="border-t border-gold/5 hover:bg-gold/5">
-                    <td className="py-2 px-3 pl-9">
-                      <span className={r.is_option_active ? 'text-cream' : 'text-cream/40'}>{r.option_name}</span>
-                      <span className="ml-2 text-xs text-cream/25 font-mono">{r.option_code}</span>
-                    </td>
-                    <td className="py-2 px-3 text-center">
-                      {r.is_closed
-                        ? <span className="text-xs text-bordeaux-light">Cerrado</span>
-                        : <span className="text-xs text-gold/80">Abierto</span>}
-                    </td>
-                    <td className="py-2 px-3 text-right text-cream/70 tabular-nums text-xs">{r.capacity}</td>
-                    <td className="py-2 px-3 text-right text-cream/70 tabular-nums text-xs">{r.booked}</td>
-                    <td className="py-2 pr-4 pl-3 text-right tabular-nums text-sm font-semibold">
-                      {r.is_closed ? (
-                        <span className="text-cream/30">—</span>
-                      ) : (
-                        <span className={r.remaining > 0 ? 'text-gold' : 'text-bordeaux-light'}>{r.remaining}</span>
-                      )}
-                    </td>
-                  </tr>
-                )),
+                ...g.rows.map((r) => {
+                  const eff = effective(r);
+                  const dirty = isDirty(r);
+                  const hasOverride = r.override_id != null || dirty;
+                  const remainingNow = Math.max(0, eff.capacity - r.booked);
+                  return (
+                    <tr key={`o-${r.option_id}`} className={`border-t border-gold/5 transition-colors ${dirty ? 'bg-gold/5' : 'hover:bg-gold/5'}`}>
+                      <td className="py-2 px-3 pl-9">
+                        <span className={r.is_option_active ? 'text-cream' : 'text-cream/40'}>{r.option_name}</span>
+                        <span className="ml-2 text-xs text-cream/25 font-mono">{r.option_code}</span>
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <Checkbox
+                          checked={eff.is_closed}
+                          onChange={(checked) => setClosed(r, checked)}
+                          aria-label={`Cerrar ${r.option_name} para ${date}`}
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <InlineNumberInput
+                          value={eff.capacity} min={0} dirty={dirty}
+                          onChange={(val) => setCapacity(r, val)}
+                        />
+                      </td>
+                      <td className="py-2 px-3 text-right text-cream/70 tabular-nums text-xs">{r.booked}</td>
+                      <td className="py-2 px-3 text-right tabular-nums text-sm font-semibold">
+                        {eff.is_closed ? (
+                          <span className="text-cream/30">—</span>
+                        ) : (
+                          <span className={remainingNow > 0 ? 'text-gold' : 'text-bordeaux-light'}>{remainingNow}</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 pl-3 text-right">
+                        {hasOverride && (
+                          <button
+                            type="button" onClick={() => handleReset(r)} disabled={saving}
+                            className="text-xs text-cream/40 hover:text-cream disabled:opacity-50"
+                            title={`Volver al cupo default (${r.default_capacity_per_day}) para esta fecha`}
+                          >
+                            Restablecer
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }),
               ])}
             </tbody>
           </table>
