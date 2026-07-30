@@ -3,24 +3,9 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { supabase } from '../../lib/supabase';
 import { sellerApi } from '../../lib/sellerApi';
+import { parseAuthHashTokens } from '../../lib/authHashTokens';
 import Spinner, { LoadingScreen } from '../../components/Spinner';
 import Logo from '../../components/Logo';
-
-// El cliente Supabase tiene detectSessionInUrl: false (para no interferir con el admin).
-// Cuando llegamos vía link de invite/recovery, necesitamos establecer la sesión manualmente
-// parseando los tokens del hash de la URL.
-
-function parseHashTokens(): { accessToken: string; refreshToken: string; type: string } | null {
-  const hash = globalThis.location.hash.slice(1);
-  const params = new URLSearchParams(hash);
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
-  const type = params.get('type') ?? '';
-  if (accessToken && refreshToken && (type === 'invite' || type === 'recovery')) {
-    return { accessToken, refreshToken, type };
-  }
-  return null;
-}
 
 function EyeIcon() {
   return (
@@ -46,7 +31,7 @@ export default function SellerLogin() {
   const location = useLocation();
   const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/seller';
 
-  const [hashTokens] = useState(parseHashTokens);
+  const [hashTokens] = useState(parseAuthHashTokens);
   const [mode, setMode] = useState<'login' | 'set-password' | 'forgot-password'>(hashTokens ? 'set-password' : 'login');
   const [sessionEstablishing, setSessionEstablishing] = useState(Boolean(hashTokens));
 

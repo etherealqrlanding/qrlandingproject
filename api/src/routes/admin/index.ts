@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { requireAdmin } from '../../middleware/requireAdmin.js';
+import { authLimiter } from '../../middleware/rateLimit.js';
 import { supabaseAdmin } from '../../services/supabase.js';
+import { sendAdminPasswordReset } from '../../services/email.js';
+import { config } from '../../config.js';
 import { pool } from '../../db.js';
 import { addAdminConnection, removeAdminConnection } from '../../services/sseNotifier.js';
 import { adminProductsRouter } from './products.js';
@@ -49,6 +52,41 @@ adminRouter.get('/notifications/stream', async (req, res, next) => {
       clearInterval(heartbeat);
       removeAdminConnection(res);
     });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/auth/forgot-password — genera un link de recovery y lo envía por
+// email. Siempre responde 200 genérico para no revelar si el email existe (mismo
+// criterio que el equivalente de vendedores en routes/seller/index.ts).
+const forgotPasswordSchema = z.object({ email: z.string().email() });
+
+adminRouter.post('/auth/forgot-password', authLimiter, async (req, res, next) => {
+  try {
+    const parsed = forgotPasswordSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Email inválido' });
+
+    const email = parsed.data.email.trim().toLowerCase();
+
+    const { rows } = await pool.query<{ id: string; full_name: string | null }>(
+      `SELECT id, full_name FROM admin_users WHERE LOWER(email) = $1 AND is_active = TRUE LIMIT 1`,
+      [email],
+    );
+    const admin = rows[0];
+
+    if (admin) {
+      const portalUrl = `${config.WEB_ORIGIN.replace(/\/$/, '')}/admin/login`;
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo: portalUrl },
+      });
+      if (!linkError && linkData) {
+        sendAdminPasswordReset(admin.full_name ?? email, email, linkData.properties.action_link)
+          .catch((e) => console.warn('[admin forgot-password] email send failed:', e));
+      }
+    }
+
+    res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
 
