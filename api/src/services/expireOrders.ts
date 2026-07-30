@@ -8,8 +8,11 @@ const EXPIRY_HOURS = 24;
 // MP: abandonos de checkout. Se caducan antes que el efectivo porque el link de pago
 // ya venció y la orden pendiente estaría reteniendo cupos sin un pago real detrás.
 const MP_EXPIRY_HOURS = 3;
-// PIX (Nautt): el "copia e cola" vive ~15 min. Damos 1 hora de gracia (por si el pasajero
-// tarda o regenera el QR) antes de liberar el cupo del abandono.
+// PIX (Nautt): el "copia e cola" vive ~30 min (verificado en vivo, puede cambiar del
+// lado de Nautt). Damos 1 hora de gracia (por si el pasajero tarda o regenera el QR)
+// antes de liberar el cupo del abandono. Esto solo aplica a PIX creado por el portal
+// del vendedor o la carga manual del admin (createPendingOrder) — el checkout público
+// usa el mecanismo de holds (ver services/expireHolds.ts), no este.
 const PIX_EXPIRY_HOURS = 1;
 // Addons (ampliaciones con link de MP): mismo criterio que las órdenes MP.
 const ADDON_EXPIRY_HOURS = 3;

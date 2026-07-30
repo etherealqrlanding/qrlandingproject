@@ -70,8 +70,9 @@ export async function setHoldPreference(holdId: string, preferenceId: string, in
 
 /**
  * Guarda los datos del cobro PIX de Nautt en el hold — incluye extender `expires_at` a
- * la expiración real del QR ("copia e cola" ~15 min), que es lo que gobierna la
- * disponibilidad. Se llama al crear el hold y también al regenerar el QR (pix-refresh).
+ * la expiración real del QR ("copia e cola", ~30 min verificado en vivo — Nautt puede
+ * cambiarlo, nunca se hardcodea, siempre se toma de su respuesta), que es lo que gobierna
+ * la disponibilidad. Se llama al crear el hold y también al regenerar el QR (pix-refresh).
  */
 export async function setHoldPixCharge(holdId: string, pix: {
   nauttOrderUuid: string;

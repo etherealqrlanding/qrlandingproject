@@ -2,8 +2,9 @@ import { logPaymentEvent } from '../repos/orders.js';
 import { listExpiredHoldsForSync, purgeStaleHolds } from '../repos/checkoutHolds.js';
 import { syncOrderWithMp, syncOrderWithNautt } from '../routes/checkout.js';
 
-// Más frecuente que el barrido de expireOrders.ts (15 min): el QR de PIX vive ~15 min
-// reales, así que un intervalo más ajustado reconcilia pagos tardíos más rápido.
+// Más frecuente que el barrido de expireOrders.ts (15 min): el QR de PIX vive ~30 min
+// reales (verificado en vivo, puede cambiar del lado de Nautt), así que un intervalo
+// más ajustado reconcilia pagos tardíos más rápido.
 const HOLD_SWEEP_INTERVAL_MS = 2 * 60_000;
 // Ventana de gracia antes de purgar (borrado físico) un hold vencido sin pago — mismos
 // números que usa expireOrders.ts para el criterio equivalente en órdenes.

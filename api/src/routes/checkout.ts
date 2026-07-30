@@ -41,8 +41,10 @@ import { generateVoucherPdf } from '../services/voucherPdf.js';
 
 // TTL inicial de los checkout_holds (cupo congelado del checkout público, antes de
 // confirmarse el pago). PIX se ajusta después a la expiración real del QR de Nautt
-// (~15 min) vía setHoldPixCharge; este valor es solo el margen mientras se genera el
-// cobro. MP no tiene ese ajuste posterior, así que su hold vive el TTL completo.
+// (verificado en vivo: ~30 min, pero viene siempre de la respuesta de Nautt, nunca
+// hardcodeado — puede cambiar de su lado) vía setHoldPixCharge; este valor es solo el
+// margen mientras se genera el cobro. MP no tiene ese ajuste posterior, así que su
+// hold vive el TTL completo.
 const PIX_HOLD_INITIAL_TTL_MINUTES = 20;
 const MP_HOLD_TTL_MINUTES = 30;
 
