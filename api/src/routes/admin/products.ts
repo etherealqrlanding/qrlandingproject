@@ -14,7 +14,7 @@ import {
   adminUpdateOption,
   adminUpdateProduct,
 } from '../../repos/admin-catalog.js';
-import { getAvailabilityForDate } from '../../repos/availability.js';
+import { getAvailabilityForDate, getAvailabilityForProductRange } from '../../repos/availability.js';
 
 export const adminProductsRouter = Router();
 
@@ -28,6 +28,32 @@ adminProductsRouter.get('/availability-by-date', async (req, res, next) => {
       return res.status(400).json({ error: 'date debe tener formato YYYY-MM-DD' });
     }
     const rows = await getAvailabilityForDate(date);
+    res.json({ data: rows });
+  } catch (err) { next(err); }
+});
+
+const rangeQuery = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+const MAX_RANGE_DAYS = 130; // ~4 meses, con margen sobre los ~92 días que pide el calendario del admin
+
+// GET /api/admin/products/:productId/availability-range?from=YYYY-MM-DD&to=YYYY-MM-DD —
+// calendario de UNA casa a lo largo de un rango: todas sus opciones activas, por día,
+// en una sola query eficiente (ver getAvailabilityForProductRange). Distinto de
+// /availability-by-date (todas las casas, un solo día) y de /:productId/availability
+// (overrides "de toda la casa", solo fechas donde todos los tiers coinciden).
+adminProductsRouter.get('/:productId/availability-range', async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid product id' });
+    const parsed = rangeQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid range', details: parsed.error.flatten() });
+    const { from, to } = parsed.data;
+    if (to < from) return res.status(400).json({ error: 'to debe ser >= from' });
+    const days = (new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 86_400_000;
+    if (days > MAX_RANGE_DAYS) return res.status(400).json({ error: `El rango no puede superar ${MAX_RANGE_DAYS} días` });
+    const rows = await getAvailabilityForProductRange(productId, from, to);
     res.json({ data: rows });
   } catch (err) { next(err); }
 });

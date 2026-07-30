@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminDateAvailabilityRow } from '../../lib/adminApi';
 import Checkbox from '../../components/Checkbox';
+import InlineNumberInput from '../../components/admin/InlineNumberInput';
+import ProductCapacityCalendar from './sections/ProductCapacityCalendar';
 
 function todayLocalISO(): string {
   const d = new Date();
@@ -10,7 +12,11 @@ function todayLocalISO(): string {
 
 interface DraftOverride { capacity: number; is_closed: boolean }
 
+type CupoView = 'table' | 'calendar';
+
 export default function BulkCapacityPage() {
+  const [view, setView] = useState<CupoView>('table');
+
   // ── Horario límite global ────────────────────────────────
   const [cutoff, setCutoff] = useState<string>('');
   const [cutoffSaving, setCutoffSaving] = useState(false);
@@ -37,7 +43,7 @@ export default function BulkCapacityPage() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-6xl">
       <Link to="/admin/products" className="text-sm text-gold-soft hover:text-gold">
         ← Volver a productos
       </Link>
@@ -100,7 +106,20 @@ export default function BulkCapacityPage() {
         )}
       </section>
 
-      <CapacityByDate />
+      <div className="flex gap-1 border-b border-gold/10 mb-6">
+        {(['table', 'calendar'] as const).map((v) => (
+          <button
+            key={v} type="button" onClick={() => setView(v)}
+            className={`px-4 py-2.5 text-sm transition border-b-2 -mb-px ${
+              view === v ? 'border-gold text-gold' : 'border-transparent text-cream/60 hover:text-cream'
+            }`}
+          >
+            {v === 'table' ? 'Tabla' : 'Calendario'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'table' ? <CapacityByDate /> : <ProductCapacityCalendar />}
     </div>
   );
 }
@@ -437,26 +456,5 @@ function CapacityByDate() {
         </div>
       )}
     </section>
-  );
-}
-
-function InlineNumberInput({ value, min, dirty, onChange }: Readonly<{
-  value: number; min: number; dirty: boolean; onChange: (val: number) => void;
-}>) {
-  return (
-    <input
-      type="number" min={min}
-      value={value}
-      onChange={(e) => {
-        const v = Number.parseInt(e.target.value, 10);
-        if (!Number.isNaN(v) && v >= min) onChange(v);
-      }}
-      className={`w-24 text-right rounded px-2 py-1 text-sm bg-ink tabular-nums
-        focus:outline-none focus:ring-1 transition-all
-        ${dirty
-          ? 'border border-gold text-gold focus:ring-gold/50'
-          : 'border border-gold/15 text-cream/70 focus:ring-gold/30'
-        }`}
-    />
   );
 }

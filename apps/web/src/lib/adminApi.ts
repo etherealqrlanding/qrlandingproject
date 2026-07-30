@@ -62,6 +62,27 @@ async function doFetch(path: string, token: string, init?: RequestInit): Promise
   });
 }
 
+// Para endpoints públicos (sin sesión) — ej. pedir un reset de contraseña antes de
+// estar logueado. A diferencia de request(), no adjunta Authorization.
+async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true', ...init?.headers },
+    });
+  } catch (err) {
+    throw new AdminApiError(0, `Sin conexión con el servidor: ${(err as Error).message}`);
+  }
+  if (!res.ok) {
+    let message = `Request failed: ${res.status}`;
+    try { const body = await res.json(); message = body?.error ?? message; } catch { /* ignore */ }
+    throw new AdminApiError(res.status, message);
+  }
+  const body = await res.json();
+  return body.data;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let token: string;
   try {
@@ -430,6 +451,22 @@ export interface AdminDateAvailabilityRow {
   remaining: number;
 }
 
+export interface AdminProductRangeAvailabilityRow {
+  option_id: number;
+  option_name: string;
+  option_code: string;
+  is_option_active: boolean;
+  date: string;
+  default_capacity_per_day: number;
+  low_availability_threshold: number;
+  available_days: number[];
+  override_id: number | null;
+  is_closed: boolean;
+  capacity: number;
+  booked: number;
+  remaining: number;
+}
+
 export interface AdminSetting {
   key: string;
   value: Record<string, unknown>;
@@ -503,6 +540,10 @@ export interface AdminNewOrderPaidEvent {
 
 export const adminApi = {
   me: () => request<AdminMe>('/api/admin/me'),
+  forgotPassword: (email: string) =>
+    publicRequest<{ ok: true }>('/api/admin/auth/forgot-password', {
+      method: 'POST', body: JSON.stringify({ email }),
+    }),
   // Código de un vendedor "casa" reservado, creado la primera vez que se pide, para
   // que el equipo pueda abrir el sitio público ya adentro del muro de exclusividad
   // (sin pedirle el código a un vendedor real).
@@ -517,6 +558,12 @@ export const adminApi = {
     // buscador del panel de cupos (distinto de products.availability, que es por producto).
     availabilityByDate: (date: string) =>
       request<AdminDateAvailabilityRow[]>(`/api/admin/products/availability-by-date?date=${date}`),
+    // Calendario por producto: todas sus opciones activas a lo largo de un rango de
+    // fechas, en una sola llamada (para pintar varios meses sin overfetch por día).
+    availabilityRange: (productId: number, from: string, to: string) =>
+      request<AdminProductRangeAvailabilityRow[]>(
+        `/api/admin/products/${productId}/availability-range?from=${from}&to=${to}`,
+      ),
     create: (input: Partial<AdminProductDetail>) =>
       request<AdminProductDetail>('/api/admin/products', { method: 'POST', body: JSON.stringify(input) }),
     update: (id: number, input: Partial<AdminProductDetail>) =>

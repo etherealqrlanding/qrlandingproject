@@ -133,6 +133,91 @@ export async function getAvailabilityForDate(serviceDate: string): Promise<DateA
   return rows;
 }
 
+export interface ProductRangeAvailabilityRow {
+  option_id: number;
+  option_name: string;
+  option_code: string;
+  is_option_active: boolean;
+  date: string;
+  default_capacity_per_day: number;
+  low_availability_threshold: number;
+  available_days: number[];
+  override_id: number | null;
+  is_closed: boolean;
+  capacity: number;
+  booked: number;
+  remaining: number;
+}
+
+/**
+ * Panel admin: calendario de UN producto a lo largo de un rango de fechas, para todas
+ * sus opciones activas, en una sola query (generate_series de fechas × opciones activas,
+ * LEFT JOIN option_availability, LEFT JOIN un subquery de pax reservado agrupado por
+ * option+fecha). A diferencia de getAvailabilityForDate (una fecha, todos los productos),
+ * acá es un producto, muchas fechas — pensado para pintar varios meses de calendario sin
+ * llamar option_booked_pax() fila por fila (esa función hace 3 subqueries por lookup,
+ * pensada para una sola consulta puntual, no para un rango completo).
+ */
+export async function getAvailabilityForProductRange(
+  productId: number,
+  fromDate: string,
+  toDate: string,
+): Promise<ProductRangeAvailabilityRow[]> {
+  const { rows } = await pool.query<ProductRangeAvailabilityRow>(
+    `WITH options AS (
+       SELECT po.id AS option_id, po.name_es AS option_name, po.code AS option_code,
+              po.is_active AS is_option_active, po.default_capacity_per_day,
+              po.low_availability_threshold, po.available_days
+         FROM product_options po
+        WHERE po.product_id = $1 AND po.is_active = TRUE
+     ),
+     dates AS (
+       SELECT generate_series($2::date, $3::date, interval '1 day')::date AS date
+     ),
+     grid AS (
+       SELECT o.*, d.date FROM options o CROSS JOIN dates d
+     ),
+     booked AS (
+       SELECT option_id, service_date AS date, SUM(pax)::int AS booked
+         FROM (
+           SELECT oi.option_id, oi.service_date, (oi.adults + oi.children) AS pax
+             FROM order_items oi
+             JOIN orders o ON o.id = oi.order_id
+            WHERE oi.option_id IN (SELECT option_id FROM options)
+              AND oi.service_date BETWEEN $2::date AND $3::date
+              AND o.status IN ('paid', 'pending')
+           UNION ALL
+           SELECT ad.option_id, ad.service_date, (ad.extra_adults + ad.extra_children) AS pax
+             FROM order_addons ad
+            WHERE ad.option_id IN (SELECT option_id FROM options)
+              AND ad.service_date BETWEEN $2::date AND $3::date
+              AND ad.status = 'pending'
+           UNION ALL
+           SELECT h.option_id, h.service_date, h.pax
+             FROM checkout_holds h
+            WHERE h.option_id IN (SELECT option_id FROM options)
+              AND h.service_date BETWEEN $2::date AND $3::date
+              AND h.expires_at > NOW()
+         ) x
+        GROUP BY option_id, service_date
+     )
+     SELECT g.option_id, g.option_name, g.option_code, g.is_option_active,
+            to_char(g.date, 'YYYY-MM-DD') AS date,
+            g.default_capacity_per_day, g.low_availability_threshold, g.available_days,
+            oa.id AS override_id,
+            COALESCE(oa.is_closed, FALSE) AS is_closed,
+            COALESCE(oa.capacity_override, g.default_capacity_per_day) AS capacity,
+            COALESCE(b.booked, 0) AS booked,
+            GREATEST(0, COALESCE(oa.capacity_override, g.default_capacity_per_day) - COALESCE(b.booked, 0)) AS remaining
+       FROM grid g
+       LEFT JOIN option_availability oa ON oa.option_id = g.option_id AND oa.date = g.date
+       LEFT JOIN booked b ON b.option_id = g.option_id AND b.date = g.date
+      ORDER BY g.date, g.option_id`,
+    [productId, fromDate, toDate],
+  );
+  return rows;
+}
+
 /**
  * Chequeo autoritativo de cupo DENTRO de una transacción. Toma un advisory lock por
  * (option_id, service_date) para serializar las reservas simultáneas de esa fecha:
