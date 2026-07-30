@@ -15,7 +15,7 @@ interface DraftOverride { capacity: number; is_closed: boolean }
 type CupoView = 'table' | 'calendar';
 
 export default function BulkCapacityPage() {
-  const [view, setView] = useState<CupoView>('table');
+  const [view, setView] = useState<CupoView>('calendar');
 
   // ── Horario límite global ────────────────────────────────
   const [cutoff, setCutoff] = useState<string>('');
@@ -107,7 +107,7 @@ export default function BulkCapacityPage() {
       </section>
 
       <div className="flex gap-1 border-b border-gold/10 mb-6">
-        {(['table', 'calendar'] as const).map((v) => (
+        {(['calendar', 'table'] as const).map((v) => (
           <button
             key={v} type="button" onClick={() => setView(v)}
             className={`px-4 py-2.5 text-sm transition border-b-2 -mb-px ${

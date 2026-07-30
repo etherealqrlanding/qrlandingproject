@@ -82,10 +82,16 @@ export default function DayCapacityModal({ date, productId, productName, onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
-      <div className="w-full max-w-lg rounded-2xl bg-ink-soft border border-gold/20 my-8 animate-modal-panel">
+      <div className="relative w-full max-w-lg rounded-2xl bg-ink-soft border border-gold/20 my-8 animate-modal-panel">
+        <button
+          type="button" onClick={onClose} aria-label="Cerrar"
+          className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
+        >
+          ×
+        </button>
         <header className="p-6 border-b border-gold/10">
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Cupo del día</p>
-          <h2 className="mt-2 font-display text-2xl text-cream">{productName}</h2>
+          <h2 className="mt-2 font-display text-2xl text-cream pr-10">{productName}</h2>
           <p className="mt-1 text-sm text-cream/50">{date}</p>
         </header>
 
