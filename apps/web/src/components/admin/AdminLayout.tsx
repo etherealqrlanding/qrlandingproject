@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAdminAuth } from '../../hooks/useAdminAuth';
 import { useNavIndicator } from '../../hooks/useNavIndicator';
 import { adminApi, getAdminNotificationStreamUrl, type AdminNewOrderPaidEvent } from '../../lib/adminApi';
+import { ADMIN_NAV, ADMIN_SUPER_NAV } from '../../lib/adminNav';
 import BottomNavAdmin from './BottomNavAdmin';
 import Logo from '../Logo';
 
@@ -11,22 +12,6 @@ const SSE_RECONNECT_MS = 5_000;
 // Nombre del evento global que dispara el toast — OrdersList.tsx lo escucha para
 // refrescar la lista en vivo si el admin ya está mirando esa pantalla.
 export const NEW_ORDER_PAID_EVENT = 'admin:new-order-paid';
-
-interface NavItem { to: string; label: string; icon: string; end?: boolean }
-
-const NAV: NavItem[] = [
-  { to: '/admin', label: 'Dashboard', icon: '◆', end: true },
-  { to: '/admin/products', label: 'Productos', icon: '⌂' },
-  { to: '/admin/products/bulk-capacity', label: 'Cupos', icon: '▦' },
-  { to: '/admin/sellers', label: 'Vendedores', icon: '☉' },
-  { to: '/admin/orders', label: 'Órdenes', icon: '✦' },
-  { to: '/admin/holds', label: 'Cupos en espera', icon: '⏳' },
-  { to: '/admin/content', label: 'Contenido', icon: '✎' },
-  { to: '/admin/settings', label: 'Settings', icon: '⚙' },
-];
-
-// Solo super_admin puede otorgar/quitar acceso admin — el resto ni ve el link.
-const SUPER_ADMIN_NAV: NavItem = { to: '/admin/admins', label: 'Admins', icon: '🛡' };
 
 export default function AdminLayout() {
   const { me, signOut } = useAdminAuth();
@@ -124,7 +109,7 @@ export default function AdminLayout() {
   }, []);
 
   const fmtArs = (n: number) => `ARS ${Math.round(n).toLocaleString('es-AR')}`;
-  const navItems = me?.admin.role === 'super_admin' ? [...NAV, SUPER_ADMIN_NAV] : NAV;
+  const navItems = me?.admin.role === 'super_admin' ? [...ADMIN_NAV, ADMIN_SUPER_NAV] : ADMIN_NAV;
 
   return (
     <div className="h-[100dvh] overflow-hidden flex bg-ink text-cream">
@@ -289,7 +274,7 @@ export default function AdminLayout() {
         </main>
       </div>
 
-      <BottomNavAdmin newOrdersCount={newOrdersCount} />
+      <BottomNavAdmin items={navItems} newOrdersCount={newOrdersCount} />
     </div>
   );
 }

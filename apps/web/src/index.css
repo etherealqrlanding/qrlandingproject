@@ -98,11 +98,23 @@
     animation: toast-in 0.3s ease-out;
   }
 
+  /* Bottom sheet "Más" del nav mobile del admin: entra deslizando desde abajo.
+     Mismo motivo que .animate-modal-panel: sin fill-mode, para no dejar un
+     transform colgado que rompa el scroll de contenido fixed/absolute anidado. */
+  @keyframes sheet-up-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .animate-sheet-up {
+    animation: sheet-up-in 0.25s ease-out;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-page-enter,
     .animate-modal-backdrop,
     .animate-modal-panel,
-    .animate-toast-in {
+    .animate-toast-in,
+    .animate-sheet-up {
       animation: none;
     }
   }
