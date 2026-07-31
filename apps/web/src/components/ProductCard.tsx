@@ -56,15 +56,19 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
           <div className="absolute inset-0 bg-gradient-to-br from-bordeaux-deep to-ink" />
         )}
         <div className="hidden sm:block absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
-        {neighborhood && (
-          <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-md bg-ink/75 backdrop-blur-md border border-cream/10 text-cream shadow-md">
-            📍 {neighborhood}
-          </span>
-        )}
-        {badge && (
-          <span className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 text-[10px] sm:text-xs font-bold uppercase tracking-wide px-2 sm:px-2.5 py-1 rounded-md bg-gold text-ink shadow-md">
-            {badge}
-          </span>
+        {(neighborhood || badge) && (
+          <div className="absolute inset-x-2 top-2 sm:inset-x-3 sm:top-3 z-10 flex items-start justify-between gap-1.5">
+            {neighborhood ? (
+              <span className="min-w-0 truncate text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-md bg-ink/75 backdrop-blur-md border border-cream/10 text-cream shadow-md">
+                📍 {neighborhood}
+              </span>
+            ) : <span />}
+            {badge ? (
+              <span className="min-w-0 truncate text-[10px] sm:text-xs font-bold uppercase tracking-wide px-2 sm:px-2.5 py-1 rounded-md bg-gold text-ink shadow-md">
+                {badge}
+              </span>
+            ) : <span />}
+          </div>
         )}
       </div>
 
