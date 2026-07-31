@@ -17,9 +17,11 @@ export const ADMIN_NAV: AdminNavItem[] = [
 // Solo super_admin puede otorgar/quitar acceso admin — el resto ni ve el link.
 export const ADMIN_SUPER_NAV: AdminNavItem = { to: '/admin/admins', label: 'Admins', icon: '🛡' };
 
-// Items fijos en la barra inferior de mobile (BottomNavAdmin) — todo lo demás
-// del menú completo cae en el botón "Más", así la barra no sigue creciendo
-// cada vez que se agrega una sección nueva al sidebar.
+// Items fijos en la barra inferior de mobile (BottomNavAdmin) — solo las 3
+// secciones de uso más frecuente/operativo. Todo lo demás (Dashboard, Cupos,
+// Cupos en espera, Contenido, Settings, Admins) cae en el botón "Más", así la
+// barra queda simple y no sigue creciendo cada vez que se agrega una sección
+// nueva al sidebar.
 export const BOTTOM_NAV_PINNED_PATHS = new Set<string>([
-  '/admin', '/admin/products', '/admin/sellers', '/admin/orders', '/admin/content', '/admin/settings',
+  '/admin/products', '/admin/sellers', '/admin/orders',
 ]);

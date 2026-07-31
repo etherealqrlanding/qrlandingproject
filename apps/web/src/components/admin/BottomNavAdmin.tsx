@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { BOTTOM_NAV_PINNED_PATHS, type AdminNavItem } from '../../lib/adminNav';
+import MoreSheet from '../MoreSheet';
 
 interface Props {
   items: AdminNavItem[];
@@ -69,45 +70,25 @@ export default function BottomNavAdmin({ items, newOrdersCount = 0 }: Readonly<P
       {/* Sheet "Más" — el resto de las secciones del admin, en grilla, para no
           tener que seguir agregando iconos a la barra fija cada vez que crece el menú. */}
       {moreOpen && (
-        <div
-          className="fixed inset-0 bg-ink/70 backdrop-blur-sm animate-modal-backdrop"
-          onClick={() => setMoreOpen(false)}
-        >
-          <div
-            className="absolute bottom-0 inset-x-0 rounded-t-2xl border-t border-gold/20 bg-ink-soft animate-sheet-up"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 pt-4 pb-2">
-              <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Más</p>
-              <button
-                type="button"
-                onClick={() => setMoreOpen(false)}
-                aria-label="Cerrar"
-                className="h-8 w-8 flex items-center justify-center rounded-full text-cream/50 hover:text-cream active:bg-gold/10"
+        <MoreSheet title="Más" onClose={() => setMoreOpen(false)}>
+          <div className="px-3 pb-2 grid grid-cols-3 gap-1.5">
+            {rest.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `flex flex-col items-center justify-center gap-1.5 rounded-lg py-3.5 transition-colors ${
+                    isActive ? 'text-gold bg-gold/10' : 'text-cream/70 active:bg-gold/5'
+                  }`
+                }
               >
-                ×
-              </button>
-            </div>
-            <div className="px-3 pb-2 grid grid-cols-3 gap-1.5">
-              {rest.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `flex flex-col items-center justify-center gap-1.5 rounded-lg py-3.5 transition-colors ${
-                      isActive ? 'text-gold bg-gold/10' : 'text-cream/70 active:bg-gold/5'
-                    }`
-                  }
-                >
-                  <span className="text-xl leading-none">{item.icon}</span>
-                  <span className="text-[11px] leading-none text-center px-1">{item.label}</span>
-                </NavLink>
-              ))}
-            </div>
+                <span className="text-xl leading-none">{item.icon}</span>
+                <span className="text-[11px] leading-none text-center px-1">{item.label}</span>
+              </NavLink>
+            ))}
           </div>
-        </div>
+        </MoreSheet>
       )}
     </nav>
   );

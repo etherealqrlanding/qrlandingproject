@@ -6,7 +6,9 @@
     "faq": "FAQ",
     "faq_short": "FAQ",
     "contact": "Contact",
-    "book": "Book now"
+    "book": "Book now",
+    "more": "More",
+    "language": "Language"
   },
   "gate": {
     "badge": "Exclusive access",
