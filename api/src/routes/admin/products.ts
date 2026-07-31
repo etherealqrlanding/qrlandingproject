@@ -73,6 +73,8 @@ const productSchema = z.object({
   neighborhood_en: z.string().max(80).optional().nullable(),
   tagline_es: z.string().max(120).optional().nullable(),
   tagline_en: z.string().max(120).optional().nullable(),
+  badge_es: z.string().max(40).optional().nullable(),
+  badge_en: z.string().max(40).optional().nullable(),
   schedule_summary_es: z.string().max(800).optional().nullable(),
   schedule_summary_en: z.string().max(800).optional().nullable(),
   video_url: z.string().max(500).optional().nullable(),

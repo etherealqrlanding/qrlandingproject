@@ -61,6 +61,10 @@ export interface ProductSummary {
   // título en la card. Si está vacía, la card cae a venue_name.
   tagline_es: string | null;
   tagline_en: string | null;
+  // Etiqueta corta y reutilizable para destacar la casa en su card (ej. "¡Últimos
+  // lugares!", "Recomendado"). NULL = no se muestra ninguna etiqueta.
+  badge_es: string | null;
+  badge_en: string | null;
   starting_price_usd: number | null;
   hero_image: string | null;
   // Nombres de los product_options activos (tiers: "Cena VIP", "Solo Show", etc.)

@@ -28,6 +28,7 @@ export async function listProducts(opts?: { categorySlug?: string }): Promise<Pr
        p.address_es, p.address_en,
        p.neighborhood_es, p.neighborhood_en,
        p.tagline_es, p.tagline_en,
+       p.badge_es, p.badge_en,
        p.starting_price_usd::float AS starting_price_usd,
        (
          SELECT pi.url FROM product_images pi
@@ -68,6 +69,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
        p.address_es, p.address_en,
        p.neighborhood_es, p.neighborhood_en,
        p.tagline_es, p.tagline_en,
+       p.badge_es, p.badge_en,
        p.schedule_summary_es, p.schedule_summary_en,
        p.video_url,
        p.starting_price_usd::float AS starting_price_usd

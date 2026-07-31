@@ -17,7 +17,7 @@ const empty = {
   short_description_es: '', short_description_en: '',
   long_description_es: '', long_description_en: '',
   address_es: '', address_en: '',
-  neighborhood_es: '', tagline_es: '',
+  neighborhood_es: '', tagline_es: '', badge_es: '',
   schedule_summary_es: '', schedule_summary_en: '',
   video_url: '',
   starting_price_usd: null as number | null,
@@ -142,6 +142,16 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
           onChange={(e) => update('tagline_es', e.target.value)}
           className="input"
           placeholder="Ej: Catedral del Tango"
+        />
+      </Field>
+
+      <Field label="Etiqueta destacada" hint="Texto corto y reutilizable para resaltar esta casa en su card del listado, ej: '¡Últimos lugares!', 'Recomendado'. Dejala vacía para no mostrar nada — la vas cambiando o sacando cuando quieras destacar otra casa.">
+        <input
+          type="text" maxLength={40}
+          value={form.badge_es ?? ''}
+          onChange={(e) => update('badge_es', e.target.value)}
+          className="input"
+          placeholder="Ej: ¡Últimos lugares!"
         />
       </Field>
 

@@ -17,6 +17,8 @@ export interface AdminProductInput {
   neighborhood_en?: string | null;
   tagline_es?: string | null;
   tagline_en?: string | null;
+  badge_es?: string | null;
+  badge_en?: string | null;
   schedule_summary_es?: string | null;
   schedule_summary_en?: string | null;
   video_url?: string | null;
@@ -105,10 +107,11 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        address_es, address_en,
        neighborhood_es, neighborhood_en,
        tagline_es, tagline_en,
+       badge_es, badge_en,
        schedule_summary_es, schedule_summary_en,
        video_url,
        starting_price_usd, is_active, display_order, available_days
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -117,6 +120,7 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.address_es ?? null, input.address_en ?? null,
       input.neighborhood_es ?? null, input.neighborhood_en ?? null,
       input.tagline_es ?? null, input.tagline_en ?? null,
+      input.badge_es ?? null, input.badge_en ?? null,
       input.schedule_summary_es ?? null, input.schedule_summary_en ?? null,
       input.video_url ?? null,
       input.starting_price_usd ?? null,

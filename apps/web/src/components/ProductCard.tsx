@@ -27,6 +27,7 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
   const description = localized(product, 'short_description', lang);
   const neighborhood = localized(product, 'neighborhood', lang);
   const tagline = localized(product, 'tagline', lang);
+  const badge = localized(product, 'badge', lang);
   const optionNames = localizedArray(product, 'option_names', lang);
   const startingArs = (exchangeRate != null && product.starting_price_usd != null)
     ? Math.round(product.starting_price_usd * exchangeRate) : null;
@@ -58,6 +59,11 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
         {neighborhood && (
           <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-10 text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-md bg-ink/75 backdrop-blur-md border border-cream/10 text-cream shadow-md">
             📍 {neighborhood}
+          </span>
+        )}
+        {badge && (
+          <span className="absolute top-2 right-2 sm:top-3 sm:right-3 z-10 text-[10px] sm:text-xs font-bold uppercase tracking-wide px-2 sm:px-2.5 py-1 rounded-md bg-gold text-ink shadow-md">
+            {badge}
           </span>
         )}
       </div>
