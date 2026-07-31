@@ -10,6 +10,11 @@ const TYPE_CONFIG: Record<string, { icon: string; accent: string }> = {
   cash_booking_pending: { icon: '💵', accent: 'border-amber-800/40 bg-amber-900/10' },
 };
 
+// Notificaciones "en lote" (varias órdenes a la vez, ej. una liquidación) no tienen
+// una única orden a la que ir -- para esas mandamos a Liquidaciones en vez de a una
+// orden puntual. El resto de los tipos ya trae order_public_id en su metadata.
+const BULK_TYPES = new Set(['commission_paid', 'net_settled']);
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -99,12 +104,20 @@ export default function SellerNotifications() {
                     <p className="text-cream/70 text-sm leading-relaxed">{n.body}</p>
                     <div className="mt-3 flex items-center gap-3">
                       <p className="text-xs text-cream/35">{fmtDate(n.created_at)}</p>
-                      {n.type === 'cash_booking_pending' && typeof n.metadata.order_public_id === 'string' && (
+                      {typeof n.metadata.order_public_id === 'string' && (
                         <Link
                           to={`/seller/ventas?highlight=${encodeURIComponent(n.metadata.order_public_id)}`}
                           className="ml-auto rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-xs font-medium text-gold-soft hover:bg-gold/15 transition-colors"
                         >
                           Ver venta →
+                        </Link>
+                      )}
+                      {BULK_TYPES.has(n.type) && (
+                        <Link
+                          to="/seller/liquidaciones"
+                          className="ml-auto rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-xs font-medium text-gold-soft hover:bg-gold/15 transition-colors"
+                        >
+                          Ver liquidaciones →
                         </Link>
                       )}
                     </div>

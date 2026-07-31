@@ -114,6 +114,7 @@ export async function notifyAdminsNewOrderPaid(orderId: number): Promise<void> {
 export async function createOrderPaidNotification(orderId: number): Promise<void> {
   const { rows } = await pool.query<{
     seller_id: number;
+    public_id: string;
     commission_amount_ars: number;
     product_name: string;
     option_name: string;
@@ -122,6 +123,7 @@ export async function createOrderPaidNotification(orderId: number): Promise<void
   }>(
     `SELECT
        a.seller_id,
+       o.public_id,
        a.commission_amount_ars::float AS commission_amount_ars,
        oi.product_name_snapshot AS product_name,
        oi.option_name_snapshot  AS option_name,
@@ -142,7 +144,7 @@ export async function createOrderPaidNotification(orderId: number): Promise<void
     type: 'order_paid',
     title: '¡Nueva venta confirmada!',
     body: `Tu código generó una venta de ${fmtArs(row.total_ars)} para "${row.option_name}" — ${row.service_date}. Te corresponde una comisión de ${fmtArs(row.commission_amount_ars)}.`,
-    metadata: { order_id: orderId, product_name: row.product_name, total_ars: row.total_ars },
+    metadata: { order_id: orderId, order_public_id: row.public_id, product_name: row.product_name, total_ars: row.total_ars },
   });
 }
 
