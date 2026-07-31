@@ -324,6 +324,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                                 <OptionInfoCard
                                   key={opt.id}
                                   option={opt}
+                                  productAvailableDays={expandedDetail.available_days}
                                   onBook={() => setBooking({ product: expandedDetail, option: opt })}
                                 />
                               ))

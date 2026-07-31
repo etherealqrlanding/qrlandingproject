@@ -146,6 +146,7 @@ export default function SellerBooking() {
                             <OptionInfoCard
                               key={opt.id}
                               option={opt}
+                              productAvailableDays={expandedDetail.available_days}
                               onBook={() => setBooking({ product: expandedDetail, option: opt })}
                             />
                           ))}

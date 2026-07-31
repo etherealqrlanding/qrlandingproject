@@ -70,6 +70,9 @@ export interface ProductDetail extends ProductSummary {
   schedule_summary_es: string | null;
   schedule_summary_en: string | null;
   video_url: string | null;
+  // Días de operación de TODA la casa (1=Lun..7=Dom) — un tier solo opera de
+  // verdad un día si está en este array Y en su propio available_days (intersección).
+  available_days: number[];
   images: ProductImage[];
   options: ProductOption[];
 }

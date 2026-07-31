@@ -4,10 +4,11 @@ const DAY = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 interface Props {
   option: ProductOption;
+  productAvailableDays: number[];
   onBook?: () => void;
 }
 
-export function OptionInfoCard({ option, onBook }: Props) {
+export function OptionInfoCard({ option, productAvailableDays, onBook }: Props) {
   const hasTimes = option.pickup_window_es || option.dinner_time_es || option.show_time_es;
 
   return (
@@ -80,7 +81,7 @@ export function OptionInfoCard({ option, onBook }: Props) {
             <span
               key={d}
               className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
-                option.available_days.includes(d)
+                option.available_days.includes(d) && productAvailableDays.includes(d)
                   ? 'bg-gold/20 text-gold border border-gold/30'
                   : 'bg-ink/40 text-cream/15 border border-cream/10'
               }`}

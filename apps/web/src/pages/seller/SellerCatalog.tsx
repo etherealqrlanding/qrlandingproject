@@ -187,6 +187,7 @@ export default function SellerCatalog() {
                                 <OptionInfoCard
                                   key={opt.id}
                                   option={opt}
+                                  productAvailableDays={detail.available_days}
                                   onBook={() => setBooking({ product: detail, option: opt })}
                                 />
                               ))}

@@ -223,6 +223,7 @@ export default function ProductPage() {
                 <OptionCard
                   key={opt.id}
                   option={opt}
+                  productAvailableDays={product.available_days}
                   // Las opciones no tienen fotos propias — se recorren las de la casa
                   // (en el mismo orden que el carrusel de arriba) para que cada card
                   // se vea distinta en vez de repetir siempre la misma.
@@ -298,9 +299,10 @@ export default function ProductPage() {
 }
 
 function OptionCard({
-  option, imageUrl, selected, onSelect, onBook, lang,
+  option, productAvailableDays, imageUrl, selected, onSelect, onBook, lang,
 }: {
   option: ProductOption;
+  productAvailableDays: number[];
   imageUrl: string | null;
   selected: boolean;
   onSelect: () => void;
@@ -395,7 +397,7 @@ function OptionCard({
             <span
               key={d}
               className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
-                option.available_days.includes(d)
+                option.available_days.includes(d) && productAvailableDays.includes(d)
                   ? 'bg-gold/20 text-gold border border-gold/30'
                   : 'bg-ink/40 text-cream/15 border border-cream/10'
               }`}
