@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { useNavIndicator } from '../../hooks/useNavIndicator';
 import { sellerApi, getNotificationStreamUrl, SELLER_NOTIFICATION_EVENT, type SellerNotification } from '../../lib/sellerApi';
+import { buildShareUrl } from '../../lib/shareLinks';
 import BottomNavSeller from './BottomNavSeller';
 import Logo from '../Logo';
 
@@ -113,6 +114,25 @@ export default function SellerLayout() {
   const handleSignOut = async () => {
     await signOut();
     navigate('/seller/login');
+  };
+
+  // Compartir el código propio a un click desde el header móvil: comparte el link
+  // de referido (mismo link/mensaje que ya arma SellerDashboard) vía el share nativo
+  // del sistema si está disponible; si no, lo copia y avisa brevemente en el mismo lugar.
+  const [codeCopied, setCodeCopied] = useState(false);
+  const handleShareCode = async () => {
+    if (!me) return;
+    const refLink = buildShareUrl('/', me.code);
+    const waMessage = `Hola! Te paso el link para reservar la experiencia: ${refLink}`;
+    if (typeof navigator.share === 'function') {
+      try { await navigator.share({ title: 'Tangos y Milongas Tickets', text: waMessage, url: refLink }); } catch { /* cancelado */ }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(refLink);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch { /* clipboard no disponible */ }
   };
 
   const unread = polledUnread ?? me?.unread_notifications ?? 0;
@@ -238,7 +258,14 @@ export default function SellerLayout() {
           <Logo className="h-8 w-auto" />
           <div className="flex items-center gap-3">
             {me && (
-              <span className="text-[10px] font-mono uppercase tracking-wider text-gold-soft">{me.code}</span>
+              <button
+                type="button"
+                onClick={handleShareCode}
+                title="Compartir tu código"
+                className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-gold-soft hover:text-gold transition-colors"
+              >
+                {codeCopied ? '✓ Copiado' : <>{me.code} <span aria-hidden>↗</span></>}
+              </button>
             )}
             <button
               type="button"

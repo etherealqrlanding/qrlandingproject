@@ -98,21 +98,23 @@ export default function SellerCatalog() {
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-cream font-semibold">{product.name}</p>
-                      <p className="text-xs text-gold-soft">{product.venue_name}</p>
+                      <p className="text-cream font-semibold truncate">{product.name}</p>
+                      <p className="text-xs text-gold-soft truncate">{product.venue_name}</p>
                       {product.short_description_es && (
                         <p className="text-xs text-cream/50 mt-0.5 line-clamp-1">{product.short_description_es}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
+                    <div className="hidden sm:flex items-center gap-3 shrink-0">
                       {product.starting_price_usd != null && (
                         <span className="text-gold text-sm font-display">desde USD {product.starting_price_usd}</span>
                       )}
                       <span className={`text-cream/40 text-sm transition-transform inline-block ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </div>
+                    <span className={`sm:hidden text-cream/40 text-sm transition-transform inline-block shrink-0 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                   </button>
                   {me?.code && (
                     <ShareButton
+                      className="shrink-0"
                       url={buildShareUrl(`/shows/${product.slug}`, me.code)}
                       title={product.name}
                       waMessage={`Hola! Te paso el link para reservar la experiencia: ${buildShareUrl(`/shows/${product.slug}`, me.code)}`}
