@@ -114,33 +114,25 @@ export default function Home() {
           aria-hidden
           className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_20%_20%,#c8a85a40,transparent_50%),radial-gradient(circle_at_80%_60%,#3a4d7355,transparent_55%)]"
         />
-        <div className="relative container-narrow pt-6 pb-16 md:pb-24 min-h-[85vh] flex flex-col items-center justify-center text-center">
+        <div className="relative container-narrow pt-4 sm:pt-6 pb-16 md:pb-24 min-h-0 md:min-h-[85vh] flex flex-col items-center justify-center text-center">
           <RefBadge />
-          <Logo className="mt-2 h-14 md:h-16 w-auto" />
-          <p className="mt-3 text-xs uppercase tracking-[0.3em] text-gold-soft">
+          <Logo className="mt-1 sm:mt-2 h-12 sm:h-14 md:h-16 w-auto" />
+          <p className="mt-1.5 sm:mt-3 text-xs uppercase tracking-[0.3em] text-gold-soft">
             {t('hero.eyebrow')}
           </p>
-          <h1 className="mt-1.5 font-display text-3xl md:text-4xl leading-[1.05] text-cream max-w-3xl">
+          <h1 className="mt-1 sm:mt-1.5 font-display text-3xl md:text-4xl leading-[1.05] text-cream max-w-3xl">
             {t('hero.title')}
           </h1>
 
-          <ShareButton
-            className="mt-4"
-            url={buildShareUrl('/', getStoredRef())}
-            title={t('hero.title')}
-            waMessage={t('share.site_message', { link: buildShareUrl('/', getStoredRef()) })}
-            label={`↗ ${t('share.button')}`}
-          />
-
-          <div className="mt-5 w-full max-w-3xl rounded-2xl border-2 border-gold/40 bg-ink-soft/80 backdrop-blur-sm p-5 md:p-7 shadow-2xl shadow-gold/10">
-            <p className="font-display text-xl md:text-2xl text-gold">
+          <div className="mt-3.5 sm:mt-5 w-full max-w-3xl rounded-2xl border-2 border-gold/40 bg-ink-soft/80 backdrop-blur-sm p-4 sm:p-5 md:p-7 shadow-2xl shadow-gold/10">
+            <p className="font-display text-lg sm:text-xl md:text-2xl text-gold">
               {t('hero.quick_select.label')}
             </p>
-            <p className="mt-1 text-sm text-cream/60">
+            <p className="mt-1 text-xs sm:text-sm text-cream/60">
               {t('hero.quick_select.subtitle')}
             </p>
 
-            <div className="mt-4 grid sm:grid-cols-2 gap-4 text-left">
+            <div className="mt-3 sm:mt-4 grid sm:grid-cols-2 gap-2.5 sm:gap-4 text-left">
               <QuickSelect
                 label={t('hero.quick_select.group_houses')}
                 icon={HouseIcon}
@@ -203,7 +195,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
             <Link to="/shows" className="btn-ghost">{t('hero.cta_primary')}</Link>
             <a
               href={`https://wa.me/${supportWhatsapp}`}
@@ -213,6 +205,12 @@ export default function Home() {
             >
               {t('hero.cta_secondary')}
             </a>
+            <ShareButton
+              url={buildShareUrl('/', getStoredRef())}
+              title={t('hero.title')}
+              waMessage={t('share.site_message', { link: buildShareUrl('/', getStoredRef()) })}
+              label={`↗ ${t('share.button')}`}
+            />
           </div>
 
           <PaymentMethods variant="compact" className="mt-6" />

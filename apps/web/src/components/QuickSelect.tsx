@@ -38,12 +38,12 @@ export default function QuickSelect({
 
   return (
     <Listbox value={value} onChange={onChange} disabled={isDisabled}>
-      <ListboxLabel className="block text-xs uppercase tracking-[0.25em] text-gold-soft mb-2">
+      <ListboxLabel className="block text-xs uppercase tracking-[0.25em] text-gold-soft mb-1.5 sm:mb-2">
         {label}
       </ListboxLabel>
       <div className="relative">
         <ListboxButton
-          className={`w-full flex items-center gap-3 rounded-md border px-4 py-3.5 text-left transition ${
+          className={`w-full flex items-center gap-3 rounded-md border px-3.5 py-3 sm:px-4 sm:py-3.5 text-left transition ${
             isDisabled
               ? 'border-gold/10 bg-ink/40 text-cream/30 cursor-not-allowed'
               : 'border-gold/30 bg-ink text-cream hover:border-gold/50 focus:outline-none focus:ring-1 focus:ring-gold/40 focus:border-gold/60'
