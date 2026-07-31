@@ -94,8 +94,8 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
   return <span className={`text-[10px] px-2.5 py-1 rounded-full border whitespace-nowrap ${color}`}>{label}</span>;
 }
 
-function SummaryCard({ label, value, format, sub, highlight }: Readonly<{
-  label: string; value: number; format?: (n: number) => string; sub?: string; highlight?: boolean;
+function SummaryCard({ label, value, format, sub, highlight, showSubOnMobile }: Readonly<{
+  label: string; value: number; format?: (n: number) => string; sub?: string; highlight?: boolean; showSubOnMobile?: boolean;
 }>) {
   const animated = useCountUp(value);
   const display = format ? format(animated) : Math.round(animated).toLocaleString('es-AR');
@@ -103,7 +103,7 @@ function SummaryCard({ label, value, format, sub, highlight }: Readonly<{
     <div className={`rounded-lg border p-3 md:p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
       <p className="text-[10px] uppercase tracking-widest text-gold-soft">{label}</p>
       <p className={`mt-0.5 font-display text-xl md:text-2xl tabular-nums ${highlight ? 'text-gold' : 'text-cream'}`}>{display}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-cream/40 hidden sm:block">{sub}</p>}
+      {sub && <p className={`mt-0.5 text-[11px] text-cream/40 ${showSubOnMobile ? '' : 'hidden sm:block'}`}>{sub}</p>}
     </div>
   );
 }
@@ -275,6 +275,14 @@ export default function OrdersList() {
   // las acciones siguen viviendo en el detalle completo vía "Ver →").
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
+
+  // Mobile: estadísticas y filtros secundarios colapsados en modales, para no
+  // tener que scrollear pasando todo eso antes de ver las órdenes. El filtro por
+  // Estado queda siempre visible en mobile (el más usado); el resto (búsqueda,
+  // vendedor, rango de fechas) vive en el modal "Más filtros".
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const extraFilterCount = [filters.search, filters.ref, filters.from, filters.to].filter(Boolean).length;
 
   const reload = (currentFilters = filters) => {
     setOrders(null);
@@ -569,36 +577,118 @@ export default function OrdersList() {
       )}
 
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4 md:mb-6">
-          <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" />
-          <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, MP o efectivo" />
-          <SummaryCard
-            label="Facturación MP"
-            value={summary.revenue}
-            format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-            sub="cobrado por Mercado Pago (no incluye efectivo)"
-          />
-          <SummaryCard
-            label="Comisiones"
-            value={summary.commission}
-            format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-            sub="a liquidar, solo ventas por MP"
-            highlight
-          />
-          <SummaryCard
-            label="Neto por cobrar"
-            value={summary.netPending}
-            format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-            sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
-            highlight
-          />
+        <>
+          {/* ── Mobile: botón que abre un modal con las estadísticas ── */}
+          <button
+            type="button"
+            onClick={() => setStatsOpen(true)}
+            className="md:hidden w-full flex items-center justify-between gap-3 rounded-lg border border-gold/15 bg-ink-soft/50 px-4 py-3 mb-3 text-left hover:border-gold/30 transition"
+          >
+            <span className="flex items-center gap-2 text-sm text-cream">📊 Estadísticas</span>
+            <span className="text-xs text-gold-soft">Ver →</span>
+          </button>
+
+          <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" />
+            <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, MP o efectivo" />
+            <SummaryCard
+              label="Facturación MP"
+              value={summary.revenue}
+              format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+              sub="cobrado por Mercado Pago (no incluye efectivo)"
+            />
+            <SummaryCard
+              label="Comisiones"
+              value={summary.commission}
+              format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+              sub="a liquidar, solo ventas por MP"
+              highlight
+            />
+            <SummaryCard
+              label="Neto por cobrar"
+              value={summary.netPending}
+              format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+              sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
+              highlight
+            />
+          </div>
+        </>
+      )}
+
+      {statsOpen && summary && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8 bg-ink/85 backdrop-blur-sm animate-modal-backdrop"
+          onClick={() => setStatsOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-6 animate-modal-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setStatsOpen(false)}
+              aria-label="Cerrar"
+              className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
+            >
+              ×
+            </button>
+            <p className="text-xs uppercase tracking-[0.3em] text-gold-soft mb-4">Estadísticas</p>
+            <div className="grid grid-cols-1 gap-3">
+              <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" showSubOnMobile />
+              <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, MP o efectivo" showSubOnMobile />
+              <SummaryCard
+                label="Facturación MP"
+                value={summary.revenue}
+                format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+                sub="cobrado por Mercado Pago (no incluye efectivo)"
+                showSubOnMobile
+              />
+              <SummaryCard
+                label="Comisiones"
+                value={summary.commission}
+                format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+                sub="a liquidar, solo ventas por MP"
+                highlight
+                showSubOnMobile
+              />
+              <SummaryCard
+                label="Neto por cobrar"
+                value={summary.netPending}
+                format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
+                sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
+                highlight
+                showSubOnMobile
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[1fr_1fr_140px_140px_140px] gap-2 mb-4">
+      {/* ── Mobile: Estado siempre visible (el filtro más usado) + botón "Más filtros" ── */}
+      <div className="md:hidden flex items-center gap-2 mb-4">
+        <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+          className="input flex-1">
+          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(true)}
+          className="relative shrink-0 rounded-md border border-gold/20 px-3 py-2 text-xs text-cream/70 hover:border-gold/40 transition whitespace-nowrap"
+        >
+          ⋯ Más filtros
+          {extraFilterCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-bold text-ink leading-none">
+              {extraFilterCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Desktop: todos los filtros inline ── */}
+      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-[1fr_1fr_140px_140px_140px] gap-2 mb-4">
         <input type="search" placeholder="Email o nombre..." value={filters.search}
           onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          className="input col-span-2 sm:col-span-1" />
+          className="input" />
         <input type="text" placeholder="Cód. vendedor" value={filters.ref}
           onChange={(e) => setFilters({ ...filters, ref: e.target.value })}
           className="input font-mono text-sm" />
@@ -607,10 +697,69 @@ export default function OrdersList() {
         <input type="date" value={filters.to}
           onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="input" />
         <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          className="input col-span-2 sm:col-span-1 lg:col-span-1">
+          className="input">
           {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
+
+      {filtersOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8 bg-ink/85 backdrop-blur-sm animate-modal-backdrop"
+          onClick={() => setFiltersOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-6 animate-modal-panel"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(false)}
+              aria-label="Cerrar"
+              className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
+            >
+              ×
+            </button>
+            <div className="flex items-center justify-between mb-4 pr-10">
+              <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Más filtros</p>
+              {extraFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setFilters({ ...filters, search: '', ref: '', from: '', to: '' })}
+                  className="text-xs text-cream/40 hover:text-cream/70 transition"
+                >
+                  Limpiar
+                </button>
+              )}
+            </div>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="block text-xs text-cream/50 mb-1">Email o nombre</span>
+                <input type="search" placeholder="Email o nombre..." value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  className="input w-full" />
+              </label>
+              <label className="block">
+                <span className="block text-xs text-cream/50 mb-1">Código de vendedor</span>
+                <input type="text" placeholder="Cód. vendedor" value={filters.ref}
+                  onChange={(e) => setFilters({ ...filters, ref: e.target.value })}
+                  className="input w-full font-mono text-sm" />
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="block text-xs text-cream/50 mb-1">Desde</span>
+                  <input type="date" value={filters.from}
+                    onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="input w-full" />
+                </label>
+                <label className="block">
+                  <span className="block text-xs text-cream/50 mb-1">Hasta</span>
+                  <input type="date" value={filters.to}
+                    onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="input w-full" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90 mb-4">{error}</div>
