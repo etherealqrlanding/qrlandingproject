@@ -156,12 +156,12 @@ export default function ProductPage() {
         />
       </header>
 
-      <div className="mt-8">
-        <Carousel images={product.images} />
-      </div>
-
-      <div className="mt-12 grid lg:grid-cols-[1fr_360px] gap-10">
+      <div className="mt-8 grid lg:grid-cols-[1fr_360px] gap-10">
         <div>
+          <div className="mb-10">
+            <Carousel images={product.images} />
+          </div>
+
           {longDescription && (
             <section>
               <h2 className="font-display text-3xl text-cream">{t('product.about')}</h2>
@@ -244,7 +244,7 @@ export default function ProductPage() {
           </section>
         </div>
 
-        <aside className="lg:sticky lg:top-24 lg:self-start">
+        <aside className="lg:sticky lg:top-24 lg:self-start space-y-4">
           <BookingSummary
             product={product}
             option={selectedOption}
@@ -254,6 +254,7 @@ export default function ProductPage() {
               setCheckoutOpen(true);
             }}
           />
+          <HouseQuickFacts product={product} lang={lang} />
         </aside>
       </div>
 
@@ -429,6 +430,74 @@ function OptionCard({
       >
         {t('product.book_option')}
       </button>
+    </div>
+  );
+}
+
+// Card compacta de info de la casa, debajo del resumen de reserva — para que el
+// cliente vea de un vistazo días/horarios, ubicación y servicios incluidos sin
+// tener que bajar hasta las secciones completas (que siguen existiendo más abajo).
+function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: string | undefined }) {
+  const { t } = useTranslation();
+  const schedule = localized(product, 'schedule_summary', lang);
+  const neighborhood = localized(product, 'neighborhood', lang);
+  const anyDinner = product.options.some((o) => o.has_dinner);
+  const anyTransfer = product.options.some((o) => o.has_transfer);
+  const hasDays = product.available_days.length > 0;
+
+  if (!hasDays && !schedule && !neighborhood && !anyDinner && !anyTransfer) return null;
+
+  return (
+    <div className="rounded-lg border border-gold/10 bg-ink-soft/40 p-5 space-y-4">
+      <p className="text-xs uppercase tracking-widest text-gold-soft">{t('product.house_info_title')}</p>
+
+      {(hasDays || schedule) && (
+        <div>
+          <p className="text-xs text-cream/40 mb-1.5">🗓 {t('product.schedule')}</p>
+          {hasDays && (
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <span
+                  key={d}
+                  className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                    product.available_days.includes(d)
+                      ? 'bg-gold/20 text-gold border border-gold/30'
+                      : 'bg-ink/40 text-cream/15 border border-cream/10'
+                  }`}
+                >
+                  {t(`product.day_${d}`)}
+                </span>
+              ))}
+            </div>
+          )}
+          {schedule && <p className="text-sm text-cream/70">{schedule}</p>}
+        </div>
+      )}
+
+      {neighborhood && (
+        <div>
+          <p className="text-xs text-cream/40 mb-1">📍 {t('product.location')}</p>
+          <p className="text-sm text-cream/70">{neighborhood}</p>
+        </div>
+      )}
+
+      {(anyDinner || anyTransfer) && (
+        <div>
+          <p className="text-xs text-cream/40 mb-1.5">{t('product.services_included')}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {anyDinner && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
+                🍽 {t('product.dinner_included')}
+              </span>
+            )}
+            {anyTransfer && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
+                🚐 {t('product.transfer_included')}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
