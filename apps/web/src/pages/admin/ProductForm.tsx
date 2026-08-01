@@ -103,7 +103,7 @@ export default function ProductForm() {
       {!loading && (
         <>
           {!isNew && (
-            <div className="flex gap-1 border-b border-gold/10 mb-6 overflow-x-auto">
+            <div className="flex flex-wrap gap-1 border-b border-gold/10 mb-6 sm:flex-nowrap sm:overflow-x-auto">
               {(['general', 'options', 'availability', 'images'] as Tab[]).map((t) => (
                 <button
                   key={t}
