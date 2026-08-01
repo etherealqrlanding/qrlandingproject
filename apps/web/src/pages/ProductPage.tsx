@@ -448,7 +448,7 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
   if (!hasDays && !schedule && !neighborhood && !anyDinner && !anyTransfer) return null;
 
   return (
-    <div className="rounded-lg border border-gold/10 bg-ink-soft/40 p-5 space-y-4">
+    <div className="hidden lg:block rounded-lg border border-gold/10 bg-ink-soft/40 p-5 space-y-4">
       <p className="text-xs uppercase tracking-widest text-gold-soft">{t('product.house_info_title')}</p>
 
       {(hasDays || schedule) && (
