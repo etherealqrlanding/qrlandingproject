@@ -59,18 +59,22 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
           <div className="absolute inset-0 bg-gradient-to-br from-bordeaux-deep to-ink" />
         )}
         <div className="hidden sm:block absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-transparent" />
-        {(neighborhood || badge) && (
-          <div className="absolute inset-x-2 top-2 sm:inset-x-3 sm:top-3 z-10 flex items-start justify-between gap-1.5">
-            {neighborhood ? (
-              <span className="min-w-0 truncate text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-md bg-ink/75 backdrop-blur-md border border-cream/10 text-cream shadow-md">
-                📍 {neighborhood}
-              </span>
-            ) : <span />}
-            {badge ? (
-              <span className="min-w-0 truncate text-[10px] sm:text-xs font-bold uppercase tracking-wide px-2 sm:px-2.5 py-1 rounded-md bg-gold text-ink shadow-md">
-                {badge}
-              </span>
-            ) : <span />}
+        {neighborhood && (
+          <div className="absolute left-2 top-2 sm:left-3 sm:top-3 z-10 max-w-[70%]">
+            <span className="block truncate text-[10px] sm:text-xs font-medium px-2 sm:px-2.5 py-1 rounded-md bg-ink/75 backdrop-blur-md border border-cream/10 text-cream shadow-md">
+              📍 {neighborhood}
+            </span>
+          </div>
+        )}
+        {badge && (
+          // Cinta diagonal en la esquina en vez de un pill al lado del pin de
+          // ubicación — con nombres de barrio largos, los dos badges en fila
+          // terminaban pisándose en mobile. El wrapper recorta la cinta para
+          // que quede prolija en la esquina sin invadir la foto.
+          <div className="absolute -right-0.5 -top-0.5 z-10 h-[74px] w-[74px] sm:h-[90px] sm:w-[90px] overflow-hidden pointer-events-none">
+            <span className="absolute left-[-6px] top-[13px] sm:left-[-8px] sm:top-[16px] w-[104px] sm:w-[130px] rotate-45 block truncate text-center px-1 py-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wide bg-gradient-to-b from-gold-soft to-gold text-ink shadow-md">
+              {badge}
+            </span>
           </div>
         )}
       </div>
