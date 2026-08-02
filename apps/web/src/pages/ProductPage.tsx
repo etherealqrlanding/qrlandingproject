@@ -135,7 +135,7 @@ export default function ProductPage() {
   const selectedOption = product.options.find((o) => o.id === selectedOptionId) ?? null;
 
   return (
-    <article className="container-narrow py-12 pb-32 md:pb-12">
+    <article className="container-narrow pt-6 pb-16 sm:pt-12 md:pb-12">
       <Link to="/shows" className="text-sm text-gold-soft hover:text-gold">
         ← {t('product.back_to_list')}
       </Link>

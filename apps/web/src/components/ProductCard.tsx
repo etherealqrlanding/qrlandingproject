@@ -6,6 +6,9 @@ import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
 const MAX_OPTION_TAGS = 2;
+// Mobile es texto plano (sin el padding/borde de los pills de desktop), así que entran
+// más nombres en el mismo espacio — se permiten 2 líneas antes de resumir en "+N".
+const MAX_OPTION_TAGS_MOBILE = 4;
 
 interface Props {
   product: ProductSummary;
@@ -81,24 +84,32 @@ const ProductCard = forwardRef<HTMLAnchorElement, Props>(function ProductCard(
           {product.name}
         </h3>
         {description && (
-          <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-cream/70 line-clamp-2">{description}</p>
+          <p className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-cream/70 line-clamp-4 sm:line-clamp-2">{description}</p>
         )}
         {optionNames.length > 0 && (
-          <div className="mt-1.5 sm:mt-2 flex flex-wrap gap-1">
-            {optionNames.slice(0, MAX_OPTION_TAGS).map((name) => (
-              <span
-                key={name}
-                className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full border border-gold/20 bg-gold/5 text-gold-soft truncate max-w-[110px] sm:max-w-[140px]"
-              >
-                {name}
-              </span>
-            ))}
-            {optionNames.length > MAX_OPTION_TAGS && (
-              <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full border border-gold/10 text-cream/40">
-                +{optionNames.length - MAX_OPTION_TAGS}
-              </span>
-            )}
-          </div>
+          <>
+            {/* Mobile: texto compacto en vez de pills (hasta 2 líneas), con "+N" si sobran */}
+            <p className="sm:hidden mt-1 text-[10px] text-gold-soft/80 line-clamp-2">
+              {optionNames.slice(0, MAX_OPTION_TAGS_MOBILE).join(' · ')}
+              {optionNames.length > MAX_OPTION_TAGS_MOBILE && ` +${optionNames.length - MAX_OPTION_TAGS_MOBILE}`}
+            </p>
+            {/* Desktop: pills, como antes */}
+            <div className="hidden sm:flex mt-2 flex-wrap gap-1">
+              {optionNames.slice(0, MAX_OPTION_TAGS).map((name) => (
+                <span
+                  key={name}
+                  className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold/20 bg-gold/5 text-gold-soft truncate max-w-[140px]"
+                >
+                  {name}
+                </span>
+              ))}
+              {optionNames.length > MAX_OPTION_TAGS && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold/10 text-cream/40">
+                  +{optionNames.length - MAX_OPTION_TAGS}
+                </span>
+              )}
+            </div>
+          </>
         )}
         <div className="mt-2 sm:mt-4 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
           {product.starting_price_usd != null && (

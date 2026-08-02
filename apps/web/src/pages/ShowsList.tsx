@@ -43,7 +43,7 @@ export default function ShowsList() {
   }, [products]);
 
   return (
-    <section className="container-narrow py-16">
+    <section className="container-narrow pt-6 pb-8 sm:py-16">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
