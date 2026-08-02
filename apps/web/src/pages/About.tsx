@@ -24,7 +24,7 @@ export default function About() {
   const paragraphs = (body ?? '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
   return (
-    <section className="container-narrow py-16">
+    <section className="container-narrow py-6 sm:py-16">
       <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
         {t('nav.about')}
       </p>

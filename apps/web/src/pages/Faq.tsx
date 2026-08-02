@@ -26,7 +26,7 @@ export default function Faq() {
   })).filter((it) => it.q.trim() || it.a.trim());
 
   return (
-    <section className="container-narrow py-16">
+    <section className="container-narrow py-6 sm:py-16">
       <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">
         {t('nav.faq')}
       </p>
