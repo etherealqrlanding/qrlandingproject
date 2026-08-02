@@ -221,29 +221,18 @@ export interface AdminImage {
   is_hero: boolean; display_order: number;
 }
 
-export interface AdminMenuItem {
-  id: number; name_es: string; name_en: string;
-}
-
-export interface AdminMenuCourse {
-  id: number; name_es: string; name_en: string;
-  items: AdminMenuItem[];
-}
-
 export interface AdminMenu {
   id: number;
-  option_id: number | null;   // null = menú general de la casa
-  title_es: string | null; title_en: string | null;
-  note_es: string | null; note_en: string | null;
+  option_id: number;
+  title: string | null;
+  content_html: string;
   is_visible: boolean;
-  courses: AdminMenuCourse[];
 }
 
 export interface AdminMenuInput {
-  title_es?: string | null; title_en?: string | null;
-  note_es?: string | null; note_en?: string | null;
+  title?: string | null;
+  content_html: string;
   is_visible?: boolean;
-  courses: { name_es: string; name_en: string; items: { name_es: string; name_en: string }[] }[];
 }
 
 export interface UploadSignedResponse {
@@ -626,12 +615,6 @@ export const adminApi = {
         request<{ ok: true }>(`/api/admin/products/images/${imageId}`, { method: 'DELETE' }),
     },
     menu: {
-      upsertGeneral: (productId: number, input: AdminMenuInput) =>
-        request<{ ok: true }>(`/api/admin/products/${productId}/menu`, {
-          method: 'PUT', body: JSON.stringify(input),
-        }),
-      deleteGeneral: (productId: number) =>
-        request<{ ok: true }>(`/api/admin/products/${productId}/menu`, { method: 'DELETE' }),
       upsertOption: (optionId: number, input: AdminMenuInput) =>
         request<{ ok: true }>(`/api/admin/products/options/${optionId}/menu`, {
           method: 'PUT', body: JSON.stringify(input),

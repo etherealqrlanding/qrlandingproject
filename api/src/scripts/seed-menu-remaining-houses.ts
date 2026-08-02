@@ -7,10 +7,11 @@
 //   npm run seed:menu-remaining -- --force
 import { parseArgs } from 'node:util';
 import { pool } from '../db.js';
-import { listProductMenus, upsertOptionMenu, type AdminMenuInput } from '../repos/admin-menus.js';
+import { listProductMenus, upsertOptionMenu } from '../repos/admin-menus.js';
+import { toAdminMenuInput, type RawMenuInput } from './menuHtmlHelpers.js';
 
 // slug de la casa -> code del tier -> menú
-const HOUSES: Record<string, Record<string, AdminMenuInput>> = {
+const HOUSES: Record<string, Record<string, RawMenuInput>> = {
   'tango-porteno': {
     'cena-show-vip': {
       title_es: 'Menú Cena Show VIP', title_en: 'VIP Dinner Show Menu',
@@ -1317,19 +1318,19 @@ async function main() {
     );
     const existing = await listProductMenus(productId);
 
-    for (const [code, input] of Object.entries(tiers)) {
+    for (const [code, raw] of Object.entries(tiers)) {
       const option = optRows.find((o) => o.code === code);
       if (!option) {
         console.warn(`⚠ [${slug}] No se encontró el tier "${code}" — se salteó.`);
         continue;
       }
       const already = existing.find((m) => m.option_id === option.id);
-      if (already && already.courses.length > 0 && !values.force) {
-        console.log(`⚠ [${slug}] "${code}" ya tiene menú (${already.courses.length} curso(s)). No se pisa.`);
+      if (already && already.content_html.trim() && !values.force) {
+        console.log(`⚠ [${slug}] "${code}" ya tiene menú cargado. No se pisa.`);
         continue;
       }
-      await upsertOptionMenu(option.id, input);
-      console.log(`  ✓ [${slug}] Menú cargado para "${code}" (${input.courses.length} cursos)`);
+      await upsertOptionMenu(option.id, toAdminMenuInput(raw));
+      console.log(`  ✓ [${slug}] Menú cargado para "${code}" (${raw.courses.length} cursos)`);
     }
   }
 

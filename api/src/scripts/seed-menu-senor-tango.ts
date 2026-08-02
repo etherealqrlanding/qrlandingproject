@@ -7,14 +7,15 @@
 //   npm run seed:menu-senor-tango -- --force
 import { parseArgs } from 'node:util';
 import { pool } from '../db.js';
-import { listProductMenus, upsertOptionMenu, type AdminMenuInput } from '../repos/admin-menus.js';
+import { listProductMenus, upsertOptionMenu } from '../repos/admin-menus.js';
+import { toAdminMenuInput, type RawMenuInput } from './menuHtmlHelpers.js';
 
 const PRODUCT_SLUG = 'senor-tango';
 
 const NOTE_ES = 'Menú sujeto a sugerencia del chef y estacionalidad.';
-const NOTE_EN = "Menu subject to the chef's recommendation and seasonal availability.";
+const NOTE_EN = "Menu subject to the chef's recommendation and seasonal availability."; // no se usa (sin traducción), se deja por si se necesita en el futuro
 
-const MENUS: Record<string, AdminMenuInput> = {
+const RAW_MENUS: Record<string, RawMenuInput> = {
   'cena-show-vip': {
     title_es: 'Menú Cena Show VIP',
     title_en: 'VIP Dinner Show Menu',
@@ -115,19 +116,19 @@ async function main() {
 
   const existing = await listProductMenus(productId);
 
-  for (const [code, input] of Object.entries(MENUS)) {
+  for (const [code, raw] of Object.entries(RAW_MENUS)) {
     const option = optRows.find((o) => o.code === code);
     if (!option) {
       console.warn(`⚠ No se encontró el tier "${code}" en Señor Tango — se salteó.`);
       continue;
     }
     const already = existing.find((m) => m.option_id === option.id);
-    if (already && already.courses.length > 0 && !values.force) {
-      console.log(`⚠ El tier "${code}" ya tiene un menú cargado (${already.courses.length} curso(s)). No se pisa.`);
+    if (already && already.content_html.trim() && !values.force) {
+      console.log(`⚠ El tier "${code}" ya tiene un menú cargado. No se pisa.`);
       continue;
     }
-    await upsertOptionMenu(option.id, input);
-    console.log(`  ✓ Menú cargado para "${code}" (${input.courses.length} cursos)`);
+    await upsertOptionMenu(option.id, toAdminMenuInput(raw));
+    console.log(`  ✓ Menú cargado para "${code}" (${raw.courses.length} cursos)`);
   }
 
   console.log('✅ Listo.');

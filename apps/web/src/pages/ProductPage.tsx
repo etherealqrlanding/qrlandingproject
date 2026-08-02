@@ -423,23 +423,18 @@ function OptionCard({
         </div>
       )}
 
-      {option.menu && option.menu.courses.length > 0 && (
-        option.menu.is_inherited ? (
-          <details className="mt-4 group" onClick={(e) => e.stopPropagation()}>
-            <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold">
-              <span className="transition-transform group-open:rotate-90">▸</span>
-              {t('product.menu_view')}
-            </summary>
-            <div className="mt-2">
-              <MenuBlock menu={option.menu} lang={lang} />
-            </div>
-          </details>
-        ) : (
-          <div className="mt-4">
-            <p className="text-[10px] uppercase tracking-wider text-cream/35 mb-1.5">{t('product.menu_title')}</p>
-            <MenuBlock menu={option.menu} lang={lang} />
+      {option.menu && option.menu.content_html && (
+        // Siempre arranca cerrado: el contenido de un menú puede ser largo
+        // (varios cursos y platos) y no queremos alargar la card por defecto.
+        <details className="mt-4 group" onClick={(e) => e.stopPropagation()}>
+          <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold">
+            <span className="transition-transform group-open:rotate-90">▸</span>
+            {t('product.menu_view')}
+          </summary>
+          <div className="mt-2">
+            <MenuBlock menu={option.menu} />
           </div>
-        )
+        </details>
       )}
 
       <button
@@ -453,25 +448,16 @@ function OptionCard({
   );
 }
 
-function MenuBlock({ menu, lang }: { menu: ProductMenu; lang: string | undefined }) {
-  const title = localized(menu, 'title', lang);
-  const note = localized(menu, 'note', lang);
+function MenuBlock({ menu }: { menu: ProductMenu }) {
   return (
-    <div className="rounded-lg border border-gold/10 bg-ink/30 p-3 space-y-3">
-      {title && <p className="font-display text-base text-cream">{title}</p>}
-      {menu.courses.map((course) => (
-        <div key={course.id}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gold-soft/90 mb-1">
-            {localized(course, 'name', lang)}
-          </p>
-          <ul className="space-y-0.5">
-            {course.items.map((item) => (
-              <li key={item.id} className="text-sm text-cream/75">{localized(item, 'name', lang)}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
-      {note && <p className="text-xs text-cream/40 italic pt-1 border-t border-gold/10">{note}</p>}
+    <div className="rounded-lg border border-gold/10 bg-ink/30 p-3">
+      {menu.title && <p className="font-display text-base text-cream mb-2">{menu.title}</p>}
+      <div
+        className="text-sm text-cream/75 leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-0.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:mb-2 last:[&_p]:mb-0 [&_strong]:text-cream [&_b]:text-cream"
+        // El HTML viene sanitizado del backend (solo negrita/subrayado/listas/párrafos,
+        // sin atributos) — ver api/src/lib/sanitizeHtml.ts.
+        dangerouslySetInnerHTML={{ __html: menu.content_html }}
+      />
     </div>
   );
 }
