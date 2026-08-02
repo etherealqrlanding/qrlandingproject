@@ -15,7 +15,6 @@ import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
 import { getStoredRef } from '../lib/referral';
 import { buildShareUrl } from '../lib/shareLinks';
-import { useSupportWhatsapp } from '../lib/useSupportWhatsapp';
 import type { ProductDetail, ProductSummary } from '../types/api';
 
 function truncate(text: string, max: number): string {
@@ -64,7 +63,6 @@ export default function Home() {
   const lang = i18n.resolvedLanguage;
   const navigate = useNavigate();
   const exchangeRate = useExchangeRate();
-  const supportWhatsapp = useSupportWhatsapp();
   const [featured, setFeatured] = useState<ProductSummary[]>([]);
   const [heroImages, setHeroImages] = useState<string[]>([]);
   const [houses, setHouses] = useState<ProductSummary[]>([]);
@@ -196,15 +194,9 @@ export default function Home() {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-            <Link to="/shows" className="btn-ghost">{t('hero.cta_primary')}</Link>
-            <a
-              href={`https://wa.me/${supportWhatsapp}`}
-              target="_blank"
-              rel="noreferrer"
-              className="btn-ghost"
-            >
-              {t('hero.cta_secondary')}
-            </a>
+            <Link to="/shows" className="btn-primary rounded-full px-8 py-3.5 text-base shadow-lg shadow-gold/20">
+              {t('hero.cta_primary')}
+            </Link>
             <ShareButton
               url={buildShareUrl('/', getStoredRef())}
               title={t('hero.title')}
