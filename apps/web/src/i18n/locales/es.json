@@ -34,6 +34,14 @@
     "empty": "Todavía no hay preguntas cargadas.",
     "error": "No pudimos cargar esta sección"
   },
+  "contact": {
+    "title": "Contacto",
+    "subtitle": "¿Ya reservaste? Toda la información para comunicarte con nosotros te llega por email.",
+    "email_notice_title": "Revisá tu email",
+    "email_notice_body": "Una vez que hacés la reserva, te enviamos por email toda la información de contacto. En ese correo vas a encontrar cómo comunicarte con nosotros para cualquier modificación, cancelación, reintegro o consulta sobre el estado de tu orden.\n\nRevisá ese email (y la carpeta de spam por las dudas): es la vía para gestionar todo lo relacionado con tu reserva.",
+    "no_booking_yet": "¿Todavía no reservaste?",
+    "no_booking_cta": "Explorá los shows de tango"
+  },
   "hero": {
     "eyebrow": "Buenos Aires · Casas de Tango",
     "title": "Vivís el tango. No solo lo mirás.",

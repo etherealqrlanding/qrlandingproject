@@ -10,7 +10,7 @@ const LANG_ORDER = ['es', 'en', 'pt'];
 
 // Rutas que agrupamos dentro de "Más" — para saber si hay que resaltar el
 // botón cuando el cliente está parado en una de ellas.
-const MORE_PATHS = ['/preguntas-frecuentes', '/nosotros'];
+const MORE_PATHS = ['/preguntas-frecuentes', '/nosotros', '/contacto'];
 
 export default function BottomNavPublic() {
   const { t, i18n } = useTranslation();
@@ -65,7 +65,7 @@ export default function BottomNavPublic() {
 
       {moreOpen && (
         <MoreSheet title={t('nav.more')} onClose={() => setMoreOpen(false)}>
-          <div className="px-3 pb-2 grid grid-cols-2 gap-1.5">
+          <div className="px-3 pb-2 grid grid-cols-3 gap-1.5">
             <NavLink to="/preguntas-frecuentes" className={tile}>
               <span className="text-xl leading-none">?</span>
               <span className="text-[11px] leading-none text-center px-1">{t('nav.faq_short')}</span>
@@ -73,6 +73,10 @@ export default function BottomNavPublic() {
             <NavLink to="/nosotros" className={tile}>
               <span className="text-xl leading-none">✧</span>
               <span className="text-[11px] leading-none text-center px-1">{t('nav.about')}</span>
+            </NavLink>
+            <NavLink to="/contacto" className={tile}>
+              <span className="text-xl leading-none">☏</span>
+              <span className="text-[11px] leading-none text-center px-1">{t('nav.contact')}</span>
             </NavLink>
           </div>
 

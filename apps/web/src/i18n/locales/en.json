@@ -34,6 +34,14 @@
     "empty": "No questions have been added yet.",
     "error": "We couldn't load this section"
   },
+  "contact": {
+    "title": "Contact",
+    "subtitle": "Already booked? Everything you need to reach us is sent to your email.",
+    "email_notice_title": "Check your email",
+    "email_notice_body": "Once you complete a booking, we send you all our contact information by email. That message includes how to reach us for any change, cancellation, refund, or question about your order status.\n\nCheck that email (and your spam folder, just in case) — it's the way to manage anything related to your booking.",
+    "no_booking_yet": "Haven't booked yet?",
+    "no_booking_cta": "Browse the tango shows"
+  },
   "hero": {
     "eyebrow": "Buenos Aires · Tango Houses",
     "title": "Live the tango. Don't just watch it.",

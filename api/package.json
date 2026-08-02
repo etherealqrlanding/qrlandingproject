@@ -13,7 +13,8 @@
     "admin:bootstrap": "tsx src/scripts/bootstrap-admin.ts",
     "import:houses": "tsx src/scripts/import-houses.ts",
     "import:images": "tsx src/scripts/import-house-images.ts",
-    "nautt:discover": "tsx src/scripts/nautt-discover.ts"
+    "nautt:discover": "tsx src/scripts/nautt-discover.ts",
+    "seed:faq": "tsx src/scripts/seed-faq.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",
