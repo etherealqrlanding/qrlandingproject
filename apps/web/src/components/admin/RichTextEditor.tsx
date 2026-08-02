@@ -38,6 +38,9 @@ export default function RichTextEditor({ value, onChange, placeholder }: Props) 
         <ToolbarButton label="Negrita" onMouseDown={() => exec('bold')}>
           <strong>B</strong>
         </ToolbarButton>
+        <ToolbarButton label="Cursiva" onMouseDown={() => exec('italic')}>
+          <em>I</em>
+        </ToolbarButton>
         <ToolbarButton label="Subrayado" onMouseDown={() => exec('underline')}>
           <span className="underline">S</span>
         </ToolbarButton>
@@ -58,7 +61,7 @@ export default function RichTextEditor({ value, onChange, placeholder }: Props) 
   );
 }
 
-function ToolbarButton({ label, onMouseDown, children }: {
+export function ToolbarButton({ label, onMouseDown, children }: {
   label: string; onMouseDown: () => void; children: React.ReactNode;
 }) {
   return (

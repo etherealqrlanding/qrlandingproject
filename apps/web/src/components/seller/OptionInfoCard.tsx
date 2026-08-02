@@ -100,7 +100,7 @@ export function OptionInfoCard({ option, productAvailableDays, onBook }: Props) 
             {option.includes_es.map((item, i) => (
               <li key={i} className="flex items-start gap-2 text-xs text-cream/70 leading-relaxed">
                 <span className="text-gold mt-0.5 shrink-0">✦</span>
-                {item}
+                <span dangerouslySetInnerHTML={{ __html: item }} />
               </li>
             ))}
           </ul>

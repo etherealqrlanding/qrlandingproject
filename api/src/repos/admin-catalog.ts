@@ -1,5 +1,13 @@
 import { pool } from '../db.js';
 import { listProductMenus } from './admin-menus.js';
+import { sanitizeMenuHtml } from '../lib/sanitizeHtml.js';
+
+// Cada ítem de "Incluye" admite negrita/cursiva/subrayado (se edita con
+// IncludesEditor, un <ul contentEditable>) — se sanitiza igual que el HTML
+// de los menús antes de guardar.
+function sanitizeIncludes(items?: string[]): string[] | undefined {
+  return items?.map((it) => sanitizeMenuHtml(it));
+}
 
 // ─── Productos ──────────────────────────────────────────
 
@@ -227,7 +235,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
     [
       productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
       input.description_es ?? null, input.description_en ?? null,
-      input.includes_es ?? [], input.includes_en ?? [],
+      sanitizeIncludes(input.includes_es) ?? [], sanitizeIncludes(input.includes_en) ?? [],
       input.price_adult_usd, input.price_child_usd ?? null,
       input.net_price_adult_usd ?? null, input.net_price_child_usd ?? null,
       input.has_dinner ?? false, input.has_transfer ?? false,
@@ -249,6 +257,8 @@ export async function adminUpdateOption(id: number, input: Partial<AdminOptionIn
   // net_price_currency is NOT NULL in DB — drop null to avoid constraint violation
   const safeInput: Partial<AdminOptionInput> = { ...input };
   if (safeInput.net_price_currency == null) delete safeInput.net_price_currency;
+  if (safeInput.includes_es) safeInput.includes_es = sanitizeIncludes(safeInput.includes_es);
+  if (safeInput.includes_en) safeInput.includes_en = sanitizeIncludes(safeInput.includes_en);
   const fields = Object.keys(safeInput);
   if (fields.length === 0) return true;
   const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');

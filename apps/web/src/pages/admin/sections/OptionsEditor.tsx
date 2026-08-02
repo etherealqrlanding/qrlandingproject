@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail } from '../../../lib/adminApi';
 import AvailabilityEditor from './AvailabilityEditor';
 import Checkbox from '../../../components/Checkbox';
+import IncludesEditor from '../../../components/admin/IncludesEditor';
 
 interface Props {
   product: AdminProductDetail;
@@ -306,13 +307,11 @@ function OptionFormFields({ option, onChange }: {
         />
       </Field>
 
-      <Field label="Incluye" hint="Una línea por ítem">
-        <textarea
-          rows={5}
-          value={(option.includes_es ?? []).join('\n')}
-          onChange={(e) => update('includes_es', e.target.value.split('\n').map((l) => l.trim()).filter(Boolean))}
-          className="input"
-          placeholder="Mesa preferencial&#10;Menú a la carta&#10;Bebidas libres"
+      <Field label="Incluye" hint="Un ítem por línea (Enter para el siguiente) — seleccioná texto para darle formato">
+        <IncludesEditor
+          key={option.id ?? 'new'}
+          items={option.includes_es ?? []}
+          onChange={(items) => update('includes_es', items)}
         />
       </Field>
 

@@ -337,7 +337,12 @@ function OptionCard({
           : 'border-gold/10 bg-ink-soft hover:border-gold/30'
       }`}
     >
-      <div className="flex items-start gap-4">
+      {/* flex-wrap: en mobile el box de precio no entra al lado de imagen+título
+          y pasa solo (por el w-full) a su propia fila completa, en vez de quedar
+          apretado y desalineado debajo del título como antes. En desktop
+          (sm:w-auto) vuelve a compartir fila, empujado a la derecha por el
+          flex-1 del bloque de título. */}
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
         {imageUrl && (
           <img
             src={imageUrl}
@@ -346,31 +351,33 @@ function OptionCard({
             className="h-20 w-28 sm:h-24 sm:w-32 shrink-0 rounded-md object-cover border border-gold/10"
           />
         )}
-        <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-          <div className="min-w-0">
-            <h3 className="font-display text-xl text-cream">{name}</h3>
-            {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
-            {(option.has_dinner || option.has_transfer) && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {option.has_dinner && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
-                    🍽 {t('product.dinner_included')}
-                  </span>
-                )}
-                {option.has_transfer && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
-                    🚐 {t('product.transfer_included')}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="self-start shrink-0 rounded-lg border border-gold/15 bg-gold/5 px-4 py-3 sm:text-right">
+        <div className="min-w-0 flex-1">
+          <h3 className="font-display text-xl text-cream">{name}</h3>
+          {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
+          {(option.has_dinner || option.has_transfer) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {option.has_dinner && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
+                  🍽 {t('product.dinner_included')}
+                </span>
+              )}
+              {option.has_transfer && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
+                  🚐 {t('product.transfer_included')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="w-full sm:w-auto self-start shrink-0 rounded-lg border border-gold/15 bg-gold/5 px-4 py-3 flex items-center justify-between gap-3 sm:block sm:text-right">
+          <div>
             <p className="text-xl font-display text-gold leading-tight">USD {option.price_adult_usd}</p>
             {priceArs != null && (
               <p className="text-sm font-display text-gold/80">ARS {priceArs.toLocaleString('es-AR')}</p>
             )}
-            <p className="mt-0.5 text-xs text-cream/50">{t('product.per_adult')}</p>
+          </div>
+          <div>
+            <p className="text-xs text-cream/50">{t('product.per_adult')}</p>
             {option.price_child_usd != null && (
               <p className="mt-1.5 pt-1.5 border-t border-gold/10 text-xs text-cream/60">
                 {t('product.children')}: <span className="text-cream/85">USD {option.price_child_usd}</span>
@@ -416,7 +423,9 @@ function OptionCard({
             {includes.map((it, i) => (
               <li key={i} className="text-sm text-cream/75 flex gap-2">
                 <span className="text-gold mt-0.5">✓</span>
-                <span>{it}</span>
+                {/* Viene sanitizado del backend (solo negrita/cursiva/subrayado, sin
+                    atributos) — ver api/src/lib/sanitizeHtml.ts. */}
+                <span dangerouslySetInnerHTML={{ __html: it }} />
               </li>
             ))}
           </ul>
