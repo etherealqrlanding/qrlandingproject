@@ -15,6 +15,7 @@ import {
   adminUpdateProduct,
 } from '../../repos/admin-catalog.js';
 import { getAvailabilityForDate, getAvailabilityForProductRange } from '../../repos/availability.js';
+import { deleteGeneralMenu, deleteOptionMenu, upsertGeneralMenu, upsertOptionMenu } from '../../repos/admin-menus.js';
 
 export const adminProductsRouter = Router();
 
@@ -215,6 +216,72 @@ adminProductsRouter.delete('/options/:optionId', async (req, res, next) => {
     const id = Number(req.params.optionId);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
     const ok = await adminDeleteOption(id);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+// ─── Menús ──────────────────────────────────────────────
+// Reemplazo total transaccional por menú (no CRUD fino de curso/ítem) — ver
+// api/src/repos/admin-menus.ts. Scope general (option_id NULL, aplica a los
+// tiers con cena que no tengan uno propio) vs scope de un tier puntual
+// (lo sobreescribe por completo). El product_id del scope de tier se resuelve
+// server-side dentro del repo, nunca se confía en el que mande el cliente.
+
+const menuSchema = z.object({
+  title_es: z.string().max(160).optional().nullable(),
+  title_en: z.string().max(160).optional().nullable(),
+  note_es: z.string().max(300).optional().nullable(),
+  note_en: z.string().max(300).optional().nullable(),
+  is_visible: z.boolean().optional(),
+  courses: z.array(z.object({
+    name_es: z.string().min(1).max(80),
+    name_en: z.string().min(1).max(80),
+    items: z.array(z.object({
+      name_es: z.string().min(1).max(200),
+      name_en: z.string().min(1).max(200),
+    })).max(30),
+  })).max(15),
+});
+
+adminProductsRouter.put('/:productId/menu', async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid product id' });
+    const parsed = menuSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await upsertGeneralMenu(productId, parsed.data);
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+adminProductsRouter.delete('/:productId/menu', async (req, res, next) => {
+  try {
+    const productId = Number(req.params.productId);
+    if (!Number.isInteger(productId) || productId <= 0) return res.status(400).json({ error: 'Invalid product id' });
+    const ok = await deleteGeneralMenu(productId);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+adminProductsRouter.put('/options/:optionId/menu', async (req, res, next) => {
+  try {
+    const optionId = Number(req.params.optionId);
+    if (!Number.isInteger(optionId) || optionId <= 0) return res.status(400).json({ error: 'Invalid option id' });
+    const parsed = menuSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    const result = await upsertOptionMenu(optionId, parsed.data);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+adminProductsRouter.delete('/options/:optionId/menu', async (req, res, next) => {
+  try {
+    const optionId = Number(req.params.optionId);
+    if (!Number.isInteger(optionId) || optionId <= 0) return res.status(400).json({ error: 'Invalid option id' });
+    const ok = await deleteOptionMenu(optionId);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }

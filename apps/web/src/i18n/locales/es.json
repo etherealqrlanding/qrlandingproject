@@ -47,7 +47,6 @@
     "title": "Vivís el tango. No solo lo mirás.",
     "subtitle": "Cenas, shows y experiencias en las 14 casas de tango más emblemáticas de la ciudad. Reservas en minutos, traslado incluido.",
     "cta_primary": "Ver experiencias",
-    "cta_secondary": "Hablar por WhatsApp",
     "quick_select": {
       "label": "Reservá en un click",
       "subtitle": "Elegí una casa de tango o un servicio y vas directo a la reserva.",
@@ -117,6 +116,8 @@
     "dinner_included": "Cena incluida",
     "transfer_included": "Traslado incluido",
     "includes_title": "Incluye",
+    "menu_title": "Menú",
+    "menu_view": "Ver menú",
     "days_available": "Días disponibles",
     "day_1": "Lun",
     "day_2": "Mar",

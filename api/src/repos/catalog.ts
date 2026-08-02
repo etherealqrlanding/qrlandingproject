@@ -1,5 +1,95 @@
 import { pool } from '../db.js';
-import type { Category, ProductDetail, ProductImage, ProductOption, ProductSummary } from '../types.js';
+import type { Category, MenuCourse, MenuItem, ProductDetail, ProductImage, ProductMenu, ProductOption, ProductSummary } from '../types.js';
+
+interface MenuRow {
+  id: number;
+  option_id: number | null;
+  title_es: string | null;
+  title_en: string | null;
+  note_es: string | null;
+  note_en: string | null;
+  is_visible: boolean;
+}
+
+// Trae los menús visibles de una casa (general + los propios de cada tier) con
+// sus cursos/ítems, y arma un resolver: por cada option_id con has_dinner=true
+// devuelve el menú efectivo (propio si existe, aunque esté oculto — ahí no
+// muestra nada, sin caer al general; si no existe propio, cae al general
+// heredado si está visible). Se hace en 3 queries fijas (no N+1 por tier).
+async function resolveProductMenus(
+  productId: number,
+  options: { id: number; has_dinner: boolean }[],
+): Promise<Map<number, ProductMenu | null>> {
+  const result = new Map<number, ProductMenu | null>();
+  const dinnerOptionIds = options.filter((o) => o.has_dinner).map((o) => o.id);
+  if (dinnerOptionIds.length === 0) return result;
+
+  const { rows: menuRows } = await pool.query<MenuRow>(
+    `SELECT id, option_id, title_es, title_en, note_es, note_en, is_visible
+       FROM product_menus
+      WHERE product_id = $1`,
+    [productId],
+  );
+  if (menuRows.length === 0) {
+    for (const id of dinnerOptionIds) result.set(id, null);
+    return result;
+  }
+
+  const menuIds = menuRows.map((m) => m.id);
+  const { rows: courseRows } = await pool.query<{ id: number; menu_id: number; name_es: string; name_en: string }>(
+    `SELECT id, menu_id, name_es, name_en
+       FROM product_menu_courses
+      WHERE menu_id = ANY($1)
+      ORDER BY display_order`,
+    [menuIds],
+  );
+  const courseIds = courseRows.map((c) => c.id);
+  const { rows: itemRows } = courseIds.length
+    ? await pool.query<{ id: number; course_id: number; name_es: string; name_en: string }>(
+        `SELECT id, course_id, name_es, name_en
+           FROM product_menu_items
+          WHERE course_id = ANY($1)
+          ORDER BY display_order`,
+        [courseIds],
+      )
+    : { rows: [] };
+
+  const itemsByCourse = new Map<number, MenuItem[]>();
+  for (const it of itemRows) {
+    const list = itemsByCourse.get(it.course_id) ?? [];
+    list.push({ id: it.id, name_es: it.name_es, name_en: it.name_en });
+    itemsByCourse.set(it.course_id, list);
+  }
+  const coursesByMenu = new Map<number, MenuCourse[]>();
+  for (const c of courseRows) {
+    const list = coursesByMenu.get(c.menu_id) ?? [];
+    list.push({ id: c.id, name_es: c.name_es, name_en: c.name_en, items: itemsByCourse.get(c.id) ?? [] });
+    coursesByMenu.set(c.menu_id, list);
+  }
+
+  const toMenu = (row: MenuRow, isInherited: boolean): ProductMenu => ({
+    id: row.id,
+    title_es: row.title_es,
+    title_en: row.title_en,
+    note_es: row.note_es,
+    note_en: row.note_en,
+    is_inherited: isInherited,
+    courses: coursesByMenu.get(row.id) ?? [],
+  });
+
+  const general = menuRows.find((m) => m.option_id === null) ?? null;
+  const byOption = new Map(menuRows.filter((m) => m.option_id !== null).map((m) => [m.option_id as number, m]));
+
+  for (const id of dinnerOptionIds) {
+    const own = byOption.get(id);
+    if (own) {
+      result.set(id, own.is_visible ? toMenu(own, false) : null);
+    } else {
+      result.set(id, general && general.is_visible ? toMenu(general, true) : null);
+    }
+  }
+  return result;
+}
 
 export async function listCategories(): Promise<Category[]> {
   const { rows } = await pool.query<Category>(
@@ -111,10 +201,12 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     ),
   ]);
 
+  const menuByOption = await resolveProductMenus(product.id, optionsRes.rows);
+
   return {
     ...product,
     hero_image: imagesRes.rows.find((i) => i.is_hero)?.url ?? imagesRes.rows[0]?.url ?? null,
     images: imagesRes.rows,
-    options: optionsRes.rows,
+    options: optionsRes.rows.map((o) => ({ ...o, menu: menuByOption.get(o.id) ?? null })),
   };
 }

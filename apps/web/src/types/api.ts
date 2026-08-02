@@ -18,6 +18,31 @@ export interface ProductImage {
   display_order: number;
 }
 
+export interface MenuItem {
+  id: number;
+  name_es: string;
+  name_en: string;
+}
+
+export interface MenuCourse {
+  id: number;
+  name_es: string;
+  name_en: string;
+  items: MenuItem[];
+}
+
+export interface ProductMenu {
+  id: number;
+  title_es: string | null;
+  title_en: string | null;
+  note_es: string | null;
+  note_en: string | null;
+  // true si es el menú general de la casa mostrado por herencia (el tier no
+  // tiene uno propio) — se muestra colapsado en vez de expandido.
+  is_inherited: boolean;
+  courses: MenuCourse[];
+}
+
 export interface ProductOption {
   id: number;
   code: string;
@@ -40,6 +65,7 @@ export interface ProductOption {
   show_time_es: string | null;
   show_time_en: string | null;
   display_order: number;
+  menu: ProductMenu | null;
 }
 
 export interface ProductSummary {

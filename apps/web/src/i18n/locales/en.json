@@ -47,7 +47,6 @@
     "title": "Live the tango. Don't just watch it.",
     "subtitle": "Dinners, shows and experiences in the 14 most iconic tango houses of the city. Book in minutes, transfer included.",
     "cta_primary": "Explore experiences",
-    "cta_secondary": "Chat on WhatsApp",
     "quick_select": {
       "label": "Book in one click",
       "subtitle": "Choose a tango house or a service and go straight to booking.",
@@ -117,6 +116,8 @@
     "dinner_included": "Dinner included",
     "transfer_included": "Transfer included",
     "includes_title": "Includes",
+    "menu_title": "Menu",
+    "menu_view": "View menu",
     "days_available": "Available days",
     "day_1": "Mon",
     "day_2": "Tue",

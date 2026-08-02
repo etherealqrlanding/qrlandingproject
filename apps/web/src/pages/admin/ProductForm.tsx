@@ -5,9 +5,10 @@ import OptionsEditor from './sections/OptionsEditor';
 import ImagesEditor from './sections/ImagesEditor';
 import GeneralSection from './sections/GeneralSection';
 import ProductAvailabilityEditor from './sections/ProductAvailabilityEditor';
+import MenuEditor from './sections/MenuEditor';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
-type Tab = 'general' | 'options' | 'availability' | 'images';
+type Tab = 'general' | 'options' | 'menu' | 'availability' | 'images';
 type DeleteDialog = 'deactivate' | 'hard';
 
 export default function ProductForm() {
@@ -104,7 +105,7 @@ export default function ProductForm() {
         <>
           {!isNew && (
             <div className="flex flex-wrap gap-1 border-b border-gold/10 mb-6 sm:flex-nowrap sm:overflow-x-auto">
-              {(['general', 'options', 'availability', 'images'] as Tab[]).map((t) => (
+              {(['general', 'options', 'menu', 'availability', 'images'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -117,6 +118,7 @@ export default function ProductForm() {
                 >
                   {t === 'general' && 'Datos generales'}
                   {t === 'options' && `Tiers / Opciones (${product?.options.length ?? 0})`}
+                  {t === 'menu' && 'Menú'}
                   {t === 'availability' && 'Disponibilidad por fecha'}
                   {t === 'images' && `Imágenes (${product?.images.length ?? 0})`}
                 </button>
@@ -137,6 +139,9 @@ export default function ProductForm() {
           )}
           {tab === 'options' && product && (
             <OptionsEditor product={product} onChange={handleUpdated} />
+          )}
+          {tab === 'menu' && product && (
+            <MenuEditor product={product} onChange={handleUpdated} />
           )}
           {tab === 'availability' && product && (
             <ProductAvailabilityEditor product={product} />

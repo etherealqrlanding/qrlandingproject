@@ -14,7 +14,9 @@
     "import:houses": "tsx src/scripts/import-houses.ts",
     "import:images": "tsx src/scripts/import-house-images.ts",
     "nautt:discover": "tsx src/scripts/nautt-discover.ts",
-    "seed:faq": "tsx src/scripts/seed-faq.ts"
+    "seed:faq": "tsx src/scripts/seed-faq.ts",
+    "seed:menu-senor-tango": "tsx src/scripts/seed-menu-senor-tango.ts",
+    "seed:menu-remaining": "tsx src/scripts/seed-menu-remaining-houses.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

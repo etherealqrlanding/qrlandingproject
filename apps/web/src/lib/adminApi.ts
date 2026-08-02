@@ -188,6 +188,7 @@ export interface AdminProductDetail {
   available_days: number[];
   options: AdminOption[];
   images: AdminImage[];
+  menus: AdminMenu[];
 }
 
 export interface AdminOption {
@@ -218,6 +219,31 @@ export interface AdminOption {
 export interface AdminImage {
   id: number; url: string; alt_text: string | null;
   is_hero: boolean; display_order: number;
+}
+
+export interface AdminMenuItem {
+  id: number; name_es: string; name_en: string;
+}
+
+export interface AdminMenuCourse {
+  id: number; name_es: string; name_en: string;
+  items: AdminMenuItem[];
+}
+
+export interface AdminMenu {
+  id: number;
+  option_id: number | null;   // null = menú general de la casa
+  title_es: string | null; title_en: string | null;
+  note_es: string | null; note_en: string | null;
+  is_visible: boolean;
+  courses: AdminMenuCourse[];
+}
+
+export interface AdminMenuInput {
+  title_es?: string | null; title_en?: string | null;
+  note_es?: string | null; note_en?: string | null;
+  is_visible?: boolean;
+  courses: { name_es: string; name_en: string; items: { name_es: string; name_en: string }[] }[];
 }
 
 export interface UploadSignedResponse {
@@ -598,6 +624,20 @@ export const adminApi = {
         }),
       delete: (imageId: number) =>
         request<{ ok: true }>(`/api/admin/products/images/${imageId}`, { method: 'DELETE' }),
+    },
+    menu: {
+      upsertGeneral: (productId: number, input: AdminMenuInput) =>
+        request<{ ok: true }>(`/api/admin/products/${productId}/menu`, {
+          method: 'PUT', body: JSON.stringify(input),
+        }),
+      deleteGeneral: (productId: number) =>
+        request<{ ok: true }>(`/api/admin/products/${productId}/menu`, { method: 'DELETE' }),
+      upsertOption: (optionId: number, input: AdminMenuInput) =>
+        request<{ ok: true }>(`/api/admin/products/options/${optionId}/menu`, {
+          method: 'PUT', body: JSON.stringify(input),
+        }),
+      deleteOption: (optionId: number) =>
+        request<{ ok: true }>(`/api/admin/products/options/${optionId}/menu`, { method: 'DELETE' }),
     },
     availability: {
       list: (productId: number) =>

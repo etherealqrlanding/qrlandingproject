@@ -1,4 +1,5 @@
 import { pool } from '../db.js';
+import { listProductMenus } from './admin-menus.js';
 
 // ─── Productos ──────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export async function adminGetProduct(id: number) {
     `SELECT * FROM products WHERE id = $1 LIMIT 1`, [id],
   );
   if (!prod[0]) return null;
-  const [optsRes, imgsRes] = await Promise.all([
+  const [optsRes, imgsRes, menus] = await Promise.all([
     pool.query(
       `SELECT * FROM product_options WHERE product_id = $1 ORDER BY display_order`,
       [id],
@@ -79,6 +80,7 @@ export async function adminGetProduct(id: number) {
       `SELECT * FROM product_images WHERE product_id = $1 ORDER BY is_hero DESC, display_order`,
       [id],
     ),
+    listProductMenus(id),
   ]);
   // Postgres devuelve columnas NUMERIC como string en un SELECT *. El front espera
   // números (y al reenviarlos en el PATCH, zod los rechazaría como string). Coaccionamos.
@@ -95,7 +97,7 @@ export async function adminGetProduct(id: number) {
     net_price_child_ars: num(o.net_price_child_ars),
     net_transfer_price_ars: num(o.net_transfer_price_ars),
   }));
-  return { ...prod[0], starting_price_usd: num(prod[0].starting_price_usd), options, images: imgsRes.rows };
+  return { ...prod[0], starting_price_usd: num(prod[0].starting_price_usd), options, images: imgsRes.rows, menus };
 }
 
 export async function adminCreateProduct(input: AdminProductInput): Promise<number> {

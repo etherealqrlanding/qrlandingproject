@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type SellerPublicInfo, type AvailabilityDay } from '../lib/api';
-import type { ProductDetail, ProductOption } from '../types/api';
+import type { ProductDetail, ProductMenu, ProductOption } from '../types/api';
 import { localized, localizedArray } from '../lib/i18nFields';
 import { getStoredRef, clearRef } from '../lib/referral';
 import { buildShareUrl } from '../lib/shareLinks';
@@ -423,6 +423,25 @@ function OptionCard({
         </div>
       )}
 
+      {option.menu && option.menu.courses.length > 0 && (
+        option.menu.is_inherited ? (
+          <details className="mt-4 group" onClick={(e) => e.stopPropagation()}>
+            <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold">
+              <span className="transition-transform group-open:rotate-90">▸</span>
+              {t('product.menu_view')}
+            </summary>
+            <div className="mt-2">
+              <MenuBlock menu={option.menu} lang={lang} />
+            </div>
+          </details>
+        ) : (
+          <div className="mt-4">
+            <p className="text-[10px] uppercase tracking-wider text-cream/35 mb-1.5">{t('product.menu_title')}</p>
+            <MenuBlock menu={option.menu} lang={lang} />
+          </div>
+        )
+      )}
+
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onBook(); }}
@@ -430,6 +449,29 @@ function OptionCard({
       >
         {t('product.book_option')}
       </button>
+    </div>
+  );
+}
+
+function MenuBlock({ menu, lang }: { menu: ProductMenu; lang: string | undefined }) {
+  const title = localized(menu, 'title', lang);
+  const note = localized(menu, 'note', lang);
+  return (
+    <div className="rounded-lg border border-gold/10 bg-ink/30 p-3 space-y-3">
+      {title && <p className="font-display text-base text-cream">{title}</p>}
+      {menu.courses.map((course) => (
+        <div key={course.id}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gold-soft/90 mb-1">
+            {localized(course, 'name', lang)}
+          </p>
+          <ul className="space-y-0.5">
+            {course.items.map((item) => (
+              <li key={item.id} className="text-sm text-cream/75">{localized(item, 'name', lang)}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {note && <p className="text-xs text-cream/40 italic pt-1 border-t border-gold/10">{note}</p>}
     </div>
   );
 }
