@@ -236,6 +236,31 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
     const portalUrl = `${config.WEB_ORIGIN.replace(/\/$/, '')}/seller/login`;
 
     if (seller.supabase_user_id) {
+      // Guardia de seguridad: antes de reusar el supabase_user_id guardado, confirmamos
+      // que sigue siendo realmente la cuenta de ESTE vendedor. Si por un dato viejo/mal
+      // cargado terminó apuntando a otra cuenta real (un admin u otro vendedor con un
+      // email distinto), el paso de abajo le pisaría el email a esa cuenta ajena y le
+      // robaría el login. Si coincide el email (misma persona con doble rol admin+
+      // vendedor), no hay problema y seguimos normal.
+      const [adminOwner, sellerOwner] = await Promise.all([
+        pool.query<{ email: string }>(`SELECT email FROM admin_users WHERE id = $1 LIMIT 1`, [seller.supabase_user_id]),
+        pool.query<{ id: number; contact_email: string | null }>(
+          `SELECT id, contact_email FROM sellers WHERE supabase_user_id = $1 AND id <> $2 LIMIT 1`,
+          [seller.supabase_user_id, id],
+        ),
+      ]);
+      const conflictingAdmin = adminOwner.rows[0] && adminOwner.rows[0].email !== seller.contact_email
+        ? adminOwner.rows[0] : null;
+      const conflictingSeller = sellerOwner.rows[0] && sellerOwner.rows[0].contact_email !== seller.contact_email
+        ? sellerOwner.rows[0] : null;
+      if (conflictingAdmin || conflictingSeller) {
+        return res.status(409).json({
+          error: `El acceso guardado para este vendedor está vinculado a otra cuenta real (${
+            conflictingAdmin ? `admin ${conflictingAdmin.email}` : `vendedor #${conflictingSeller!.id}`
+          }) — reenviar la invitación le pisaría el login a esa persona. Contactá a soporte técnico para corregir el vínculo antes de continuar.`,
+        });
+      }
+
       // Ya tiene cuenta. Sincronizamos el email del usuario de Auth con el contact_email
       // actual: si se cambió el email después de crear la cuenta, el usuario de Auth
       // seguía con el viejo y el recovery fallaba con "User with this email not found".
