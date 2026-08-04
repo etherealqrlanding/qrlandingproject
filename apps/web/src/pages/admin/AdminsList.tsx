@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminUserRow } from '../../lib/adminApi';
 import { useAdminAuth } from '../../hooks/useAdminAuth';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const ROLE_LABELS: Record<AdminUserRow['role'], string> = {
   super_admin: 'Super admin',
@@ -136,6 +137,8 @@ export default function AdminsList() {
   const [error, setError] = useState<string | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUserRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = () => {
     adminApi.admins.list()
@@ -168,6 +171,22 @@ export default function AdminsList() {
       setError(err instanceof AdminApiError ? err.message : 'No se pudo actualizar el estado.');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await adminApi.admins.delete(deleteTarget.id);
+      setAdmins((prev) => prev?.filter((a) => a.id !== deleteTarget.id) ?? prev);
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err instanceof AdminApiError ? err.message : 'No se pudo eliminar el admin.');
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -221,14 +240,24 @@ export default function AdminsList() {
                       <option value="operator">Operador</option>
                       <option value="super_admin">Super admin</option>
                     </select>
-                    <button
-                      type="button"
-                      disabled={isSelf || busyId === a.id}
-                      onClick={() => handleToggleActive(a)}
-                      className={`text-xs whitespace-nowrap disabled:opacity-40 ${a.is_active ? 'text-cream/60 hover:text-bordeaux-light' : 'text-gold-soft hover:text-gold'}`}
-                    >
-                      {a.is_active ? 'Desactivar' : 'Activar'}
-                    </button>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isSelf || busyId === a.id}
+                        onClick={() => handleToggleActive(a)}
+                        className={`text-xs whitespace-nowrap disabled:opacity-40 ${a.is_active ? 'text-cream/60 hover:text-bordeaux-light' : 'text-gold-soft hover:text-gold'}`}
+                      >
+                        {a.is_active ? 'Desactivar' : 'Activar'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSelf || busyId === a.id}
+                        onClick={() => setDeleteTarget(a)}
+                        className="text-xs whitespace-nowrap text-bordeaux-light/70 hover:text-bordeaux-light disabled:opacity-40"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
                   {isSelf && <p className="mt-2 text-[10px] text-cream/30">Sos vos — cambiá tu perfil desde otra cuenta super_admin.</p>}
                 </div>
@@ -280,14 +309,24 @@ export default function AdminsList() {
                           : <span className="text-xs text-cream/40">Inactivo</span>}
                       </td>
                       <td className="py-2.5 px-3 text-right">
-                        <button
-                          type="button"
-                          disabled={isSelf || busyId === a.id}
-                          onClick={() => handleToggleActive(a)}
-                          className="text-xs text-gold-soft hover:text-gold disabled:opacity-40 whitespace-nowrap"
-                        >
-                          {a.is_active ? 'Desactivar' : 'Activar'}
-                        </button>
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            type="button"
+                            disabled={isSelf || busyId === a.id}
+                            onClick={() => handleToggleActive(a)}
+                            className="text-xs text-gold-soft hover:text-gold disabled:opacity-40 whitespace-nowrap"
+                          >
+                            {a.is_active ? 'Desactivar' : 'Activar'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSelf || busyId === a.id}
+                            onClick={() => setDeleteTarget(a)}
+                            className="text-xs text-bordeaux-light/70 hover:text-bordeaux-light disabled:opacity-40 whitespace-nowrap"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -308,6 +347,27 @@ export default function AdminsList() {
           })}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteTarget != null}
+        title="Eliminar admin definitivamente"
+        message={
+          <>
+            <p>
+              Vas a eliminar a <strong className="text-cream">{deleteTarget?.full_name ?? deleteTarget?.email}</strong> ({deleteTarget?.email}).
+              Pierde el acceso al panel para siempre — esta acción no se puede deshacer.
+            </p>
+            <p className="text-xs text-cream/50">
+              Si esta misma cuenta también es el login de un vendedor, ese acceso se conserva.
+            </p>
+          </>
+        }
+        confirmLabel="Eliminar"
+        requireText="ELIMINAR"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

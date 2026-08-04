@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireRole } from '../../middleware/requireAdmin.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { listAdminUsers, upsertAdminUser, updateAdminUser } from '../../repos/adminUsers.js';
+import { pool } from '../../db.js';
+import { listAdminUsers, upsertAdminUser, updateAdminUser, getAdminUser, deleteAdminUser, countOtherActiveSuperAdmins } from '../../repos/adminUsers.js';
 import { sendAdminPortalInvite, sendAdminPasswordReset } from '../../services/email.js';
 
 export const adminUsersRouter = Router();
@@ -109,8 +110,62 @@ adminUsersRouter.patch('/:id', async (req, res, next) => {
     if (parsed.data.role === undefined && parsed.data.is_active === undefined) {
       return res.status(400).json({ error: 'Nada para actualizar' });
     }
+
+    // Guardia: no dejar el sistema sin ningún super_admin activo (ni desactivando ni
+    // degradando de rol al último que queda) — sin uno, nadie puede volver a gestionar
+    // admins ni revertir el cambio.
+    const target = await getAdminUser(id);
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    const losingSuperAdmin = target.role === 'super_admin' && target.is_active
+      && ((parsed.data.is_active === false) || (parsed.data.role && parsed.data.role !== 'super_admin'));
+    if (losingSuperAdmin) {
+      const remaining = await countOtherActiveSuperAdmins(id);
+      if (remaining === 0) {
+        return res.status(409).json({ error: 'No podés dejar el sistema sin ningún super_admin activo. Ascendé a otro admin antes de continuar.' });
+      }
+    }
+
     const updated = await updateAdminUser(id, parsed.data);
     if (!updated) return res.status(404).json({ error: 'Not found' });
     res.json({ data: updated });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/admin/admins/:id — borrado permanente (no hay soft-delete separado acá:
+// "desactivar" ya cumple ese rol via PATCH is_active=false). Borra también la cuenta de
+// Supabase Auth asociada, best-effort, mismo patrón que sellers.ts.
+adminUsersRouter.delete('/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (id === req.admin!.id) {
+      return res.status(400).json({ error: 'No podés eliminar tu propia cuenta desde acá.' });
+    }
+    const target = await getAdminUser(id);
+    if (!target) return res.status(404).json({ error: 'Not found' });
+
+    if (target.role === 'super_admin' && target.is_active) {
+      const remaining = await countOtherActiveSuperAdmins(id);
+      if (remaining === 0) {
+        return res.status(409).json({ error: 'No podés eliminar al último super_admin activo. Ascendé a otro admin antes de continuar.' });
+      }
+    }
+
+    const deleted = await deleteAdminUser(id);
+    if (!deleted) return res.status(404).json({ error: 'Not found' });
+
+    // Si esta misma cuenta de Auth también es el login de un vendedor (doble rol, ej.
+    // alguien que es admin y vendedor con el mismo email), NO borramos la cuenta de
+    // Auth: solo le sacamos el acceso admin, pero conserva su login de vendedor.
+    const { rows: sellerLink } = await pool.query<{ id: number }>(
+      `SELECT id FROM sellers WHERE supabase_user_id = $1 LIMIT 1`,
+      [id],
+    );
+    if (sellerLink.length === 0) {
+      await supabaseAdmin.auth.admin.deleteUser(id).catch((err) => {
+        console.warn('No se pudo eliminar el usuario de Supabase Auth:', err);
+      });
+    }
+
+    res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });

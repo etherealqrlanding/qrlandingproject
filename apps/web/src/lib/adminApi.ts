@@ -678,6 +678,8 @@ export const adminApi = {
       request<AdminUserRow>(`/api/admin/admins/${id}`, {
         method: 'PATCH', body: JSON.stringify(input),
       }),
+    delete: (id: string) =>
+      request<{ ok: true }>(`/api/admin/admins/${id}`, { method: 'DELETE' }),
   },
   sellers: {
     list: () => request<AdminSeller[]>('/api/admin/sellers'),

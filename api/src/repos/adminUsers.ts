@@ -21,6 +21,28 @@ export async function listAdminUsers(): Promise<AdminUserRow[]> {
   return rows;
 }
 
+export async function getAdminUser(id: string): Promise<AdminUserRow | null> {
+  const { rows } = await pool.query<AdminUserRow>(
+    `SELECT ${SELECT_COLUMNS} FROM admin_users WHERE id = $1 LIMIT 1`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+// Para el guardrail de "no dejar el sistema sin super_admin activo" antes de borrar uno.
+export async function countOtherActiveSuperAdmins(excludeId: string): Promise<number> {
+  const { rows } = await pool.query<{ count: string }>(
+    `SELECT COUNT(*) FROM admin_users WHERE role = 'super_admin' AND is_active = TRUE AND id <> $1`,
+    [excludeId],
+  );
+  return Number(rows[0]?.count ?? 0);
+}
+
+export async function deleteAdminUser(id: string): Promise<boolean> {
+  const result = await pool.query(`DELETE FROM admin_users WHERE id = $1`, [id]);
+  return (result.rowCount ?? 0) > 0;
+}
+
 // Crea o reactiva el admin_users row para un auth user ya creado (nuevo o preexistente,
 // p.ej. un vendedor al que también le damos acceso admin) — mismo criterio que
 // bootstrap-admin.ts para no duplicar cuentas de Supabase Auth por email repetido.
