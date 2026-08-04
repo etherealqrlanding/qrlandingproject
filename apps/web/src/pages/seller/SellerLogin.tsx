@@ -64,13 +64,16 @@ export default function SellerLogin() {
     if (session && me) navigate(from, { replace: true });
   }, [session, me, navigate, from, mode]);
 
-  // Sesión válida pero API rechazó con 403 → cuenta inactiva o no vinculada
+  // Sesión válida pero API rechazó con 403 → cuenta inactiva o no vinculada. Cubre el caso
+  // de llegar a esta pantalla con una sesión vieja ya inválida; se ignora mientras hay un
+  // submit en curso, porque ese caso ya lo maneja el catch de handleLogin directamente, sin
+  // la carrera de este efecto reaccionando a medio camino.
   useEffect(() => {
-    if (mode !== 'login') return;
+    if (mode !== 'login' || submitting) return;
     if (session && !me && !loading && !meLoading && !hasTransientError) {
       setError('Tu acceso no está habilitado actualmente. Si alguna vez tuviste una cuenta activa, contactá al administrador.');
     }
-  }, [session, me, loading, meLoading, hasTransientError, mode]);
+  }, [session, me, loading, meLoading, hasTransientError, mode, submitting]);
 
   // ── Olvidé mi contraseña ─────────────────────────────────
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -128,6 +131,7 @@ export default function SellerLogin() {
   // ── Login normal ─────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return; // refuerzo además de disabled={submitting} en el botón
     setError(null);
     setSubmitting(true);
     try {

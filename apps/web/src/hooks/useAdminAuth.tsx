@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { adminApi, AdminApiError, type AdminMe } from '../lib/adminApi';
+import { withTimeout } from '../lib/withTimeout';
 
 type LoadMeStatus = 'ok' | 'auth_error' | 'transient_error';
 
@@ -116,14 +117,31 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [hasTransientError, loadMe]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    setError(null);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    if (err) {
-      setError(err.message);
-      throw err;
-    }
-  }, []);
+  // Resuelve recién cuando TODO el login terminó (Supabase + perfil admin_users), no solo
+  // la autenticación — así el formulario puede mantener el spinner hasta tener la certeza
+  // de si hay acceso o no, en vez de soltarlo apenas Supabase confirma la contraseña y
+  // dejar una ventana muerta donde `session` ya está pero `me` todavía no (eso disparaba
+  // el cartel de "acceso no habilitado" como falso positivo, ver AdminLogin.tsx).
+  const signIn = useCallback((email: string, password: string): Promise<void> => {
+    return withTimeout((async () => {
+      setError(null);
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) {
+        setError(err.message);
+        throw err;
+      }
+      setSession(data.session);
+      const status = await loadMe(data.session);
+      if (status === 'auth_error') {
+        const msg = 'Tu acceso no está habilitado actualmente. Contactá al super admin.';
+        setError(msg);
+        throw new Error(msg);
+      }
+      // 'transient_error' (ej. hiccup de red puntual contra nuestra propia API) no bloquea
+      // el login: Supabase ya autenticó bien las credenciales, y hay reintentos automáticos
+      // en segundo plano (al volver el foco, o el intervalo periódico) que resuelven `me` solos.
+    })(), 15_000, 'La conexión está tardando demasiado. Probá de nuevo en unos segundos.');
+  }, [loadMe]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

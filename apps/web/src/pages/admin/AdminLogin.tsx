@@ -63,12 +63,16 @@ export default function AdminLogin() {
     if (session && me) navigate(from, { replace: true });
   }, [session, me, navigate, from, mode]);
 
+  // Cubre el caso de llegar a esta pantalla con una sesión vieja ya inválida (ej. cuenta
+  // desactivada mientras el navegador todavía tenía la sesión guardada). Se ignora mientras
+  // hay un submit en curso: ese caso ya lo maneja directamente el catch de handleLogin,
+  // con el mismo mensaje, sin la carrera de un efecto separado reaccionando a medio camino.
   useEffect(() => {
-    if (mode !== 'login') return;
+    if (mode !== 'login' || submitting) return;
     if (session && !me && !loading && !hasTransientError) {
       setError('Tu acceso no está habilitado actualmente. Contactá al super admin.');
     }
-  }, [session, me, loading, hasTransientError, mode]);
+  }, [session, me, loading, hasTransientError, mode, submitting]);
 
   if (loading || sessionEstablishing) return <LoadingScreen label="Verificando acceso..." />;
   if (mode === 'login' && session && me) return <Navigate to={from} replace />;
@@ -106,6 +110,7 @@ export default function AdminLogin() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return; // refuerzo además de disabled={submitting} en el botón
     setError(null);
     setSubmitting(true);
     try {

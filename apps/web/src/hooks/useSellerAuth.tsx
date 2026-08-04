@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerMe } from '../lib/sellerApi';
+import { withTimeout } from '../lib/withTimeout';
 
 type LoadMeStatus = 'ok' | 'auth_error' | 'transient_error';
 
@@ -119,14 +120,30 @@ export function SellerAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [hasTransientError, loadMe]);
 
-  const signIn = useCallback(async (email: string, password: string) => {
-    setError(null);
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-    if (err) {
-      setError(err.message);
-      throw err;
-    }
-  }, []);
+  // Resuelve recién cuando TODO el login terminó (Supabase + perfil de vendedor), no solo
+  // la autenticación — así el formulario mantiene el spinner hasta saber con certeza si hay
+  // acceso, en vez de soltarlo apenas Supabase confirma la contraseña y dejar una ventana
+  // muerta donde `session` ya está pero `me` todavía no (disparaba el cartel de "acceso no
+  // habilitado" como falso positivo, ver SellerLogin.tsx).
+  const signIn = useCallback((email: string, password: string): Promise<void> => {
+    return withTimeout((async () => {
+      setError(null);
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) {
+        setError(err.message);
+        throw err;
+      }
+      setSession(data.session);
+      const status = await loadMe(data.session);
+      if (status === 'auth_error') {
+        const msg = 'Tu acceso no está habilitado actualmente. Si alguna vez tuviste una cuenta activa, contactá al administrador.';
+        setError(msg);
+        throw new Error(msg);
+      }
+      // 'transient_error' (hiccup de red puntual) no bloquea el login: Supabase ya
+      // autenticó bien; hay reintentos automáticos en segundo plano que resuelven `me` solos.
+    })(), 15_000, 'La conexión está tardando demasiado. Probá de nuevo en unos segundos.');
+  }, [loadMe]);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
