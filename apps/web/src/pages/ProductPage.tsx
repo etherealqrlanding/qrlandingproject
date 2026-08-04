@@ -9,6 +9,7 @@ import { buildShareUrl } from '../lib/shareLinks';
 import { ApiError } from '../lib/api';
 import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
+import AvailabilityCheckModal from '../components/AvailabilityCheckModal';
 import ShareButton from '../components/ShareButton';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
@@ -59,6 +60,8 @@ export default function ProductPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>('mercadopago');
+  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number }>({});
+  const [checkingAvailabilityOptionId, setCheckingAvailabilityOptionId] = useState<number | null>(null);
   const [sellerInfo, setSellerInfo] = useState<SellerPublicInfo | null>(null);
 
   useEffect(() => {
@@ -237,8 +240,10 @@ export default function ProductPage() {
                   onBook={() => {
                     setSelectedOptionId(opt.id);
                     setCheckoutPaymentMethod('mercadopago');
+                    setCheckoutPrefill({});
                     setCheckoutOpen(true);
                   }}
+                  onCheckAvailability={() => setCheckingAvailabilityOptionId(opt.id)}
                   lang={lang}
                 />
               ))}
@@ -253,6 +258,7 @@ export default function ProductPage() {
             sellerInfo={sellerInfo}
             onBook={(method) => {
               setCheckoutPaymentMethod(method);
+              setCheckoutPrefill({});
               setCheckoutOpen(true);
             }}
           />
@@ -280,7 +286,7 @@ export default function ProductPage() {
           </div>
           <button
             type="button"
-            onClick={() => { setCheckoutPaymentMethod('mercadopago'); setCheckoutOpen(true); }}
+            onClick={() => { setCheckoutPaymentMethod('mercadopago'); setCheckoutPrefill({}); setCheckoutOpen(true); }}
             className="btn-primary shrink-0 px-5 py-2.5 text-sm"
           >
             {t('product.book_cta')}
@@ -295,6 +301,25 @@ export default function ProductPage() {
           onClose={() => setCheckoutOpen(false)}
           initialPaymentMethod={checkoutPaymentMethod}
           showCash={sellerInfo?.is_permanent === true}
+          initialDate={checkoutPrefill.date}
+          initialAdults={checkoutPrefill.adults}
+          initialChildren={checkoutPrefill.children}
+        />
+      )}
+
+      {checkingAvailabilityOptionId != null && (
+        <AvailabilityCheckModal
+          productSlug={product.slug}
+          productName={product.name}
+          initialOptionId={checkingAvailabilityOptionId}
+          onClose={() => setCheckingAvailabilityOptionId(null)}
+          onBookDate={(_bookedProduct, bookedOption, date, pax) => {
+            setCheckingAvailabilityOptionId(null);
+            setSelectedOptionId(bookedOption.id);
+            setCheckoutPaymentMethod('mercadopago');
+            setCheckoutPrefill({ date, adults: pax?.adults, children: pax?.children });
+            setCheckoutOpen(true);
+          }}
         />
       )}
     </article>
@@ -302,7 +327,7 @@ export default function ProductPage() {
 }
 
 function OptionCard({
-  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, selected, onSelect, onBook, lang,
+  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, selected, onSelect, onBook, onCheckAvailability, lang,
 }: {
   option: ProductOption;
   productAvailableDays: number[];
@@ -312,6 +337,7 @@ function OptionCard({
   selected: boolean;
   onSelect: () => void;
   onBook: () => void;
+  onCheckAvailability: () => void;
   lang: string | undefined;
 }) {
   const { t } = useTranslation();
@@ -451,13 +477,22 @@ function OptionCard({
         </details>
       )}
 
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onBook(); }}
-        className="mt-4 w-full btn-primary text-sm py-2.5"
-      >
-        {t('product.book_option')}
-      </button>
+      <div className="mt-4 flex flex-col sm:flex-row gap-2">
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onCheckAvailability(); }}
+          className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/25 bg-gold/5 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/15 transition"
+        >
+          <span aria-hidden>🗓</span> {t('product.check_availability')}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onBook(); }}
+          className="w-full btn-primary text-sm py-2.5"
+        >
+          {t('product.book_option')}
+        </button>
+      </div>
     </div>
   );
 }

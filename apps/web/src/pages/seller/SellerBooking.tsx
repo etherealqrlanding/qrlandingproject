@@ -4,7 +4,7 @@ import type { ProductDetail, ProductOption, ProductSummary } from '../../types/a
 import SellerBookingModal from '../../components/seller/SellerBookingModal';
 import { OptionInfoCard } from '../../components/seller/OptionInfoCard';
 import SellerQuickSettings from '../../components/seller/SellerQuickSettings';
-import AvailabilityCheckModal from '../../components/seller/AvailabilityCheckModal';
+import AvailabilityCheckModal from '../../components/AvailabilityCheckModal';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 
 export default function SellerBooking() {

@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, type AvailabilityDay } from '../../lib/api';
-import AvailabilityCalendar from '../AvailabilityCalendar';
-import type { ProductDetail, ProductOption } from '../../types/api';
+import { api, type AvailabilityDay } from '../lib/api';
+import AvailabilityCalendar from './AvailabilityCalendar';
+import type { ProductDetail, ProductOption } from '../types/api';
 
 interface Props {
   productSlug: string;
   productName: string;
   onClose: () => void;
-  // Se dispara al tocar "Reservar esta fecha": el consumidor abre SellerBookingModal
-  // con la casa, el servicio, la fecha y (si se marcaron) los pasajeros ya cargados.
+  // Arranca en este tier en vez del primero de la casa — para cuando el botón que abrió
+  // el modal ya estaba asociado a un servicio puntual (ej. la card de ese tier).
+  initialOptionId?: number;
+  // Se dispara al tocar "Reservar esta fecha": el consumidor abre el flujo de reserva
+  // correspondiente (checkout público o modal del vendedor) con la casa, el servicio, la
+  // fecha y (si se marcaron) los pasajeros ya cargados.
   onBookDate: (product: ProductDetail, option: ProductOption, date: string, pax?: { adults: number; children: number }) => void;
 }
 
@@ -64,11 +68,13 @@ function MiniStepper({ label, value, onChange }: { label: string; value: number;
   );
 }
 
-// Modal de "Verificar disponibilidad" — el vendedor elige un servicio (tier) de la casa,
-// ve el semáforo de cupo por fecha (mismo calendario/endpoint que el sitio público y
-// Configuración) y el detalle en texto del día que está mirando, con nombre de día
-// incluido para calcular mejor. Desde ahí puede pasar directo a reservar esa fecha.
-export default function AvailabilityCheckModal({ productSlug, productName, onClose, onBookDate }: Props) {
+// Modal de "Verificar disponibilidad" — se elige un servicio (tier) de la casa, se ve el
+// semáforo de cupo por fecha (mismo calendario/endpoint que el checkout público, el
+// portal del vendedor y Configuración) y el detalle en texto del día que se está mirando,
+// con nombre de día incluido para calcular mejor. Desde ahí se puede pasar directo a
+// reservar esa fecha. Lo usan tanto el portal del vendedor (SellerCatalog/SellerBooking)
+// como el sitio público (ProductPage) — sin ninguna dependencia de auth de ninguno de los dos.
+export default function AvailabilityCheckModal({ productSlug, productName, onClose, initialOptionId, onBookDate }: Props) {
   const [detail, setDetail] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,10 +105,15 @@ export default function AvailabilityCheckModal({ productSlug, productName, onClo
     api.products.bySlug(productSlug)
       .then((d) => {
         setDetail(d);
-        setOptionId(d.options[0]?.id ?? null);
+        const initial = initialOptionId != null && d.options.some((o) => o.id === initialOptionId)
+          ? initialOptionId : d.options[0]?.id ?? null;
+        setOptionId(initial);
       })
       .catch(() => setError('No se pudo cargar la disponibilidad de esta casa.'))
       .finally(() => setLoading(false));
+  // Solo al montar (con el slug ya fijo) — no queremos que cambie el tier elegido si
+  // initialOptionId cambiara de identidad por algún motivo externo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productSlug]);
 
   // Estable entre renders — evita que AvailabilityCalendar dispare el efecto de más.
@@ -181,7 +192,7 @@ export default function AvailabilityCheckModal({ productSlug, productName, onClo
                     )}
                   </div>
                   {!detail.accepts_children && (
-                    <p className="mt-1.5 text-[11px] text-cream/30">Esta casa no acepta menores (Datos generales).</p>
+                    <p className="mt-1.5 text-[11px] text-cream/30">Esta casa no acepta menores.</p>
                   )}
                 </div>
 
@@ -198,7 +209,7 @@ export default function AvailabilityCheckModal({ productSlug, productName, onClo
                 )}
 
                 {/* Feedback en texto del día que se está mirando — con nombre de día para
-                    que el vendedor calcule mejor antes de confirmar con el pasajero. */}
+                    calcular mejor antes de confirmar. */}
                 {optionId != null && (
                   <div className="rounded-lg border border-gold/15 bg-ink/30 p-3">
                     <p className="text-sm font-medium text-cream">{formatDayLabel(viewDate)}</p>

@@ -17,6 +17,10 @@ interface Props {
   // El vendedor referido tiene cobro en efectivo habilitado — muestra el botón
   // "Al vendedor" en el selector. Si es false, solo quedan tarjeta y PIX.
   showCash: boolean;
+  // Precarga fecha/pasajeros (ej. vienen de "Verificar disponibilidad"). Siguen editables.
+  initialDate?: string;
+  initialAdults?: number;
+  initialChildren?: number;
 }
 
 const PixIcon = (
@@ -39,7 +43,7 @@ const NATIONALITIES = [
   'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
 ];
 
-export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash }: Props) {
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, initialDate, initialAdults, initialChildren }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
@@ -84,9 +88,11 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     phone: '',
     nationality: '',
     dni: '',
-    service_date: today,
-    adults: 2,
-    children: 0,
+    service_date: initialDate ?? today,
+    adults: initialAdults ?? 2,
+    // Si la casa no acepta menores, arranca en 0 sin importar lo precargado — el campo
+    // queda oculto y no tendría cómo editarse (mismo criterio que BookingForm).
+    children: (product.accepts_children && option.price_child_usd != null) ? (initialChildren ?? 0) : 0,
   });
 
   // Disponibilidad por fecha de la option seleccionada
