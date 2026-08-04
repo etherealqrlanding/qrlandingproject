@@ -43,10 +43,35 @@ adminSellersRouter.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Un contact_email de vendedor eventualmente se convierte en el email real de su cuenta
+// de Supabase Auth (ver /invite más abajo) — si ya lo tiene otro admin o vendedor, avisamos
+// acá mismo al guardar en vez de dejar que explote recién cuando alguien apriete "invitar".
+async function findEmailOwner(
+  email: string,
+  excludeSellerId?: number,
+): Promise<{ kind: 'admin' | 'seller'; label: string } | null> {
+  const [adminRows, sellerRows] = await Promise.all([
+    pool.query<{ email: string }>(`SELECT email FROM admin_users WHERE LOWER(email) = LOWER($1) LIMIT 1`, [email]),
+    pool.query<{ id: number; name: string }>(
+      `SELECT id, name FROM sellers WHERE LOWER(contact_email) = LOWER($1) AND id <> $2 LIMIT 1`,
+      [email, excludeSellerId ?? -1],
+    ),
+  ]);
+  if (adminRows.rows[0]) return { kind: 'admin', label: `el admin ${adminRows.rows[0].email}` };
+  if (sellerRows.rows[0]) return { kind: 'seller', label: `el vendedor "${sellerRows.rows[0].name}"` };
+  return null;
+}
+
 adminSellersRouter.post('/', async (req, res, next) => {
   try {
     const parsed = sellerSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    if (parsed.data.contact_email) {
+      const owner = await findEmailOwner(parsed.data.contact_email);
+      if (owner) {
+        return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este vendedor.` });
+      }
+    }
     const id = await createSeller(parsed.data);
     const seller = await getSeller(id);
     res.status(201).json({ data: seller });
@@ -64,6 +89,17 @@ adminSellersRouter.patch('/:id', async (req, res, next) => {
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
     const parsed = sellerSchema.partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    // Solo valida si el email realmente está cambiando — evita falsos positivos al re-guardar
+    // sin tocarlo (ej. alguien con doble rol admin+vendedor por el mismo email, ya aceptado).
+    if (parsed.data.contact_email) {
+      const current = await getSeller(id);
+      if (current && current.contact_email?.toLowerCase() !== parsed.data.contact_email.toLowerCase()) {
+        const owner = await findEmailOwner(parsed.data.contact_email, id);
+        if (owner) {
+          return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este vendedor.` });
+        }
+      }
+    }
     const ok = await updateSeller(id, parsed.data);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     const seller = await getSeller(id);
