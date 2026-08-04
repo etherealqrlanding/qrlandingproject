@@ -53,6 +53,15 @@ const schema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().min(1).optional(),
   SMTP_PASS: z.string().min(1).optional(),
+  // Modo test de comunicaciones: si está seteada, TODOS los emails (cliente/vendedor/admin)
+  // se redirigen acá en vez de a sus destinatarios reales, con el asunto prefijado
+  // "[MAIL TESTING]". Se ignora en producción (ver email.ts) para que nunca pueda
+  // interceptar por error los emails reales de un cliente.
+  TEST_EMAIL_OVERRIDE: z.string().email().optional(),
+  // Si es "true" (y TEST_EMAIL_OVERRIDE está seteada), no se envía nada por red: cada email
+  // se guarda como archivo .html en api/tmp-test-emails/ para revisar el diseño sin gastar
+  // cuota de Resend/SMTP. Se ignora en producción.
+  TEST_EMAIL_DRY_RUN: z.string().optional(),
 }).superRefine((data, ctx) => {
   // En producción, sin este secreto la verificación de firma del webhook de MP queda
   // deshabilitada para siempre y en silencio (ver checkout.ts) — mejor que el server

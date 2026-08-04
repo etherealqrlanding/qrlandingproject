@@ -132,9 +132,9 @@ export const api = {
     bySlug: (slug: string) => request<ProductDetail>(`/api/products/${encodeURIComponent(slug)}`),
   },
   availability: {
-    forOption: (optionId: number, from: string, to: string) =>
+    forOption: (optionId: number, from: string, to: string, pax?: number) =>
       request<AvailabilityDay[]>(
-        `/api/options/${optionId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        `/api/options/${optionId}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${pax ? `&pax=${pax}` : ''}`,
       ),
     remainingForDate: (optionId: number, date: string) =>
       request<{ remaining: number; capacity: number; status: string; reason?: string }>(

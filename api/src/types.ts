@@ -91,6 +91,10 @@ export interface ProductDetail extends ProductSummary {
   // Días de operación de TODA la casa (1=Lun..7=Dom) — un tier solo opera de
   // verdad un día si está en este array Y en su propio available_days (intersección).
   available_days: number[];
+  // Política general de menores de la casa — el precio sigue siendo por tier
+  // (ProductOption.price_child_usd); esto solo habilita/deshabilita ofrecerlo.
+  accepts_children: boolean;
+  children_age_label: string | null;
   images: ProductImage[];
   options: ProductOption[];
 }

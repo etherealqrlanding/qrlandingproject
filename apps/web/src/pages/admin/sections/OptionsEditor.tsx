@@ -141,7 +141,7 @@ export default function OptionsEditor({ product, onChange }: Props) {
       {expandedId === 'new' && (
         <div className="rounded-lg border border-gold/30 bg-gold/5 p-5">
           <h3 className="font-display text-lg text-cream mb-4">Nuevo tier</h3>
-          <OptionFormFields option={draftNew} onChange={setDraftNew} />
+          <OptionFormFields option={draftNew} onChange={setDraftNew} productAcceptsChildren={product.accepts_children} />
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost text-sm">Cancelar</button>
             <button type="button" onClick={handleCreate} className="btn-primary text-sm">Crear tier</button>
@@ -160,6 +160,7 @@ export default function OptionsEditor({ product, onChange }: Props) {
           onManageAvailability={() => setAvailabilityFor(opt)}
           onToggleVisibility={() => handleToggleOption(opt)}
           isToggling={toggling.has(opt.id)}
+          productAcceptsChildren={product.accepts_children}
         />
       ))}
 
@@ -173,7 +174,7 @@ export default function OptionsEditor({ product, onChange }: Props) {
   );
 }
 
-function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvailability, onToggleVisibility, isToggling }: {
+function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvailability, onToggleVisibility, isToggling, productAcceptsChildren }: {
   option: AdminOption;
   expanded: boolean;
   onToggle: () => void;
@@ -182,6 +183,7 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
   onManageAvailability: () => void;
   onToggleVisibility: () => void;
   isToggling: boolean;
+  productAcceptsChildren: boolean;
 }) {
   const [draft, setDraft] = useState<Partial<AdminOption>>(option);
 
@@ -213,7 +215,12 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
         <div className="flex items-center gap-3 mt-2.5 flex-wrap pl-7">
           <span className="text-gold text-sm">
             Venta USD {option.price_adult_usd}
-            {fmt(option.price_child_usd) && <span className="text-gold/60"> · menor {fmt(option.price_child_usd)}</span>}
+            {fmt(option.price_child_usd) && (
+              <span className={productAcceptsChildren ? 'text-gold/60' : 'text-bordeaux-light/80'}>
+                {' · menor '}{fmt(option.price_child_usd)}
+                {!productAcceptsChildren && ' (inactivo — casa no acepta menores)'}
+              </span>
+            )}
           </span>
           {fmt(netAdult) ? (
             <span className="text-cream/60 text-xs">
@@ -244,7 +251,7 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
 
       {expanded && (
         <div className="p-5 border-t border-gold/10">
-          <OptionFormFields option={draft} onChange={setDraft} />
+          <OptionFormFields option={draft} onChange={setDraft} productAcceptsChildren={productAcceptsChildren} />
           <div className="mt-5 flex items-center justify-between">
             <div className="flex gap-2">
               <button type="button" onClick={onManageAvailability} className="btn-ghost text-sm">
@@ -268,9 +275,10 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
   );
 }
 
-function OptionFormFields({ option, onChange }: {
+function OptionFormFields({ option, onChange, productAcceptsChildren }: {
   option: Partial<AdminOption>;
   onChange: (next: Partial<AdminOption>) => void;
+  productAcceptsChildren: boolean;
 }) {
   const update = <K extends keyof AdminOption>(key: K, value: AdminOption[K] | null | string | string[] | number | boolean) =>
     onChange({ ...option, [key]: value });
@@ -323,7 +331,12 @@ function OptionFormFields({ option, onChange }: {
             className="input"
           />
         </Field>
-        <Field label="Precio menor (USD)" hint="Dejar vacío si no admite menores">
+        <Field
+          label="Precio menor (USD)"
+          hint={productAcceptsChildren
+            ? 'Dejar vacío si este tier puntual no admite menores'
+            : '⚠ La casa tiene "Acepta menores" desactivado en Datos generales — este precio no se ofrece hasta que lo actives ahí'}
+        >
           <input
             type="number" min={0} step={0.01}
             value={option.price_child_usd ?? ''}

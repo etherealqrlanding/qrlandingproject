@@ -6,6 +6,16 @@ interface Props {
   value: string;       // YYYY-MM-DD — fecha seleccionada
   currentDate: string; // YYYY-MM-DD — fecha original de la reserva (destacada con borde)
   onChange: (date: string) => void;
+  // Opcional: se dispara con el estado (status/reason/remaining) de `value` cada vez que
+  // cambia la selección o termina de cargar la disponibilidad. Para consumidores que
+  // necesitan mostrar feedback de texto además del semáforo visual (ver AvailabilityCheckModal).
+  onDayInfo?: (day: AvailabilityDay | undefined) => void;
+  // Versión más chica (menos padding, celdas más bajas) para contextos angostos como un
+  // modal — no afecta a los consumidores que no la pasan (checkout público, reprogramar).
+  compact?: boolean;
+  // Cantidad de pasajeros a filtrar (adultos + menores comparten un único pool de cupo).
+  // Sin pasar nada, el server asume 1 — mismo comportamiento que antes de este prop.
+  pax?: number;
 }
 
 const DAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
@@ -13,7 +23,7 @@ const DAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
 function startOfMonth(y: number, m: number) { return new Date(y, m, 1); }
 function addMonths(d: Date, n: number) { return new Date(d.getFullYear(), d.getMonth() + n, 1); }
 
-export default function AvailabilityCalendar({ optionId, value, currentDate, onChange }: Props) {
+export default function AvailabilityCalendar({ optionId, value, currentDate, onChange, onDayInfo, compact, pax }: Props) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   // 3 = fallback mientras carga el valor real configurado en el admin.
   const [horizonMonths, setHorizonMonths] = useState<number | null>(3);
@@ -36,11 +46,16 @@ export default function AvailabilityCalendar({ optionId, value, currentDate, onC
 
   useEffect(() => {
     setLoading(true);
-    api.availability.forOption(optionId, today, horizon)
+    api.availability.forOption(optionId, today, horizon, pax)
       .then((days) => setAvMap(new Map(days.map((d) => [d.date, d]))))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [optionId, today, horizon]);
+  }, [optionId, today, horizon, pax]);
+
+  useEffect(() => {
+    onDayInfo?.(avMap.get(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, avMap]);
 
   const { cells, monthLabel } = useMemo(() => {
     const y = viewDate.getFullYear();
@@ -66,20 +81,20 @@ export default function AvailabilityCalendar({ optionId, value, currentDate, onC
   const showOriginalLegend = currentDate !== value;
 
   return (
-    <div className="rounded-lg border border-gold/20 bg-ink/30 p-3 select-none">
+    <div className={`rounded-lg border border-gold/20 bg-ink/30 select-none ${compact ? 'p-2' : 'p-3'}`}>
       {/* Navegación de mes */}
-      <div className="flex items-center justify-between mb-2">
+      <div className={`flex items-center justify-between ${compact ? 'mb-1' : 'mb-2'}`}>
         <button type="button" onClick={() => setViewDate(addMonths(viewDate, -1))} disabled={!canPrev}
-          className="h-7 w-7 flex items-center justify-center rounded hover:bg-gold/15 transition text-cream/60 disabled:opacity-25 text-lg">‹</button>
-        <span className="text-sm font-medium text-cream/90">{monthLabel}</span>
+          className={`flex items-center justify-center rounded hover:bg-gold/15 transition text-cream/60 disabled:opacity-25 ${compact ? 'h-6 w-6 text-base' : 'h-7 w-7 text-lg'}`}>‹</button>
+        <span className={`font-medium text-cream/90 ${compact ? 'text-xs' : 'text-sm'}`}>{monthLabel}</span>
         <button type="button" onClick={() => setViewDate(addMonths(viewDate, 1))} disabled={!canNext}
-          className="h-7 w-7 flex items-center justify-center rounded hover:bg-gold/15 transition text-cream/60 disabled:opacity-25 text-lg">›</button>
+          className={`flex items-center justify-center rounded hover:bg-gold/15 transition text-cream/60 disabled:opacity-25 ${compact ? 'h-6 w-6 text-base' : 'h-7 w-7 text-lg'}`}>›</button>
       </div>
 
       {/* Encabezado de días */}
       <div className="grid grid-cols-7 mb-0.5">
         {DAYS.map((d) => (
-          <div key={d} className="text-center text-[10px] font-medium text-cream/30 py-0.5">{d}</div>
+          <div key={d} className={`text-center text-[10px] font-medium text-cream/30 ${compact ? 'py-0' : 'py-0.5'}`}>{d}</div>
         ))}
       </div>
 
@@ -96,7 +111,7 @@ export default function AvailabilityCalendar({ optionId, value, currentDate, onC
           const isOriginal = iso === currentDate && !isSelected;
           const dayNum = Number(iso.slice(-2));
 
-          let cls = 'relative flex items-center justify-center h-8 rounded text-xs font-normal transition ';
+          let cls = `relative flex items-center justify-center rounded text-xs font-normal transition ${compact ? 'h-7' : 'h-8'} `;
           if (isSelected) {
             cls += 'bg-gold text-ink font-semibold';
           } else if (isOriginal) {
@@ -125,7 +140,7 @@ export default function AvailabilityCalendar({ optionId, value, currentDate, onC
       </div>
 
       {/* Leyenda */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2.5 pt-2 border-t border-gold/10 text-[10px] text-cream/35">
+      <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gold/10 text-[10px] text-cream/35 ${compact ? 'mt-1.5 pt-1.5' : 'mt-2.5 pt-2'}`}>
         {loading
           ? <span>Cargando disponibilidad...</span>
           : (

@@ -18,11 +18,20 @@ export interface BookingFormTotals {
 
 export interface BookingFormProps {
   option: ProductOption;
+  // Política de menores de la CASA (no del tier) — el tier solo aporta el precio.
+  productAcceptsChildren: boolean;
+  childrenAgeLabel?: string | null;
   allowCash: boolean;
   contextBanner: React.ReactNode;
   submitLabels: { cash: string; mercadopago: string; pix: string };
   submitting: boolean;
   externalError?: string | null;
+  // Precarga la fecha del servicio (ej. viene de "Verificar disponibilidad") en vez de
+  // arrancar siempre en hoy. Igual queda editable — el vendedor puede cambiarla.
+  initialDate?: string;
+  // Precarga la cantidad de pasajeros (misma fuente). Siguen editables.
+  initialAdults?: number;
+  initialChildren?: number;
   onValidSubmit: (payload: SellerBookingInput, totals: BookingFormTotals) => void;
 }
 
@@ -32,7 +41,7 @@ const NATIONALITIES = [
 ];
 
 export default function BookingForm({
-  option, allowCash, contextBanner, submitLabels, submitting, externalError, onValidSubmit,
+  option, productAcceptsChildren, childrenAgeLabel, allowCash, contextBanner, submitLabels, submitting, externalError, initialDate, initialAdults, initialChildren, onValidSubmit,
 }: BookingFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(allowCash ? 'cash' : 'mercadopago');
@@ -64,9 +73,11 @@ export default function BookingForm({
     phone: '',
     nationality: '',
     dni: '',
-    service_date: today,
-    adults: 2,
-    children: 0,
+    service_date: initialDate ?? today,
+    adults: initialAdults ?? 2,
+    // Si la casa no acepta menores, arranca en 0 sin importar lo que venga precargado —
+    // el campo queda oculto y no tendría cómo editarse.
+    children: productAcceptsChildren ? (initialChildren ?? 0) : 0,
   });
   // Solo para validar que no haya un typo en el mail del pasajero — no se envía al backend.
   const [emailConfirm, setEmailConfirm] = useState('');
@@ -113,15 +124,15 @@ export default function BookingForm({
   const selectedDateStatus = selectedDay?.status;
   const isDateBlocked = selectedDateStatus === 'full' || selectedDateStatus === 'closed';
   const isDateLow = selectedDateStatus === 'low';
-  const supportsChildren = option.price_child_usd != null;
+  const supportsChildren = productAcceptsChildren && option.price_child_usd != null;
   const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 
   const ticketsUsd = useMemo(() => {
     const adult = option.price_adult_usd * form.adults;
-    const child = (option.price_child_usd ?? 0) * form.children;
+    const child = supportsChildren ? (option.price_child_usd ?? 0) * form.children : 0;
     return Math.round((adult + child) * 100) / 100;
-  }, [option, form.adults, form.children]);
+  }, [option, form.adults, form.children, supportsChildren]);
 
   const transferUsd = useMemo(() => {
     if (!option.has_transfer || !wantsTransfer || !option.transfer_price_usd) return 0;
@@ -291,7 +302,7 @@ export default function BookingForm({
               />
             </Field>
             {supportsChildren && (
-              <Field label="Menores (3-10)">
+              <Field label={childrenAgeLabel ? `Menores (${childrenAgeLabel})` : 'Menores'}>
                 <NumberStepper
                   value={form.children} min={0} max={maxChildren}
                   onChange={(v) => updateField('children', v)}

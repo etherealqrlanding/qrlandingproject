@@ -325,6 +325,8 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                                   key={opt.id}
                                   option={opt}
                                   productAvailableDays={expandedDetail.available_days}
+                                  productAcceptsChildren={expandedDetail.accepts_children}
+                                  productChildrenAgeLabel={expandedDetail.children_age_label}
                                   onBook={() => setBooking({ product: expandedDetail, option: opt })}
                                 />
                               ))
@@ -371,6 +373,8 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
             {sellerBadge}
             <BookingForm
               option={booking.option}
+              productAcceptsChildren={booking.product.accepts_children}
+              childrenAgeLabel={booking.product.children_age_label}
               allowCash={selectedSeller.is_permanent}
               submitting={false}
               submitLabels={{ cash: 'Revisar y confirmar', mercadopago: 'Revisar y confirmar', pix: 'Revisar y confirmar' }}

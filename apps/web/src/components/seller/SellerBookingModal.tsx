@@ -9,9 +9,12 @@ interface Props {
   option: ProductOption;
   onClose: () => void;
   isPermanent: boolean;
+  initialDate?: string;
+  initialAdults?: number;
+  initialChildren?: number;
 }
 
-export default function SellerBookingModal({ product, option, onClose, isPermanent }: Props) {
+export default function SellerBookingModal({ product, option, onClose, isPermanent, initialDate, initialAdults, initialChildren }: Props) {
   const navigate = useNavigate();
 
   const [submitting, setSubmitting] = useState(false);
@@ -142,9 +145,14 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
           <div className="p-7">
             <BookingForm
               option={option}
+              productAcceptsChildren={product.accepts_children}
+              childrenAgeLabel={product.children_age_label}
               allowCash={isPermanent}
               submitting={submitting}
               externalError={error}
+              initialDate={initialDate}
+              initialAdults={initialAdults}
+              initialChildren={initialChildren}
               submitLabels={{ cash: 'Confirmar reserva manual', mercadopago: 'Enviar link de Mercado Pago', pix: 'Enviar link de PIX' }}
               onValidSubmit={handleValidSubmit}
               contextBanner={(

@@ -224,6 +224,8 @@ export default function ProductPage() {
                   key={opt.id}
                   option={opt}
                   productAvailableDays={product.available_days}
+                  productAcceptsChildren={product.accepts_children}
+                  productChildrenAgeLabel={product.children_age_label}
                   // Las opciones no tienen fotos propias — se recorren las de la casa
                   // (en el mismo orden que el carrusel de arriba) para que cada card
                   // se vea distinta en vez de repetir siempre la misma.
@@ -300,10 +302,12 @@ export default function ProductPage() {
 }
 
 function OptionCard({
-  option, productAvailableDays, imageUrl, selected, onSelect, onBook, lang,
+  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, selected, onSelect, onBook, lang,
 }: {
   option: ProductOption;
   productAvailableDays: number[];
+  productAcceptsChildren: boolean;
+  productChildrenAgeLabel: string | null;
   imageUrl: string | null;
   selected: boolean;
   onSelect: () => void;
@@ -318,9 +322,10 @@ function OptionCard({
   const pickup = localized(option, 'pickup_window', lang);
   const dinner = localized(option, 'dinner_time', lang);
   const show = localized(option, 'show_time', lang);
+  const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
   const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
-  const priceChildArs = (exchangeRate != null && option.price_child_usd != null)
-    ? Math.round(option.price_child_usd * exchangeRate) : null;
+  const priceChildArs = (exchangeRate != null && showChildPrice)
+    ? Math.round(option.price_child_usd! * exchangeRate) : null;
   const hasTimes = Boolean(pickup || dinner || show);
 
   return (
@@ -378,9 +383,9 @@ function OptionCard({
           </div>
           <div>
             <p className="text-xs text-cream/50">{t('product.per_adult')}</p>
-            {option.price_child_usd != null && (
+            {showChildPrice && (
               <p className="mt-1.5 pt-1.5 border-t border-gold/10 text-xs text-cream/60">
-                {t('product.children')}: <span className="text-cream/85">USD {option.price_child_usd}</span>
+                {t('product.children')}{productChildrenAgeLabel ? ` (${productChildrenAgeLabel})` : ''}: <span className="text-cream/85">USD {option.price_child_usd}</span>
                 {priceChildArs != null && (
                   <span className="text-cream/40"> · ARS {priceChildArs.toLocaleString('es-AR')}</span>
                 )}
@@ -578,9 +583,10 @@ function BookingSummary({
   if (!option) return null;
 
   const showCash = sellerInfo?.is_permanent === true;
+  const showChildPrice = product.accepts_children && option.price_child_usd != null;
   const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
-  const priceChildArs = (exchangeRate != null && option.price_child_usd != null)
-    ? Math.round(option.price_child_usd * exchangeRate) : null;
+  const priceChildArs = (exchangeRate != null && showChildPrice)
+    ? Math.round(option.price_child_usd! * exchangeRate) : null;
   const urgentDayLabel = urgentDay
     ? new Date(`${urgentDay.date}T00:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
     : null;
@@ -608,9 +614,9 @@ function BookingSummary({
         </p>
       )}
 
-      {option.price_child_usd != null && (
+      {showChildPrice && (
         <p className="mt-2 text-sm text-cream/60">
-          {t('product.children')}:{' '}
+          {t('product.children')}{product.children_age_label ? ` (${product.children_age_label})` : ''}:{' '}
           <span className="text-cream/85">USD {option.price_child_usd}</span>
           {priceChildArs != null && (
             <>

@@ -50,9 +50,14 @@ catalogRouter.get('/products/:slug', async (req, res, next) => {
 // ─── Disponibilidad por option en un rango de fechas ─────────────
 // Devuelve, para cada fecha del rango, si está disponible y un hint de cupos restantes.
 // NO expone los cupos exactos al frontend público (solo categorías: ok / low / full / closed).
+// `pax` (adultos + menores, comparten un único pool de cupo — ver /capacity) es opcional y
+// por defecto 1: con pax=1 el cálculo de full/low da exactamente igual que antes de este
+// parámetro, así que los consumidores que no lo mandan (checkout público, reprogramar) no
+// cambian de comportamiento.
 const availabilityQuery = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  pax: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 // Cupo restante para una fecha concreta — usado por el checkout para capear el stepper de pax
@@ -223,6 +228,7 @@ catalogRouter.get('/options/:optionId/availability', async (req, res, next) => {
       [optionId, parsed.data.from, parsed.data.to],
     );
     const overrideByDate = new Map(overrides.map((o) => [o.date, o]));
+    const pax = parsed.data.pax ?? 1;
 
     // 4) Generar respuesta día por día
     const result: Array<{ date: string; status: 'available' | 'low' | 'full' | 'closed'; reason?: string; remaining?: number }> = [];
@@ -255,9 +261,11 @@ catalogRouter.get('/options/:optionId/availability', async (req, res, next) => {
       const booked = bookedByDate.get(iso) ?? 0;
       const remaining = capacity - booked;
 
-      if (capacity > 0 && remaining <= 0) {
+      // "full" acá significa "no entra este grupo" — con pax=1 (default) equivale
+      // exactamente a remaining <= 0, igual que antes de tener este parámetro.
+      if (capacity > 0 && remaining < pax) {
         result.push({ date: iso, status: 'full' });
-      } else if (capacity > 0 && remaining <= option.low_availability_threshold) {
+      } else if (capacity > 0 && (remaining - pax) < option.low_availability_threshold) {
         // Exponer el conteo exacto solo si el admin lo habilitó
         const entry: (typeof result)[number] = { date: iso, status: 'low' };
         if (option.show_remaining_count) entry.remaining = remaining;

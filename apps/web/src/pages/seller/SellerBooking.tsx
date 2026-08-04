@@ -3,6 +3,8 @@ import { api } from '../../lib/api';
 import type { ProductDetail, ProductOption, ProductSummary } from '../../types/api';
 import SellerBookingModal from '../../components/seller/SellerBookingModal';
 import { OptionInfoCard } from '../../components/seller/OptionInfoCard';
+import SellerQuickSettings from '../../components/seller/SellerQuickSettings';
+import AvailabilityCheckModal from '../../components/seller/AvailabilityCheckModal';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 
 export default function SellerBooking() {
@@ -16,7 +18,8 @@ export default function SellerBooking() {
   const [expandedDetail, setExpandedDetail] = useState<ProductDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const [booking, setBooking] = useState<{ product: ProductDetail; option: ProductOption } | null>(null);
+  const [booking, setBooking] = useState<{ product: ProductDetail; option: ProductOption; initialDate?: string; initialAdults?: number; initialChildren?: number } | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState<{ slug: string; name: string } | null>(null);
 
   useEffect(() => {
     api.products.list()
@@ -46,10 +49,13 @@ export default function SellerBooking() {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl">
-      <header className="mb-4 md:mb-6">
-        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
-        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Nueva Reserva</h1>
-        <p className="mt-0.5 text-xs md:text-sm text-cream/50">Ingresá una reserva en nombre de un pasajero</p>
+      <header className="mb-4 md:mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
+          <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Nueva Reserva</h1>
+          <p className="mt-0.5 text-xs md:text-sm text-cream/50">Ingresá una reserva en nombre de un pasajero</p>
+        </div>
+        <SellerQuickSettings />
       </header>
 
       <div className="mb-4 md:mb-6 rounded-xl border border-gold/20 bg-gold/5 p-3 md:p-4 flex gap-3">
@@ -89,34 +95,43 @@ export default function SellerBooking() {
                 }`}
               >
                 {/* Header del producto */}
-                <button
-                  type="button"
-                  onClick={() => handleToggle(product.slug)}
-                  className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-gold/5 transition"
-                >
-                  {product.hero_image && (
-                    <img
-                      src={product.hero_image}
-                      alt=""
-                      className="h-14 w-14 rounded-lg object-cover shrink-0 border border-gold/10"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-cream font-semibold">{product.name}</p>
-                    <p className="text-xs text-gold-soft">{product.venue_name}</p>
-                    {product.short_description_es && (
-                      <p className="text-xs text-cream/50 mt-0.5 line-clamp-1">{product.short_description_es}</p>
+                <div className="w-full flex items-center gap-2 px-5 py-4 hover:bg-gold/5 transition">
+                  <button
+                    type="button"
+                    onClick={() => handleToggle(product.slug)}
+                    className="flex-1 min-w-0 flex items-center gap-4 text-left"
+                  >
+                    {product.hero_image && (
+                      <img
+                        src={product.hero_image}
+                        alt=""
+                        className="h-14 w-14 rounded-lg object-cover shrink-0 border border-gold/10"
+                      />
                     )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {product.starting_price_usd != null && (
-                      <span className="text-gold text-sm font-display">desde USD {product.starting_price_usd}</span>
-                    )}
-                    <span className={`text-cream/40 text-sm transition-transform inline-block ${isExpanded ? 'rotate-180' : ''}`}>
-                      ▾
-                    </span>
-                  </div>
-                </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-cream font-semibold">{product.name}</p>
+                      <p className="text-xs text-gold-soft">{product.venue_name}</p>
+                      {product.short_description_es && (
+                        <p className="text-xs text-cream/50 mt-0.5 line-clamp-1">{product.short_description_es}</p>
+                      )}
+                    </div>
+                    <div className="hidden sm:flex items-center gap-3 shrink-0">
+                      {product.starting_price_usd != null && (
+                        <span className="text-gold text-sm font-display">desde USD {product.starting_price_usd}</span>
+                      )}
+                      <span className={`text-cream/40 text-sm transition-transform inline-block ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+                    </div>
+                    <span className={`sm:hidden text-cream/40 text-sm transition-transform inline-block shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setCheckingAvailability({ slug: product.slug, name: product.name }); }}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gold/25 bg-gold/5 px-3 py-1.5 text-xs text-gold-soft hover:bg-gold/15 transition whitespace-nowrap"
+                  >
+                    <span aria-hidden>🗓</span>
+                    <span className="hidden sm:inline">Verificar disponibilidad</span>
+                  </button>
+                </div>
 
                 {/* Opciones expandidas */}
                 {isExpanded && (
@@ -147,6 +162,8 @@ export default function SellerBooking() {
                               key={opt.id}
                               option={opt}
                               productAvailableDays={expandedDetail.available_days}
+                              productAcceptsChildren={expandedDetail.accepts_children}
+                              productChildrenAgeLabel={expandedDetail.children_age_label}
                               onBook={() => setBooking({ product: expandedDetail, option: opt })}
                             />
                           ))}
@@ -165,8 +182,23 @@ export default function SellerBooking() {
         <SellerBookingModal
           product={booking.product}
           option={booking.option}
+          initialDate={booking.initialDate}
+          initialAdults={booking.initialAdults}
+          initialChildren={booking.initialChildren}
           isPermanent={isPermanent}
           onClose={() => setBooking(null)}
+        />
+      )}
+
+      {checkingAvailability && (
+        <AvailabilityCheckModal
+          productSlug={checkingAvailability.slug}
+          productName={checkingAvailability.name}
+          onClose={() => setCheckingAvailability(null)}
+          onBookDate={(product, option, date, pax) => {
+            setCheckingAvailability(null);
+            setBooking({ product, option, initialDate: date, initialAdults: pax?.adults, initialChildren: pax?.children });
+          }}
         />
       )}
     </div>

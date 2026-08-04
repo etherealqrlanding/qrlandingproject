@@ -3,6 +3,8 @@ import { api } from '../../lib/api';
 import type { ProductDetail, ProductOption, ProductSummary } from '../../types/api';
 import { OptionInfoCard } from '../../components/seller/OptionInfoCard';
 import SellerBookingModal from '../../components/seller/SellerBookingModal';
+import SellerQuickSettings from '../../components/seller/SellerQuickSettings';
+import AvailabilityCheckModal from '../../components/seller/AvailabilityCheckModal';
 import ShareButton from '../../components/ShareButton';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { buildShareUrl } from '../../lib/shareLinks';
@@ -15,7 +17,8 @@ export default function SellerCatalog() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, ProductDetail | 'loading' | 'error'>>({});
-  const [booking, setBooking] = useState<{ product: ProductDetail; option: ProductOption } | null>(null);
+  const [booking, setBooking] = useState<{ product: ProductDetail; option: ProductOption; initialDate?: string; initialAdults?: number; initialChildren?: number } | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState<{ slug: string; name: string } | null>(null);
 
   useEffect(() => {
     api.products.list()
@@ -42,12 +45,15 @@ export default function SellerCatalog() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl">
-      <header className="mb-2">
-        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
-        <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Catálogo de Shows</h1>
-        <p className="mt-0.5 text-xs md:text-sm text-cream/50">
-          Info completa de cada servicio para asesorar a tus pasajeros
-        </p>
+      <header className="mb-2 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
+          <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Catálogo de Shows</h1>
+          <p className="mt-0.5 text-xs md:text-sm text-cream/50">
+            Info completa de cada servicio para asesorar a tus pasajeros
+          </p>
+        </div>
+        <SellerQuickSettings />
       </header>
 
       <div className="mt-3 mb-5 md:mb-7 rounded-xl border border-gold/15 bg-gold/5 px-3 md:px-4 py-3 text-xs md:text-sm text-cream/70 flex gap-3">
@@ -111,6 +117,14 @@ export default function SellerCatalog() {
                       <span className={`text-cream/40 text-sm transition-transform inline-block ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </div>
                     <span className={`sm:hidden text-cream/40 text-sm transition-transform inline-block shrink-0 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setCheckingAvailability({ slug: product.slug, name: product.name }); }}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gold/25 bg-gold/5 px-3 py-1.5 text-xs text-gold-soft hover:bg-gold/15 transition whitespace-nowrap"
+                  >
+                    <span aria-hidden>🗓</span>
+                    <span className="hidden sm:inline">Verificar disponibilidad</span>
                   </button>
                   {me?.code && (
                     <ShareButton
@@ -190,6 +204,8 @@ export default function SellerCatalog() {
                                   key={opt.id}
                                   option={opt}
                                   productAvailableDays={detail.available_days}
+                                  productAcceptsChildren={detail.accepts_children}
+                                  productChildrenAgeLabel={detail.children_age_label}
                                   onBook={() => setBooking({ product: detail, option: opt })}
                                 />
                               ))}
@@ -214,8 +230,23 @@ export default function SellerCatalog() {
         <SellerBookingModal
           product={booking.product}
           option={booking.option}
+          initialDate={booking.initialDate}
+          initialAdults={booking.initialAdults}
+          initialChildren={booking.initialChildren}
           isPermanent={isPermanent}
           onClose={() => setBooking(null)}
+        />
+      )}
+
+      {checkingAvailability && (
+        <AvailabilityCheckModal
+          productSlug={checkingAvailability.slug}
+          productName={checkingAvailability.name}
+          onClose={() => setCheckingAvailability(null)}
+          onBookDate={(product, option, date, pax) => {
+            setCheckingAvailability(null);
+            setBooking({ product, option, initialDate: date, initialAdults: pax?.adults, initialChildren: pax?.children });
+          }}
         />
       )}
     </div>

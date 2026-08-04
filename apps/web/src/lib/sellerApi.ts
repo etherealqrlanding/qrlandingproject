@@ -358,6 +358,16 @@ export const sellerApi = {
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/archive`, { method: 'POST' }),
   operationWindows: () =>
     request<{ modify: number | null; cancel: number | null }>('/api/seller/me/operation-windows'),
+  settings: () =>
+    request<{
+      exchange_rate: number | null;
+      exchange_rate_mode: 'auto' | 'manual';
+      modify_window_hours: number | null;
+      cancel_window_hours: number | null;
+      same_day_booking_cutoff: string | null;
+      auto_archive_enabled: boolean;
+      archive_retention_days: number | null;
+    }>('/api/seller/me/settings'),
   faq: () => request<{ items: { q_es: string; a_es: string }[]; updated_at: string | null }>('/api/seller/me/faq'),
   archive: {
     list: (params?: { page?: number; limit?: number; status?: string; search?: string }) => {

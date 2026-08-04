@@ -166,6 +166,7 @@ export interface AdminProductSummary {
   id: number; slug: string; name: string; venue_name: string;
   is_active: boolean; display_order: number;
   starting_price_usd: number | null;
+  accepts_children: boolean;
   category_id: number; category_slug: string; category_name_es: string;
   options_count: string; images_count: string;
   hero_image_url: string | null;
@@ -186,6 +187,7 @@ export interface AdminProductDetail {
   starting_price_usd: number | null;
   is_active: boolean; display_order: number;
   available_days: number[];
+  accepts_children: boolean;
   options: AdminOption[];
   images: AdminImage[];
   menus: AdminMenu[];

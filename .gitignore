@@ -13,3 +13,4 @@ coverage/
 .idea/
 *.tsbuildinfo
 .pgdata/
+api/tmp-test-emails/

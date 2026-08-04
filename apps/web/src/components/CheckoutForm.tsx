@@ -140,15 +140,15 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const isDateBlocked = isPastDate || selectedDateStatus === 'full' || selectedDateStatus === 'closed';
   const isDateLow = selectedDateStatus === 'low';
 
-  const supportsChildren = option.price_child_usd != null;
+  const supportsChildren = product.accepts_children && option.price_child_usd != null;
   const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 
   const ticketsUsd = useMemo(() => {
     const adult = option.price_adult_usd * form.adults;
-    const child = (option.price_child_usd ?? 0) * form.children;
+    const child = supportsChildren ? (option.price_child_usd ?? 0) * form.children : 0;
     return Math.round((adult + child) * 100) / 100;
-  }, [option, form.adults, form.children]);
+  }, [option, form.adults, form.children, supportsChildren]);
 
   const transferUsd = useMemo(() => {
     if (!option.has_transfer || !wantsTransfer || !option.transfer_price_usd) return 0;
@@ -398,7 +398,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                 />
               </Field>
               {supportsChildren && (
-                <Field label={t('checkout.children')}>
+                <Field label={product.children_age_label ? `${t('checkout.children')} (${product.children_age_label})` : t('checkout.children')}>
                   <NumberStepper
                     value={form.children} min={0} max={maxChildren}
                     onChange={(v) => updateField('children', v)}

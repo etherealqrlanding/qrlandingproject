@@ -49,6 +49,7 @@ import SellerBooking from './pages/seller/SellerBooking';
 import SellerNotifications from './pages/seller/SellerNotifications';
 import SellerCatalog from './pages/seller/SellerCatalog';
 import SellerHelp from './pages/seller/SellerHelp';
+import SellerSettings from './pages/seller/SellerSettings';
 import SellerArchive from './pages/seller/SellerArchive';
 import ActionPage from './pages/ActionPage';
 
@@ -119,6 +120,7 @@ export default function App() {
             <Route path="nueva-reserva" element={<SellerBooking />} />
             <Route path="notificaciones" element={<SellerNotifications />} />
             <Route path="archivo" element={<SellerArchive />} />
+            <Route path="configuracion" element={<SellerSettings />} />
             <Route path="ayuda" element={<SellerHelp />} />
           </Route>
         </Routes>

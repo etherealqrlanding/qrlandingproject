@@ -16,7 +16,7 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
-import { getExchangeRate, convertUsdToArs, getModifyWindow, getCancelWindow, checkOperationWindow } from '../../services/settings.js';
+import { getExchangeRate, getExchangeRateMode, convertUsdToArs, getModifyWindow, getCancelWindow, getSameDayCutoff, getArchiveRetentionDays, checkOperationWindow } from '../../services/settings.js';
 import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification, notifyAdminsNewOrderPaid } from '../../repos/notifications.js';
@@ -227,6 +227,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
       is_active: boolean; product_active: boolean;
+      accepts_children: boolean;
     }>(
       `SELECT
          o.id, o.product_id, o.name_es, o.name_en,
@@ -242,7 +243,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
          o.net_transfer_price_ars::text AS net_transfer_price_ars,
          o.available_days, o.default_capacity_per_day, o.is_active,
          p.name AS product_name, p.slug AS product_slug,
-         p.is_active AS product_active
+         p.is_active AS product_active, p.accepts_children
        FROM product_options o
        JOIN products p ON p.id = o.product_id
       WHERE o.id = $1 LIMIT 1`,
@@ -273,7 +274,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     // Calcular totales
     const priceAdult = Number.parseFloat(option.price_adult_usd);
     const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
-    if (input.children > 0 && option.price_child_usd == null) {
+    if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
       return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
     }
     const transferPriceUsd = Number.parseFloat(option.transfer_price_usd ?? '0');
@@ -1054,6 +1055,33 @@ sellerRouter.get('/me/operation-windows', async (_req, res, next) => {
   try {
     const [modify, cancel] = await Promise.all([getModifyWindow(), getCancelWindow()]);
     res.json({ data: { modify, cancel } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/seller/me/settings — panel de "Configuración": todo lo que el admin define y el
+// vendedor necesita tener siempre a mano (tipo de cambio, ventanas de modificar/cancelar,
+// archivado automático, horario límite de reservas), en un solo llamado.
+sellerRouter.get('/me/settings', async (_req, res, next) => {
+  try {
+    const [rate, rateMode, modify, cancel, cutoff, archiveRetentionDays] = await Promise.all([
+      getExchangeRate().catch(() => null),
+      getExchangeRateMode(),
+      getModifyWindow(),
+      getCancelWindow(),
+      getSameDayCutoff(),
+      getArchiveRetentionDays(),
+    ]);
+    res.json({
+      data: {
+        exchange_rate: rate,
+        exchange_rate_mode: rateMode,
+        modify_window_hours: modify,
+        cancel_window_hours: cancel,
+        same_day_booking_cutoff: cutoff,
+        auto_archive_enabled: archiveRetentionDays !== null,
+        archive_retention_days: archiveRetentionDays,
+      },
+    });
   } catch (err) { next(err); }
 });
 

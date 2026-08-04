@@ -1,8 +1,13 @@
 import { Resend } from 'resend';
 import nodemailer from 'nodemailer';
+import fs from 'node:fs';
+import path from 'node:path';
 import { config } from '../config.js';
 import { pool } from '../db.js';
 import { getSupportWhatsapp } from './settings.js';
+
+// Carpeta de salida del modo dry-run (ver TEST_EMAIL_DRY_RUN más abajo). Gitignoreada.
+const DRY_RUN_DIR = path.resolve(process.cwd(), 'tmp-test-emails');
 
 // Transporte preferido: SMTP (ej. Gmail) si está configurado. Mandar vía el SMTP del
 // proveedor del remitente (Gmail) mantiene SPF/DKIM/DMARC alineados → buena entregabilidad
@@ -64,9 +69,34 @@ function htmlToText(html: string): string {
  * Envía un email por el transporte activo. Nunca lanza: devuelve { sent, error } para que
  * quien llama decida si avisar al usuario. Loguea siempre el fallo.
  */
-async function send(to: string | string[], subject: string, html: string): Promise<SendResult> {
+type Audience = 'CLIENTE' | 'VENDEDOR' | 'ADMIN';
+
+async function send(to: string | string[], subject: string, html: string, audience?: Audience): Promise<SendResult> {
   const transport = activeTransport();
-  const recipients = Array.isArray(to) ? to : [to];
+  let recipients = Array.isArray(to) ? to : [to];
+
+  // Modo test de comunicaciones (TEST_EMAIL_OVERRIDE, nunca activo en producción): redirige
+  // todos los destinatarios reales a una casilla de revisión, conservando el asunto original
+  // (prefijado, + el grupo destinatario si se indicó) para que se pueda identificar de qué
+  // email se trata y a quién iba dirigido con solo mirar la bandeja de entrada.
+  if (config.TEST_EMAIL_OVERRIDE && config.NODE_ENV !== 'production') {
+    console.info(`[email] TEST_EMAIL_OVERRIDE activo — "${subject}" (originalmente a ${recipients.join(', ')}) redirigido a ${config.TEST_EMAIL_OVERRIDE}`);
+    const tag = audience ? `[MAIL TESTING - ${audience}]` : '[MAIL TESTING]';
+    subject = `${tag} ${subject}`;
+    recipients = [config.TEST_EMAIL_OVERRIDE];
+
+    // Dry-run: no se manda nada por red (ni SMTP ni Resend) — se guarda como .html en disco.
+    // Sirve para revisar el diseño sin gastar cuota del proveedor.
+    if (config.TEST_EMAIL_DRY_RUN === 'true') {
+      fs.mkdirSync(DRY_RUN_DIR, { recursive: true });
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const safeSubject = subject.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+      const filePath = path.join(DRY_RUN_DIR, `${stamp}__${audience ?? 'SIN-AUDIENCIA'}__${safeSubject}.html`);
+      fs.writeFileSync(filePath, html, 'utf-8');
+      console.info(`[email] DRY RUN — guardado en ${filePath} (no se envió por red)`);
+      return { sent: true, transport: 'none' };
+    }
+  }
 
   if (transport === 'none') {
     console.warn(`[email] Sin transporte configurado (SMTP/Resend). No se envió "${subject}" a ${recipients.join(', ')}`);
@@ -505,7 +535,7 @@ export async function sendPaymentLinkEmail(orderId: number, initPoint: string): 
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
-  await send(data.customer_email, `Completá tu pago — ${orderData.option_name}`, html);
+  await send(data.customer_email, `Completá tu pago — ${orderData.option_name}`, html, 'CLIENTE');
 }
 
 // ─── Función principal: notifica los 3 destinatarios cuando una orden se paga ──
@@ -527,6 +557,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
     data.customer_email,
     `✓ Reserva confirmada — ${orderData.option_name}`,
     htmlForCustomer(orderData),
+    'CLIENTE',
   );
 
   // 2) Admin
@@ -540,6 +571,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
         seller_code: data.seller_code,
         commission_usd: data.commission_usd,
       }),
+      'ADMIN',
     );
   }
 
@@ -554,6 +586,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
         commission_usd: data.commission_usd,
         commission_percent: data.commission_percent ?? 0,
       }),
+      'VENDEDOR',
     );
   }
 }
@@ -598,7 +631,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el vendedor confirme el cobro desde su portal.</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, adminHtml, 'ADMIN');
   }
 
   // 3) Vendedor
@@ -649,7 +682,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml);
+    await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml, 'VENDEDOR');
   }
 }
 
@@ -679,7 +712,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
-  await send(data.customer_email, `¡Reserva confirmada! — ${baseData.option_name}`, customerHtml);
+  await send(data.customer_email, `¡Reserva confirmada! — ${baseData.option_name}`, customerHtml, 'CLIENTE');
 
   // 2) Admin — indica quién confirmó el cobro
   if (config.ADMIN_NOTIFICATION_EMAIL) {
@@ -711,7 +744,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   <p style="color:rgba(245,239,230,0.7);">${actorNote}</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (${fmtArs(baseData.total_ars)})`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (${fmtArs(baseData.total_ars)})`, adminHtml, 'ADMIN');
   }
 
   // 3) Vendedor — texto diferente según quién confirmó
@@ -736,7 +769,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml);
+    await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml, 'VENDEDOR');
   }
 }
 
@@ -766,7 +799,7 @@ export async function sendSellerPortalInvite(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-  return send(sellerEmail, 'Acceso a tu portal de ventas — Tangos y Milongas Tickets', html);
+  return send(sellerEmail, 'Acceso a tu portal de ventas — Tangos y Milongas Tickets', html, 'VENDEDOR');
 }
 
 export async function sendSellerPasswordReset(
@@ -793,7 +826,7 @@ export async function sendSellerPasswordReset(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-  return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html);
+  return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html, 'VENDEDOR');
 }
 
 export async function sendAdminPortalInvite(
@@ -820,7 +853,7 @@ export async function sendAdminPortalInvite(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Panel de administración</p>
 </div></body></html>`;
-  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html);
+  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html, 'ADMIN');
 }
 
 export async function sendAdminPasswordReset(
@@ -847,7 +880,7 @@ export async function sendAdminPasswordReset(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Panel de administración</p>
 </div></body></html>`;
-  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html);
+  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html, 'ADMIN');
 }
 
 /**
@@ -894,6 +927,7 @@ export async function sendOrderRefundedNotifications(
       ? `Reintegro parcial de tu reserva — ARS ${arsStr}`
       : `Tu reserva fue cancelada — reintegro ARS ${arsStr}`,
     htmlForRefund(orderData),
+    'CLIENTE',
   );
 
   // 2) Admin
@@ -904,6 +938,7 @@ export async function sendOrderRefundedNotifications(
         ? `[Reintegro parcial] ${orderData.customer_name} — ARS ${arsStr} (de ARS ${data.total_ars.toLocaleString('es-AR')})`
         : `[Reintegro procesado] ${orderData.customer_name} — ARS ${arsStr}`,
       htmlForRefund(orderData),
+      'ADMIN',
     );
   }
 
@@ -920,6 +955,7 @@ export async function sendOrderRefundedNotifications(
         commission_usd: data.commission_usd,
         is_partial: isPartial,
       }),
+      'VENDEDOR',
     );
   }
 }
@@ -971,7 +1007,7 @@ export async function sendOrderModifiedNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
-  await send(data.customer_email, `Reserva actualizada — reintegro ARS ${arsStr}`, customerHtml);
+  await send(data.customer_email, `Reserva actualizada — reintegro ARS ${arsStr}`, customerHtml, 'CLIENTE');
 
   // 2) Admin
   if (config.ADMIN_NOTIFICATION_EMAIL) {
@@ -991,7 +1027,7 @@ export async function sendOrderModifiedNotifications(
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Modificada] ${orderData.customer_name} — reintegro ARS ${arsStr}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Modificada] ${orderData.customer_name} — reintegro ARS ${arsStr}`, adminHtml, 'ADMIN');
   }
 
   // 3) Vendedor (si hay atribución y email) — su comisión se ajustó al nuevo total
@@ -1011,7 +1047,7 @@ export async function sendOrderModifiedNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `Venta modificada — ${orderData.option_name}`, sellerHtml);
+    await send(data.seller_email, `Venta modificada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
 }
 
@@ -1047,7 +1083,7 @@ export async function sendOrderIncreasedNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
-  await send(data.customer_email, `Reserva actualizada — ${orderData.option_name}`, customerHtml);
+  await send(data.customer_email, `Reserva actualizada — ${orderData.option_name}`, customerHtml, 'CLIENTE');
 
   // 2) Admin
   if (config.ADMIN_NOTIFICATION_EMAIL) {
@@ -1066,7 +1102,7 @@ export async function sendOrderIncreasedNotifications(
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliada] ${orderData.customer_name} — +ARS ${arsStr}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliada] ${orderData.customer_name} — +ARS ${arsStr}`, adminHtml, 'ADMIN');
   }
 
   // 3) Vendedor (si hay atribución) — comisión ajustada al nuevo total
@@ -1086,7 +1122,7 @@ export async function sendOrderIncreasedNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml);
+    await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
 }
 
@@ -1124,7 +1160,7 @@ export async function sendOrderRescheduledNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
-  await send(data.customer_email, `Reserva reprogramada — nueva fecha ${newDate}`, customerHtml);
+  await send(data.customer_email, `Reserva reprogramada — nueva fecha ${newDate}`, customerHtml, 'CLIENTE');
 
   // 2) Admin
   if (config.ADMIN_NOTIFICATION_EMAIL) {
@@ -1143,7 +1179,7 @@ export async function sendOrderRescheduledNotifications(
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Reprogramada] ${orderData.customer_name} — ${prevDate} → ${newDate}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Reprogramada] ${orderData.customer_name} — ${prevDate} → ${newDate}`, adminHtml, 'ADMIN');
   }
 
   // 3) Vendedor (si hay atribución y email) — no afecta su comisión, solo aviso operativo
@@ -1162,7 +1198,7 @@ export async function sendOrderRescheduledNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `Venta reprogramada — ${orderData.option_name}`, sellerHtml);
+    await send(data.seller_email, `Venta reprogramada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
 }
 
@@ -1209,6 +1245,7 @@ export async function sendSellerCancelledNotifications(
     data.customer_email,
     `Tu reserva fue cancelada — ${orderData.option_name}`,
     customerHtml,
+    'CLIENTE',
   );
 
   // 2) Vendedor — confirmación de que la cancelación se procesó y el cliente fue notificado
@@ -1238,6 +1275,7 @@ export async function sendSellerCancelledNotifications(
       data.seller_email,
       `Cancelación registrada — ${orderData.option_name} (${escapeHtml(orderData.customer_name)})`,
       sellerHtml,
+      'VENDEDOR',
     );
   }
 
@@ -1275,6 +1313,7 @@ export async function sendSellerCancelledNotifications(
       config.ADMIN_NOTIFICATION_EMAIL,
       `[Cancelada por vendedor] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`,
       adminHtml,
+      'ADMIN',
     );
   }
 }
@@ -1318,7 +1357,7 @@ export async function sendAdminCancelledNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
-  await send(data.customer_email, `Tu reserva fue cancelada — ${orderData.option_name}`, customerHtml);
+  await send(data.customer_email, `Tu reserva fue cancelada — ${orderData.option_name}`, customerHtml, 'CLIENTE');
 
   // 2) Vendedor (si la orden tenía atribución)
   if (data.seller_name && data.seller_email) {
@@ -1340,7 +1379,7 @@ export async function sendAdminCancelledNotifications(
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-    await send(data.seller_email, `[Cancelada por admin] ${escapeHtml(orderData.customer_name)} — ${escapeHtml(orderData.option_name)}`, sellerHtml);
+    await send(data.seller_email, `[Cancelada por admin] ${escapeHtml(orderData.customer_name)} — ${escapeHtml(orderData.option_name)}`, sellerHtml, 'VENDEDOR');
   }
 
   // 3) Admin
@@ -1362,7 +1401,7 @@ export async function sendAdminCancelledNotifications(
   ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cancelada admin] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cancelada admin] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`, adminHtml, 'ADMIN');
   }
 }
 
@@ -1398,7 +1437,7 @@ export async function sendSellerCommissionPaid(input: {
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-  await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html);
+  await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html, 'VENDEDOR');
 
   if (config.ADMIN_NOTIFICATION_EMAIL) {
     const adminHtml = `
@@ -1414,7 +1453,7 @@ export async function sendSellerCommissionPaid(input: {
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Liquidación MP] ${sellerName} — ${fmtArs(totalCommissionArs)}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Liquidación MP] ${sellerName} — ${fmtArs(totalCommissionArs)}`, adminHtml, 'ADMIN');
   }
 }
 
@@ -1451,7 +1490,7 @@ export async function sendNetSettledConfirmation(input: {
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
 </div></body></html>`;
-  await send(sellerEmail, `Rendición confirmada — ${fmtArs(totalNetArs)} recibidos`, html);
+  await send(sellerEmail, `Rendición confirmada — ${fmtArs(totalNetArs)} recibidos`, html, 'VENDEDOR');
 
   if (config.ADMIN_NOTIFICATION_EMAIL) {
     const adminHtml = `
@@ -1467,6 +1506,6 @@ export async function sendNetSettledConfirmation(input: {
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
-    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Rendición efectivo] ${sellerName} — ${fmtArs(totalNetArs)}`, adminHtml);
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Rendición efectivo] ${sellerName} — ${fmtArs(totalNetArs)}`, adminHtml, 'ADMIN');
   }
 }

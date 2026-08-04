@@ -5,11 +5,14 @@ const DAY = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 interface Props {
   option: ProductOption;
   productAvailableDays: number[];
+  productAcceptsChildren: boolean;
+  productChildrenAgeLabel: string | null;
   onBook?: () => void;
 }
 
-export function OptionInfoCard({ option, productAvailableDays, onBook }: Props) {
+export function OptionInfoCard({ option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, onBook }: Props) {
   const hasTimes = option.pickup_window_es || option.dinner_time_es || option.show_time_es;
+  const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
 
   return (
     <div className="rounded-xl border border-gold/15 bg-ink/40 p-4 space-y-3">
@@ -27,8 +30,10 @@ export function OptionInfoCard({ option, productAvailableDays, onBook }: Props) 
         <div className="text-right shrink-0">
           <p className="text-gold font-display text-xl leading-none">USD {option.price_adult_usd}</p>
           <p className="text-[10px] text-cream/40 mt-0.5">por adulto</p>
-          {option.price_child_usd != null && (
-            <p className="text-xs text-cream/50 mt-1">Menor: USD {option.price_child_usd}</p>
+          {showChildPrice && (
+            <p className="text-xs text-cream/50 mt-1">
+              Menor{productChildrenAgeLabel ? ` (${productChildrenAgeLabel})` : ''}: USD {option.price_child_usd}
+            </p>
           )}
         </div>
       </div>

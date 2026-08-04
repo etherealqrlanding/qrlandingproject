@@ -16,7 +16,8 @@
     "nautt:discover": "tsx src/scripts/nautt-discover.ts",
     "seed:faq": "tsx src/scripts/seed-faq.ts",
     "seed:menu-senor-tango": "tsx src/scripts/seed-menu-senor-tango.ts",
-    "seed:menu-remaining": "tsx src/scripts/seed-menu-remaining-houses.ts"
+    "seed:menu-remaining": "tsx src/scripts/seed-menu-remaining-houses.ts",
+    "send:test-emails": "tsx src/scripts/send-test-emails.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

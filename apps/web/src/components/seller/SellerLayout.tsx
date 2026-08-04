@@ -15,6 +15,7 @@ const NAV = [
   { to: '/seller/liquidaciones', label: 'Liquidaciones', icon: '⬡' },
   { to: '/seller/archivo', label: 'Archivo', icon: '📁' },
   { to: '/seller/notificaciones', label: 'Notificaciones', icon: '🔔' },
+  { to: '/seller/configuracion', label: 'Configuración', icon: '⚙' },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
