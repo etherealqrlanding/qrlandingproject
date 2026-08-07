@@ -193,7 +193,7 @@ export default function SellerLayout() {
           )}
         </div>
 
-        <nav ref={navRef} className="flex-1 px-3 py-4 space-y-1 relative">
+        <nav ref={navRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 relative">
           {navIndicator && (
             <div
               aria-hidden
