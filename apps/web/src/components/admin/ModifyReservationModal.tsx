@@ -1,15 +1,18 @@
 import { useMemo, useState } from 'react';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import Checkbox from '../Checkbox';
+import type { SellerMember } from '../../lib/sellerApi';
+import MemberPinGate, { isMemberPinMissing } from '../seller/MemberPinGate';
 
-type ReduceBody = {
+type MemberFields = { seller_member_id?: number; seller_member_pin?: string };
+type ReduceBody = MemberFields & {
   adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean;
   // Presente solo cuando la misma acción también reprograma la fecha: así el backend
   // manda un único email combinado en vez de uno por la reducción y otro por la fecha.
   reschedule_from?: string; reschedule_to?: string;
 };
-type IncreaseBody = { adults: number; children: number; reason?: string; notify_customer?: boolean };
-type RescheduleBody = { new_date: string; reason?: string; notify_customer?: boolean };
+type IncreaseBody = MemberFields & { adults: number; children: number; reason?: string; notify_customer?: boolean };
+type RescheduleBody = MemberFields & { new_date: string; reason?: string; notify_customer?: boolean };
 
 // Handlers de API — el admin y el vendedor pasan los suyos. Los que falten deshabilitan
 // esa operación (ej. el vendedor NO puede reintegrar por MP → reduceMp ausente).
@@ -45,12 +48,15 @@ interface Props {
   handlers: ModifyHandlers;
   onClose: () => void;
   onDone: () => void;
+  // Solo lo pasa el portal de vendedores (no el admin): si el vendedor tiene equipo
+  // cargado, exige elegir quién hace el cambio + su PIN antes de dejar confirmar.
+  members?: SellerMember[];
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const fmtArs = (n: number) => `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 
-export default function ModifyReservationModal({ order, item, handlers, onClose, onDone }: Props) {
+export default function ModifyReservationModal({ order, item, handlers, onClose, onDone, members }: Props) {
   const origAdults = item.adults;
   const origChildren = item.children;
   const unitAdult = Number(item.unit_price_adult_usd);
@@ -73,6 +79,15 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const [error, setError] = useState<string | null>(null);
   const [mpLink, setMpLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Equipo cargado → hay que identificarse con PIN antes de poder confirmar cualquier cambio.
+  const teamMembers = members ?? [];
+  const [memberId, setMemberId] = useState<number | ''>('');
+  const [memberPin, setMemberPin] = useState('');
+  const memberFields: MemberFields = memberId !== ''
+    ? { seller_member_id: memberId, seller_member_pin: memberPin }
+    : {};
+  const memberMissing = isMemberPinMissing(teamMembers, memberId, memberPin);
 
   const newPax = adults + children;
   const isIncreasing = newPax > origAdults + origChildren;
@@ -113,6 +128,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
   const handleConfirm = async () => {
     setError(null);
+    if (memberMissing) { setError('Elegí quién sos y tu PIN para confirmar el cambio.'); return; }
     setProcessing(true);
     try {
       // Si además de la fecha también hay una reducción de pax, mandamos UN solo email
@@ -124,12 +140,14 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         await handlers.reschedule({
           new_date: newDate, reason: reason.trim() || undefined,
           notify_customer: combiningWithReduce ? false : notify,
+          ...memberFields,
         });
       }
       if (preview.direction === 'reduce') {
         const body: ReduceBody = {
           adults, children, transfer_requested: effectiveTransfer, reason: reason.trim() || undefined, notify_customer: notify,
           ...(combiningWithReduce ? { reschedule_from: item.service_date, reschedule_to: newDate } : {}),
+          ...memberFields,
         };
         const fn = isMp ? handlers.reduceMp : handlers.reduceCash;
         if (!fn) { setError('Esta operación no está disponible.'); return; }
@@ -142,7 +160,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           setMpLink(r.init_point);
         } else {
           if (!handlers.increaseCash) { setError('Esta operación no está disponible.'); return; }
-          await handlers.increaseCash({ adults, children, reason: reason.trim() || undefined, notify_customer: notify });
+          await handlers.increaseCash({ adults, children, reason: reason.trim() || undefined, notify_customer: notify, ...memberFields });
           onDone();
         }
       } else if (hasDateChange) {
@@ -297,12 +315,21 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             <p className="text-xs text-cream/40">El cliente recibe el email de confirmación cuando confirmás el cobro.</p>
           )}
 
+          <MemberPinGate
+            members={teamMembers}
+            memberId={memberId}
+            memberPin={memberPin}
+            onMemberIdChange={setMemberId}
+            onPinChange={setMemberPin}
+            label="¿Quién sos? Tu equipo está cargado — necesitamos tu PIN para confirmar este cambio."
+          />
+
           {error && <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90">{error}</div>}
         </div>
 
         <div className="p-6 border-t border-gold/10 flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} disabled={processing} className="btn-ghost text-sm disabled:opacity-40">Cancelar</button>
-          <button type="button" onClick={handleConfirm} disabled={processing || (preview.direction === 'none' && !hasDateChange) || reduceBlocked || increaseBlocked || rescheduleBlocked}
+          <button type="button" onClick={handleConfirm} disabled={processing || (preview.direction === 'none' && !hasDateChange) || reduceBlocked || increaseBlocked || rescheduleBlocked || memberMissing}
             className="btn-primary text-sm disabled:opacity-40">
             {processing ? 'Procesando...' : confirmLabel}
           </button>

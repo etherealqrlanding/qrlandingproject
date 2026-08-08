@@ -6,6 +6,9 @@ import { RouteValidationError } from '../../errors.js';
 import { requireSeller } from '../../middleware/requireSeller.js';
 import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
+import { resolveSellerMember, requireMemberIfTeamExists } from '../../repos/sellerMembers.js';
+import { sellerMembersRouter } from './members.js';
+import { sellerBrandingRouter } from './branding.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
 import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail } from '../../services/email.js';
@@ -66,6 +69,14 @@ sellerRouter.post('/auth/forgot-password', authLimiter, async (req, res, next) =
 // ─── Rutas protegidas ─────────────────────────────────────
 sellerRouter.use(requireSeller);
 
+// Mi equipo: sub-vendedores (ej. conserjes) que comparten mi código/QR. Alta/baja y
+// stats de "quién vendió qué" dentro de mi cuenta — solo trazabilidad interna, no
+// afecta comisión ni liquidación (esas siguen siendo 100% a nivel de este vendedor).
+sellerRouter.use('/me/members', sellerMembersRouter);
+
+// Personalización de la landing pública (logo/lema/teléfono) — solo si el admin lo habilitó.
+sellerRouter.use('/me/branding', sellerBrandingRouter);
+
 // GET /api/seller/me — perfil del vendedor + stats agregados
 sellerRouter.get('/me', async (req, res, next) => {
   try {
@@ -73,6 +84,7 @@ sellerRouter.get('/me', async (req, res, next) => {
       `SELECT
          s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
          s.is_permanent,
+         s.landing_customization_enabled, s.logo_url, s.tagline, s.public_phone,
          s.commission_percent::text AS commission_percent,
          COALESCE(stats.orders_paid, 0)::int       AS orders_paid,
          COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
@@ -188,6 +200,10 @@ const sellerCheckoutSchema = z.object({
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  // Sub-vendedor (ej. conserje) que cerró esta venta puntual dentro de mi cuenta —
+  // opcional, solo aplica si tengo equipo cargado. Requiere su PIN como firma.
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/checkout', async (req, res, next) => {
@@ -205,6 +221,16 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     );
     const seller = sellerRows[0];
     if (!seller) return res.status(403).json({ error: 'Vendedor no encontrado o inactivo' });
+
+    let sellerMemberId: number | null = null;
+    if (input.seller_member_id != null) {
+      if (!input.seller_member_pin) {
+        return res.status(400).json({ error: 'Ingresá el PIN de la persona que cerró la venta.' });
+      }
+      const resolved = await resolveSellerMember(seller.id, input.seller_member_id, input.seller_member_pin);
+      if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
+      sellerMemberId = resolved.memberId;
+    }
 
     // Pago en efectivo solo permitido para vendedores permanentes (is_permanent = true)
     if (input.payment_method === 'cash' && !seller.is_permanent) {
@@ -342,6 +368,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       payment_method: input.payment_method,
       default_capacity_per_day: option.default_capacity_per_day,
       utm: { source: 'seller_portal', medium: seller.code, campaign: null },
+      seller_member_id: sellerMemberId,
     });
 
     // ── Pago en efectivo ──────────────────────────────────
@@ -480,7 +507,13 @@ sellerRouter.get('/me/commissions/:date/orders', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-const collectCashSchema = z.object({ currency: z.enum(['ARS', 'USD']).default('ARS') });
+const collectCashSchema = z.object({
+  currency: z.enum(['ARS', 'USD']).default('ARS'),
+  // Sub-vendedor (ej. conserje) que cobró — opcional, se puede marcar acá si no se
+  // marcó al cargar la reserva (o para corregirlo).
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+});
 
 // POST /api/seller/me/orders/:publicId/collect — vendedor confirma que recibió el dinero en efectivo
 sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
@@ -489,7 +522,12 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
     if (!publicId) return res.status(400).json({ error: 'publicId requerido' });
     const parsedCurrency = collectCashSchema.safeParse(req.body ?? {});
     if (!parsedCurrency.success) return res.status(400).json({ error: 'Moneda inválida' });
-    const { currency } = parsedCurrency.data;
+    const { currency, seller_member_id, seller_member_pin } = parsedCurrency.data;
+
+    // Si el vendedor tiene equipo cargado, confirmar el cobro exige identificarse con PIN.
+    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, { seller_member_id, seller_member_pin });
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
+    const sellerMemberId = memberCheck.memberId;
 
     // Verificar que la orden pertenece a este vendedor, es cash y está pendiente
     const { rows } = await pool.query<{
@@ -531,6 +569,13 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
       return res.status(409).json({ error: 'La orden ya fue procesada anteriormente' });
     }
 
+    if (sellerMemberId != null) {
+      await pool.query(
+        `UPDATE order_attributions SET seller_member_id = $2 WHERE order_id = $1`,
+        [order.id, sellerMemberId],
+      );
+    }
+
     await logPaymentEvent(order.id, 'cash_collected_by_seller', null, { seller_id: req.seller!.sellerId, currency });
 
     // Aviso en vivo al panel de órdenes del admin — el vendedor confirmó el cobro,
@@ -548,12 +593,59 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const attributionSchema = z.object({
+  seller_member_id: z.number().int().positive().nullable(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+});
+
+// PATCH /api/seller/me/orders/:publicId/attribution — marca (o corrige) qué persona de
+// mi equipo cerró esta venta. Sirve para las que no tuvieron touchpoint humano al
+// crearse (ej. el pasajero pagó por Mercado Pago solo desde la habitación) y el hotel
+// se entera después de quién la asistió. Mandar seller_member_id: null la limpia.
+sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    const parsed = attributionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+    const { seller_member_id, seller_member_pin } = parsed.data;
+
+    const { rows } = await pool.query<{ id: number }>(
+      `SELECT o.id
+         FROM orders o
+         JOIN order_attributions a ON a.order_id = o.id
+        WHERE o.public_id = $1 AND a.seller_id = $2
+        LIMIT 1`,
+      [publicId, req.seller!.sellerId],
+    );
+    const order = rows[0];
+    if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
+
+    let sellerMemberId: number | null = null;
+    if (seller_member_id != null) {
+      if (!seller_member_pin) {
+        return res.status(400).json({ error: 'Ingresá el PIN de la persona que cerró la venta.' });
+      }
+      const resolved = await resolveSellerMember(req.seller!.sellerId, seller_member_id, seller_member_pin);
+      if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
+      sellerMemberId = resolved.memberId;
+    }
+
+    await pool.query(
+      `UPDATE order_attributions SET seller_member_id = $2 WHERE order_id = $1`,
+      [order.id, sellerMemberId],
+    );
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
 // POST /api/seller/me/orders/:publicId/increase-cash — el vendedor suma pasajeros a una
 // reserva EN EFECTIVO suya: crea una ampliación PENDIENTE de cobro (reserva el cupo).
 // Después confirma el cobro (flujo pendiente → cobrada, como la reserva original).
 const sellerIncreaseSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) => {
@@ -562,6 +654,9 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
     if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
     const parsed = sellerIncreaseSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
     const result = await createCashAddonForOrder({
       orderPublicId: publicId, adults: parsed.data.adults, children: parsed.data.children,
@@ -584,11 +679,21 @@ sellerRouter.get('/me/orders/:publicId/addons', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const sellerMemberOnlySchema = z.object({
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+});
+
 // POST /api/seller/me/addons/:addonPublicId/collect — confirma el cobro de una ampliación en efectivo
 sellerRouter.post('/me/addons/:addonPublicId/collect', async (req, res, next) => {
   try {
     const addonPublicId = req.params.addonPublicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(addonPublicId)) return res.status(400).json({ error: 'ID inválido' });
+    const parsedMember = sellerMemberOnlySchema.safeParse(req.body ?? {});
+    if (!parsedMember.success) return res.status(400).json({ error: 'Datos inválidos', details: parsedMember.error.flatten() });
+    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsedMember.data);
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
+
     const addon = await getAddonForAction(addonPublicId);
     if (!addon || addon.seller_id !== req.seller!.sellerId) return res.status(404).json({ error: 'Ampliación no encontrada' });
     if (addon.payment_method !== 'cash') return res.status(400).json({ error: 'Esta ampliación no es en efectivo.' });
@@ -612,11 +717,16 @@ sellerRouter.post('/me/addons/:addonPublicId/cancel', async (req, res, next) => 
   try {
     const addonPublicId = req.params.addonPublicId;
     if (!/^[0-9a-f-]{8,40}$/i.test(addonPublicId)) return res.status(400).json({ error: 'ID inválido' });
+    const parsedMember = sellerMemberOnlySchema.safeParse(req.body ?? {});
+    if (!parsedMember.success) return res.status(400).json({ error: 'Datos inválidos', details: parsedMember.error.flatten() });
+    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsedMember.data);
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
+
     const addon = await getAddonForAction(addonPublicId);
     if (!addon || addon.seller_id !== req.seller!.sellerId) return res.status(404).json({ error: 'Ampliación no encontrada' });
     const orderId = await cancelAddon(addonPublicId);
     if (orderId == null) return res.status(409).json({ error: 'La ampliación no está pendiente.' });
-    await logPaymentEvent(orderId, 'addon_cancelled', null, { addon_public_id: addonPublicId });
+    await logPaymentEvent(orderId, 'addon_cancelled', null, { addon_public_id: addonPublicId, seller_member_id: memberCheck.memberId });
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
@@ -633,6 +743,8 @@ const sellerReduceSchema = z.object({
   // ModifyReservationModal): permiten mandar un único email combinado.
   reschedule_from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   reschedule_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => {
@@ -642,6 +754,9 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
 
     const parsed = sellerReduceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
     const { rows } = await pool.query<{
       order_id: number; status: string; payment_method: string;
@@ -773,6 +888,8 @@ sellerRouter.get('/me/orders/:publicId/events', async (req, res, next) => {
 // Las órdenes de Mercado Pago las cancela el administrador (ver payment_method check abajo).
 const sellerCancelSchema = z.object({
   reason: z.string().max(500).nullish(),
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
@@ -783,6 +900,9 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
     const parsed = sellerCancelSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     const reason = parsed.data.reason ?? null;
+
+    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
     const { rows } = await pool.query<{
       order_id: number; status: string; payment_method: string;
@@ -827,7 +947,7 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
       return res.status(409).json({ error: 'La reserva ya fue procesada anteriormente' });
     }
     await logPaymentEvent(row.order_id, 'order_cancelled', null, {
-      actor: 'seller', seller_id: req.seller!.sellerId, reason,
+      actor: 'seller', seller_id: req.seller!.sellerId, seller_member_id: memberCheck.memberId, reason,
     });
 
     // Notificar al cliente y al admin — el cliente debe coordinar devolución con el vendedor
@@ -848,6 +968,8 @@ const sellerRescheduleSchema = z.object({
   new_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   reason: z.string().max(500).nullish(),
   notify_customer: z.boolean().optional(),
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
@@ -855,6 +977,9 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
   if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
   const parsed = sellerRescheduleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+  const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+  if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
   const { new_date, reason, notify_customer } = parsed.data;
   const newDateObj = new Date(`${new_date}T00:00:00`);

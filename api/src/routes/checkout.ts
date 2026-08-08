@@ -515,13 +515,29 @@ checkoutRouter.get('/seller-info', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid code' });
     }
     res.set('Cache-Control', 'no-store');
-    const { rows } = await pool.query<{ name: string; kind: string | null; is_permanent: boolean; is_active: boolean }>(
-      `SELECT name, kind, is_permanent, is_active FROM sellers WHERE code = $1 LIMIT 1`,
+    const { rows } = await pool.query<{
+      name: string; kind: string | null; is_permanent: boolean; is_active: boolean;
+      landing_customization_enabled: boolean; logo_url: string | null; tagline: string | null; public_phone: string | null;
+    }>(
+      `SELECT name, kind, is_permanent, is_active,
+              landing_customization_enabled, logo_url, tagline, public_phone
+         FROM sellers WHERE code = $1 LIMIT 1`,
       [code],
     );
     if (!rows[0]) return res.status(404).json({ error: 'Seller not found' });
     if (!rows[0].is_active) return res.status(410).json({ error: 'SELLER_INACTIVE' });
-    res.json({ data: { name: rows[0].name, kind: rows[0].kind, is_permanent: rows[0].is_permanent } });
+    const s = rows[0];
+    res.json({
+      data: {
+        name: s.name,
+        kind: s.kind,
+        is_permanent: s.is_permanent,
+        // Solo viaja al público si el admin habilitó la personalización para este vendedor.
+        branding: s.landing_customization_enabled
+          ? { logo_url: s.logo_url, tagline: s.tagline, public_phone: s.public_phone }
+          : null,
+      },
+    });
   } catch (err) { next(err); }
 });
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sellerApi, SellerApiError, type SellerBookingInput, type SellerBookingResult } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, type SellerBookingInput, type SellerBookingResult, type SellerMember } from '../../lib/sellerApi';
 import type { ProductDetail, ProductOption } from '../../types/api';
 import BookingForm from '../booking/BookingForm';
 
@@ -21,6 +21,17 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SellerBookingResult | null>(null);
 
+  // Sub-vendedores (ej. conserjes) de mi equipo — el selector solo aparece si tengo
+  // alguno cargado, para no meterle un campo de más al 99% de los vendedores que
+  // venden solos.
+  const [members, setMembers] = useState<SellerMember[]>([]);
+  const [memberId, setMemberId] = useState<number | ''>('');
+  const [memberPin, setMemberPin] = useState('');
+
+  useEffect(() => {
+    sellerApi.members.list().then((list) => setMembers(list.filter((m) => m.is_active))).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -35,9 +46,16 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
 
   const handleValidSubmit = async (payload: SellerBookingInput): Promise<void> => {
     setError(null);
+    if (memberId !== '' && !/^\d{4,6}$/.test(memberPin)) {
+      setError('Ingresá el PIN de la persona que cerró la venta (4-6 dígitos).');
+      return;
+    }
     setSubmitting(true);
     try {
-      const res = await sellerApi.checkout.create(payload);
+      const res = await sellerApi.checkout.create({
+        ...payload,
+        ...(memberId !== '' ? { seller_member_id: memberId, seller_member_pin: memberPin } : {}),
+      });
       // MP: el vendedor no ve ni reenvía el link — se lo mandamos al pasajero por email.
       setResult(res);
     } catch (err) {
@@ -143,6 +161,32 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
           </div>
 
           <div className="p-7">
+            {members.length > 0 && (
+              <div className="mb-5 rounded-lg border border-gold/20 bg-gold/5 p-3 md:p-4">
+                <p className="text-xs text-cream/70 mb-2">
+                  <strong className="text-cream/90">¿Quién de tu equipo cerró esta venta?</strong> Opcional — dejalo en blanco si la venta es "de la casa".
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={memberId}
+                    onChange={(e) => setMemberId(e.target.value ? Number(e.target.value) : '')}
+                    className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream focus:outline-none focus:border-gold/40"
+                  >
+                    <option value="">— Sin especificar —</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                  {memberId !== '' && (
+                    <input
+                      value={memberPin}
+                      onChange={(e) => setMemberPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Su PIN"
+                      inputMode="numeric"
+                      className="sm:w-32 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
             <BookingForm
               option={option}
               productAcceptsChildren={product.accepts_children}

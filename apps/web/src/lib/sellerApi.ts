@@ -125,6 +125,10 @@ export interface SellerMe {
   contact_phone: string | null;
   kind: string | null;
   is_permanent: boolean;
+  landing_customization_enabled: boolean;
+  logo_url: string | null;
+  tagline: string | null;
+  public_phone: string | null;
   commission_percent: string;
   orders_paid: number;
   revenue_paid_usd: number;
@@ -176,6 +180,20 @@ export interface SellerOrder {
   was_reduced: boolean;
   has_paid_addon: boolean;
   restored_at: string | null;
+  seller_member_id: number | null;
+  seller_member_name: string | null;
+}
+
+export interface SellerMember {
+  id: number;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface SellerMemberStats extends SellerMember {
+  orders_paid: number;
+  revenue_paid_ars: number;
 }
 
 export interface SellerBookingInput {
@@ -194,6 +212,8 @@ export interface SellerBookingInput {
   transfer_requested?: boolean;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
+  seller_member_id?: number | null;
+  seller_member_pin?: string;
 }
 
 export interface SellerBookingResult {
@@ -318,17 +338,30 @@ export const sellerApi = {
         body: JSON.stringify(input),
       }),
   },
-  collectCash: (publicId: string, currency: 'ARS' | 'USD') =>
+  collectCash: (publicId: string, currency: 'ARS' | 'USD', member?: { seller_member_id: number; seller_member_pin: string }) =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/collect`, {
       method: 'POST',
-      body: JSON.stringify({ currency }),
+      body: JSON.stringify({ currency, ...member }),
     }),
-  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string }) =>
+  setOrderAttribution: (publicId: string, sellerMemberId: number | null, pin?: string) =>
+    request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution`, {
+      method: 'PATCH',
+      body: JSON.stringify({ seller_member_id: sellerMemberId, seller_member_pin: pin }),
+    }),
+  members: {
+    list: () => request<SellerMember[]>('/api/seller/me/members'),
+    stats: () => request<SellerMemberStats[]>('/api/seller/me/members/stats'),
+    create: (name: string, pin: string, adminPin: string) =>
+      request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, pin, admin_pin: adminPin }) }),
+    update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; admin_pin?: string; current_pin?: string }) =>
+      request<SellerMember>(`/api/seller/me/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  },
+  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string; seller_member_id?: number; seller_member_pin?: string }) =>
     request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reduce-cash`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean }) =>
+  increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string }) =>
     request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/increase-cash`,
       { method: 'POST', body: JSON.stringify(body) },
@@ -339,20 +372,20 @@ export const sellerApi = {
     ),
   orderAddons: (publicId: string) =>
     request<SellerPendingAddon[]>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/addons`),
-  collectAddon: (addonPublicId: string) =>
+  collectAddon: (addonPublicId: string, member?: { seller_member_id: number; seller_member_pin: string }) =>
     request<{ ok: true; charge_usd: number; charge_ars: number }>(
-      `/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST' }),
-  cancelAddon: (addonPublicId: string) =>
-    request<{ ok: true }>(`/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/cancel`, { method: 'POST' }),
-  reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean }) =>
+      `/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST', body: JSON.stringify(member ?? {}) }),
+  cancelAddon: (addonPublicId: string, member?: { seller_member_id: number; seller_member_pin: string }) =>
+    request<{ ok: true }>(`/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/cancel`, { method: 'POST', body: JSON.stringify(member ?? {}) }),
+  reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string }) =>
     request<{ ok: true; prev_date: string; new_date: string }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reschedule`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  cancelOrder: (publicId: string, reason?: string) =>
+  cancelOrder: (publicId: string, reason?: string, member?: { seller_member_id: number; seller_member_pin: string }) =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({ reason: reason ?? null }),
+      body: JSON.stringify({ reason: reason ?? null, ...member }),
     }),
   archiveOrder: (publicId: string) =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/archive`, { method: 'POST' }),
@@ -396,6 +429,15 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
+  branding: {
+    uploadSign: (filename: string, contentType: string) =>
+      request<{ upload_url: string; token: string; path: string; public_url: string }>(
+        '/api/seller/me/branding/upload-sign',
+        { method: 'POST', body: JSON.stringify({ filename, content_type: contentType }) },
+      ),
+    update: (body: { logo_url: string | null; tagline: string; public_phone: string }) =>
+      request<{ ok: true }>('/api/seller/me/branding', { method: 'PATCH', body: JSON.stringify(body) }),
+  },
   qrBlob: async (size = 400): Promise<Blob> => {
     const token = await getValidToken();
     const res = await doFetch(`/api/seller/me/qr?size=${size}`, token);

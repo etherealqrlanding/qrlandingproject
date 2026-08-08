@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminSeller } from '../../../lib/adminApi';
 import { SELLER_KINDS, sellerKindSuggestsCash } from '../../../lib/sellerKinds';
 import InvitePortalSection from './InvitePortalSection';
+import TeamAdminPinSection from './TeamAdminPinSection';
 import Checkbox from '../../../components/Checkbox';
 
 interface Props {
@@ -18,6 +19,7 @@ const empty = {
   contact_email: '', contact_phone: '',
   kind: '', commission_percent: 10,
   notes: '', is_active: true, is_permanent: false, is_house: false,
+  landing_customization_enabled: false,
 };
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
@@ -207,6 +209,15 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             </span>
           </span>
         </label>
+        <label className="inline-flex items-center gap-2">
+          <Checkbox checked={form.landing_customization_enabled ?? false} onChange={(checked) => update('landing_customization_enabled', checked)} />
+          <span className="text-cream/80">
+            Puede personalizar su página
+            <span className="ml-2 text-xs text-cream/50">
+              (socios comerciales: puede cargar logo, lema y teléfono público que se muestran en la home a sus referidos)
+            </span>
+          </span>
+        </label>
         {form.is_house && (
           <p className="text-xs text-gold-soft bg-gold/5 border border-gold/15 rounded-md px-3 py-2">
             💡 Para ventas directas de la agencia (Instagram, WhatsApp, mostrador) sin pagarte comisión a vos mismo,
@@ -238,7 +249,10 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
       </div>
 
       {!isNew && seller && (
-        <InvitePortalSection seller={seller} onUpdated={onUpdated} />
+        <>
+          <InvitePortalSection seller={seller} onUpdated={onUpdated} />
+          <TeamAdminPinSection seller={seller} onUpdated={onUpdated} />
+        </>
       )}
     </form>
   );

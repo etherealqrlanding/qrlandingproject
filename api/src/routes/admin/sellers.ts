@@ -8,6 +8,7 @@ import {
 import { config } from '../../config.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
+import { hashPin } from '../../services/pin.js';
 import { sendSellerPortalInvite, sendSellerPasswordReset, sendSellerCommissionPaid, sendNetSettledConfirmation } from '../../services/email.js';
 import { createCommissionPaidNotification, createNetSettledNotification } from '../../repos/notifications.js';
 
@@ -24,6 +25,7 @@ const sellerSchema = z.object({
   is_active: z.boolean().optional(),
   is_permanent: z.boolean().optional(),
   is_house: z.boolean().optional(),
+  landing_customization_enabled: z.boolean().optional(),
 });
 
 adminSellersRouter.get('/', async (_req, res, next) => {
@@ -144,6 +146,30 @@ adminSellersRouter.delete('/:id/permanent', async (req, res, next) => {
     }
     next(err);
   }
+});
+
+// ─── PIN de administrador (equipo/Mi equipo del vendedor) ─
+// Solo nosotros lo cargamos/reseteamos acá. Sin este PIN, el vendedor no puede
+// crear ni editar sub-vendedores en su portal — ver requireMemberIfTeamExists
+// y routes/seller/members.ts.
+const setAdminPinSchema = z.object({
+  admin_pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos'),
+});
+
+adminSellersRouter.post('/:id/admin-pin', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = setAdminPinSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const { rowCount } = await pool.query(
+      `UPDATE sellers SET admin_pin_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [hashPin(parsed.data.admin_pin), id],
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
 });
 
 // ─── Órdenes atribuidas ──────────────────────────────────

@@ -4,6 +4,8 @@ import { fmtArs } from '../../lib/useExchangeRate';
 import { useSellerSettings, windowLabel as windowLabelShort } from '../../lib/useSellerSettings';
 import AvailabilityCalendar from '../../components/AvailabilityCalendar';
 import type { ProductSummary, ProductDetail } from '../../types/api';
+import SellerTeamSection from '../../components/seller/SellerTeamSection';
+import SellerBrandingSection from '../../components/seller/SellerBrandingSection';
 
 function windowLabel(hours: number | null): string {
   return hours == null ? windowLabelShort(hours) : `${windowLabelShort(hours)} antes del servicio`;
@@ -110,6 +112,12 @@ export default function SellerSettings() {
           />
         </section>
       )}
+
+      {/* ── Personalizar mi página (solo socios habilitados) ── */}
+      <SellerBrandingSection />
+
+      {/* ── Mi equipo ── */}
+      <SellerTeamSection />
 
       {/* ── Cupo por fecha ── */}
       <section>

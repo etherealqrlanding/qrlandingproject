@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerOrder, type SellerPendingAddon } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerOrder, type SellerPendingAddon, type SellerMember } from '../../lib/sellerApi';
 import DetailRow from '../../components/DetailRow';
+import AttributionPicker from '../../components/seller/AttributionPicker';
+import MemberPinGate, { isMemberPinMissing } from '../../components/seller/MemberPinGate';
 
 function isWindowBlocked(hours: number | null, serviceDate: string): boolean {
   if (!hours) return false;
@@ -162,6 +164,9 @@ export default function SellerOrders() {
   const [confirmPublicId, setConfirmPublicId] = useState<string | null>(null);
   const [collectCurrency, setCollectCurrency] = useState<'ARS' | 'USD'>('ARS');
   const [collectError, setCollectError] = useState<string | null>(null);
+  const [members, setMembers] = useState<SellerMember[]>([]);
+  const [collectMemberId, setCollectMemberId] = useState<number | ''>('');
+  const [collectMemberPin, setCollectMemberPin] = useState('');
   const [modifyOrder, setModifyOrder] = useState<SellerOrder | null>(null);
   const [eventsByOrder, setEventsByOrder] = useState<Record<string, OrderEvent[]>>({});
   const [addonsByOrder, setAddonsByOrder] = useState<Record<string, SellerPendingAddon[]>>({});
@@ -172,6 +177,8 @@ export default function SellerOrders() {
   const [cancelConfirmOrder, setCancelConfirmOrder] = useState<SellerOrder | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelMemberId, setCancelMemberId] = useState<number | ''>('');
+  const [cancelMemberPin, setCancelMemberPin] = useState('');
   const [archivingOrder, setArchivingOrder] = useState<string | null>(null);
 
   const reload = async () => {
@@ -197,10 +204,10 @@ export default function SellerOrders() {
     if (!addonsByOrder[o.public_id]) loadAddons(o.public_id);
   }, [expanded, orders, eventsByOrder, addonsByOrder]);
 
-  const handleCollectAddon = async (orderPublicId: string, addonPublicId: string) => {
+  const handleCollectAddon = async (orderPublicId: string, addonPublicId: string, member?: { seller_member_id: number; seller_member_pin: string }) => {
     setAddonBusy(addonPublicId);
     try {
-      await sellerApi.collectAddon(addonPublicId);
+      await sellerApi.collectAddon(addonPublicId, member);
       // Invalida el histórico cacheado: confirmar el cobro agrega un evento nuevo
       // ("cobro confirmado") que si no, quedaba sin verse hasta recargar la página entera.
       setEventsByOrder((prev) => { const next = { ...prev }; delete next[orderPublicId]; return next; });
@@ -213,10 +220,10 @@ export default function SellerOrders() {
     }
   };
 
-  const handleCancelAddon = async (orderPublicId: string, addonPublicId: string) => {
+  const handleCancelAddon = async (orderPublicId: string, addonPublicId: string, member?: { seller_member_id: number; seller_member_pin: string }) => {
     setAddonBusy(addonPublicId);
     try {
-      await sellerApi.cancelAddon(addonPublicId);
+      await sellerApi.cancelAddon(addonPublicId, member);
       // Mismo motivo: cancelar también agrega un evento nuevo al histórico.
       setEventsByOrder((prev) => { const next = { ...prev }; delete next[orderPublicId]; return next; });
       await loadAddons(orderPublicId);
@@ -227,19 +234,60 @@ export default function SellerOrders() {
     }
   };
 
+  // Ampliaciones: cobrar/cancelar también quedan detrás del PIN si hay equipo cargado.
+  // Sin equipo, se ejecuta directo (mismo comportamiento de siempre).
+  const [addonPrompt, setAddonPrompt] = useState<{ orderPublicId: string; addonPublicId: string; action: 'collect' | 'cancel' } | null>(null);
+  const [addonMemberId, setAddonMemberId] = useState<number | ''>('');
+  const [addonMemberPin, setAddonMemberPin] = useState('');
+  const [addonPromptError, setAddonPromptError] = useState<string | null>(null);
+
+  const requestAddonAction = (orderPublicId: string, addonPublicId: string, action: 'collect' | 'cancel') => {
+    if (members.length === 0) {
+      if (action === 'collect') handleCollectAddon(orderPublicId, addonPublicId);
+      else handleCancelAddon(orderPublicId, addonPublicId);
+      return;
+    }
+    setAddonPrompt({ orderPublicId, addonPublicId, action });
+    setAddonMemberId('');
+    setAddonMemberPin('');
+    setAddonPromptError(null);
+  };
+
+  const confirmAddonAction = async () => {
+    if (!addonPrompt) return;
+    if (isMemberPinMissing(members, addonMemberId, addonMemberPin)) {
+      setAddonPromptError('Elegí quién sos y tu PIN para confirmar.');
+      return;
+    }
+    const member = { seller_member_id: addonMemberId as number, seller_member_pin: addonMemberPin };
+    const { orderPublicId, addonPublicId, action } = addonPrompt;
+    setAddonPrompt(null);
+    if (action === 'collect') await handleCollectAddon(orderPublicId, addonPublicId, member);
+    else await handleCancelAddon(orderPublicId, addonPublicId, member);
+  };
+
   const handleCancelOrder = (o: SellerOrder) => {
     setCancelConfirmOrder(o);
     setCancelReason('');
     setCancelError(null);
+    setCancelMemberId('');
+    setCancelMemberPin('');
   };
 
   const handleCancelConfirm = async () => {
     if (!cancelConfirmOrder) return;
+    if (isMemberPinMissing(members, cancelMemberId, cancelMemberPin)) {
+      setCancelError('Elegí quién sos y tu PIN para confirmar.');
+      return;
+    }
     setCancelingOrder(cancelConfirmOrder.public_id);
     setCancelError(null);
     try {
       const publicId = cancelConfirmOrder.public_id;
-      await sellerApi.cancelOrder(publicId, cancelReason.trim() || undefined);
+      await sellerApi.cancelOrder(
+        publicId, cancelReason.trim() || undefined,
+        cancelMemberId !== '' ? { seller_member_id: cancelMemberId, seller_member_pin: cancelMemberPin } : undefined,
+      );
       setCancelConfirmOrder(null);
       // Cancelar agrega un evento nuevo al histórico — sin esto, si se reabre la fila
       // después de cancelar, se seguía viendo el histórico viejo hasta recargar la página.
@@ -283,12 +331,12 @@ export default function SellerOrders() {
             </p>
             {ad.payment_method === 'cash' ? (
               <div className="mt-2 flex gap-2">
-                <button type="button" onClick={(e) => { e.stopPropagation(); handleCollectAddon(o.public_id, ad.public_id); }}
+                <button type="button" onClick={(e) => { e.stopPropagation(); requestAddonAction(o.public_id, ad.public_id, 'collect'); }}
                   disabled={addonBusy === ad.public_id}
                   className="flex-1 rounded-md bg-gold px-3 py-2 text-sm font-semibold text-ink hover:bg-gold/90 transition disabled:opacity-50">
                   {addonBusy === ad.public_id ? '...' : '✓ Confirmar cobro'}
                 </button>
-                <button type="button" onClick={(e) => { e.stopPropagation(); handleCancelAddon(o.public_id, ad.public_id); }}
+                <button type="button" onClick={(e) => { e.stopPropagation(); requestAddonAction(o.public_id, ad.public_id, 'cancel'); }}
                   disabled={addonBusy === ad.public_id}
                   className="rounded-md border border-gold/20 px-3 py-2 text-sm text-cream/60 hover:border-gold/40 transition disabled:opacity-50">
                   Cancelar
@@ -297,7 +345,7 @@ export default function SellerOrders() {
             ) : (
               <div className="mt-2 space-y-2">
                 <p className="text-xs text-cream/45">Le enviamos el link de pago al pasajero por email.</p>
-                <button type="button" onClick={(e) => { e.stopPropagation(); handleCancelAddon(o.public_id, ad.public_id); }}
+                <button type="button" onClick={(e) => { e.stopPropagation(); requestAddonAction(o.public_id, ad.public_id, 'cancel'); }}
                   disabled={addonBusy === ad.public_id}
                   className="w-full rounded-md border border-gold/20 px-3 py-2 text-sm text-cream/60 hover:border-gold/40 transition disabled:opacity-50">
                   Cancelar ampliación
@@ -323,12 +371,30 @@ export default function SellerOrders() {
     }
   }, [highlight, loading, orders]);
 
+  const openCollectModal = (publicId: string) => {
+    setConfirmPublicId(publicId);
+    setCollectCurrency('ARS');
+    setCollectMemberId('');
+    setCollectMemberPin('');
+    setCollectError(null);
+  };
+
   const handleCollect = async (publicId: string) => {
+    if (isMemberPinMissing(members, collectMemberId, collectMemberPin)) {
+      setCollectError('Elegí quién cobró y su PIN para confirmar.');
+      return;
+    }
     setCollecting(publicId);
     setCollectError(null);
     try {
-      await sellerApi.collectCash(publicId, collectCurrency);
+      await sellerApi.collectCash(
+        publicId,
+        collectCurrency,
+        collectMemberId !== '' ? { seller_member_id: collectMemberId, seller_member_pin: collectMemberPin } : undefined,
+      );
       setConfirmPublicId(null);
+      setCollectMemberId('');
+      setCollectMemberPin('');
       // Refrescar la lista
       const data = await sellerApi.orders(filter || undefined);
       setOrders(data);
@@ -359,6 +425,10 @@ export default function SellerOrders() {
   useEffect(() => {
     loadOrders(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    sellerApi.members.list().then((list) => setMembers(list.filter((m) => m.is_active))).catch(() => {});
   }, []);
 
   // Push en vivo: cualquier notificación (venta nueva, ampliación, rendición, reserva
@@ -410,6 +480,7 @@ export default function SellerOrders() {
             ? { reschedule: (body) => sellerApi.reschedule(modifyOrder.public_id, body) }
             : {}),
         }}
+        members={members}
         onClose={() => setModifyOrder(null)}
         onDone={() => {
           const pid = modifyOrder.public_id;
@@ -482,6 +553,14 @@ export default function SellerOrders() {
                 </button>
               </div>
             </div>
+            <MemberPinGate
+              members={members}
+              memberId={collectMemberId}
+              memberPin={collectMemberPin}
+              onMemberIdChange={setCollectMemberId}
+              onPinChange={setCollectMemberPin}
+              label="¿Quién de tu equipo cobró? Necesitamos el PIN para confirmar."
+            />
             <p className="text-xs text-cream/40 mb-5">
               El monto que le cobrás al pasajero lo definís vos. Al confirmar, la reserva pasa a <strong className="text-cream/60">Cobrada</strong> y se envía el email de confirmación al pasajero.
             </p>
@@ -500,7 +579,7 @@ export default function SellerOrders() {
               <button
                 type="button"
                 onClick={() => handleCollect(confirmPublicId)}
-                disabled={collecting === confirmPublicId}
+                disabled={collecting === confirmPublicId || isMemberPinMissing(members, collectMemberId, collectMemberPin)}
                 className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors disabled:opacity-60"
               >
                 {collecting === confirmPublicId ? 'Procesando...' : 'Sí, cobré el dinero'}
@@ -549,6 +628,14 @@ export default function SellerOrders() {
                 className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2.5 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40 resize-none"
               />
             </label>
+            <MemberPinGate
+              members={members}
+              memberId={cancelMemberId}
+              memberPin={cancelMemberPin}
+              onMemberIdChange={setCancelMemberId}
+              onPinChange={setCancelMemberPin}
+              label="¿Quién sos? Necesitamos tu PIN para confirmar la cancelación."
+            />
             {cancelError && (
               <p className="text-xs text-red-400 mb-4">⚠ {cancelError}</p>
             )}
@@ -564,10 +651,51 @@ export default function SellerOrders() {
               <button
                 type="button"
                 onClick={handleCancelConfirm}
-                disabled={cancelingOrder === cancelConfirmOrder.public_id}
+                disabled={cancelingOrder === cancelConfirmOrder.public_id || isMemberPinMissing(members, cancelMemberId, cancelMemberPin)}
                 className="flex-1 rounded-lg bg-red-600/80 border border-red-500/50 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-60"
               >
                 {cancelingOrder === cancelConfirmOrder.public_id ? 'Cancelando...' : 'Sí, cancelar reserva'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {addonPrompt && (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
+        <div className="min-h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-ink-soft border border-gold/20 p-6 animate-modal-panel">
+            <h2 className="font-display text-xl text-cream mb-1">
+              {addonPrompt.action === 'collect' ? 'Confirmar cobro de ampliación' : 'Cancelar ampliación'}
+            </h2>
+            <p className="text-sm text-cream/50 mb-5">
+              Tu equipo está cargado — necesitamos identificar quién hace este cambio.
+            </p>
+            <MemberPinGate
+              members={members}
+              memberId={addonMemberId}
+              memberPin={addonMemberPin}
+              onMemberIdChange={setAddonMemberId}
+              onPinChange={setAddonMemberPin}
+            />
+            {addonPromptError && (
+              <p className="text-xs text-bordeaux-light mb-4">⚠ {addonPromptError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => { setAddonPrompt(null); setAddonPromptError(null); }}
+                className="flex-1 rounded-lg border border-gold/20 px-4 py-2.5 text-sm text-cream/70 hover:border-gold/40 transition-colors"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={confirmAddonAction}
+                disabled={isMemberPinMissing(members, addonMemberId, addonMemberPin)}
+                className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors disabled:opacity-60"
+              >
+                Confirmar
               </button>
             </div>
           </div>
@@ -700,6 +828,7 @@ export default function SellerOrders() {
                         );
                       })()}
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
+                      <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} onSaved={() => reload()} />
                       {o.payment_method !== 'cash' && (
                         <>
                           <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
@@ -743,7 +872,7 @@ export default function SellerOrders() {
                         <div className="mt-3 pt-3 border-t border-gold/10">
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setConfirmPublicId(o.public_id); setCollectCurrency('ARS'); }}
+                            onClick={(e) => { e.stopPropagation(); openCollectModal(o.public_id); }}
                             className="w-full rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
                           >
                             ✓ Confirmar cobro en efectivo
@@ -936,6 +1065,7 @@ export default function SellerOrders() {
                               <div className="space-y-1.5">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y liquidación</p>
                                 <DetailRow label="Medio">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
+                                <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} onSaved={() => reload()} />
                                 {o.payment_method !== 'cash' && (
                                   <>
                                     <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
@@ -982,7 +1112,7 @@ export default function SellerOrders() {
                               <div className="mt-4 pt-4 border-t border-gold/10">
                                 <button
                                   type="button"
-                                  onClick={(e) => { e.stopPropagation(); setConfirmPublicId(o.public_id); setCollectCurrency('ARS'); }}
+                                  onClick={(e) => { e.stopPropagation(); openCollectModal(o.public_id); }}
                                   className="w-full rounded-lg bg-gold px-4 py-3 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors"
                                 >
                                   ✓ Confirmar cobro en efectivo

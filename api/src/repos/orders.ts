@@ -37,6 +37,9 @@ export interface CreateOrderInput {
   // Capacidad efectiva de la opción para el día: se usa para el chequeo autoritativo
   // de cupo (con lock) dentro de la transacción, evitando sobreventa por concurrencia.
   default_capacity_per_day: number;
+  // Sub-vendedor (ej. conserje) que cerró la venta dentro de la cuenta del vendedor —
+  // solo viene del checkout del portal de vendedores, nunca del checkout público.
+  seller_member_id?: number | null;
 }
 
 export interface CreatedOrder {
@@ -67,7 +70,7 @@ async function insertOrderItemAndAttribution(
   client: PoolClient,
   orderId: number,
   item: CreateOrderInput['item'],
-  ctx: { total_usd: number; exchange_rate_used: number; ref_code: string | null; payment_method?: 'mercadopago' | 'cash' | 'pix' },
+  ctx: { total_usd: number; exchange_rate_used: number; ref_code: string | null; payment_method?: 'mercadopago' | 'cash' | 'pix'; seller_member_id?: number | null },
 ): Promise<void> {
   await client.query(
     `INSERT INTO order_items (
@@ -120,9 +123,9 @@ async function insertOrderItemAndAttribution(
         `INSERT INTO order_attributions (
            order_id, seller_id,
            net_total_usd_snapshot, commission_percent_snapshot,
-           commission_amount_usd, commission_amount_ars
-         ) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [orderId, seller.id, netTotalUsd, commissionPercent, commissionUsd, commissionArs],
+           commission_amount_usd, commission_amount_ars, seller_member_id
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [orderId, seller.id, netTotalUsd, commissionPercent, commissionUsd, commissionArs, ctx.seller_member_id ?? null],
       );
     }
   }
@@ -169,6 +172,7 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
       exchange_rate_used: input.exchange_rate_used,
       ref_code: input.ref_code,
       payment_method: input.payment_method,
+      seller_member_id: input.seller_member_id,
     });
 
     await client.query('COMMIT');

@@ -309,6 +309,8 @@ export interface AdminSeller {
   is_active: boolean;
   is_permanent: boolean;
   is_house: boolean;
+  has_admin_pin?: boolean;
+  landing_customization_enabled?: boolean;
   created_at: string;
   supabase_user_id?: string | null;
   orders_total?: number;
@@ -731,6 +733,12 @@ export const adminApi = {
       }),
     qrUrl: (id: number, format: 'png' | 'svg' = 'png', size = 512) =>
       `${(import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000'}/api/admin/sellers/${id}/qr?format=${format}&size=${size}`,
+    // PIN de administrador del "Mi equipo" del vendedor (sub-vendedores) — lo cargamos
+    // nosotros; sin esto el vendedor no puede crear ni editar su equipo.
+    setAdminPin: (id: number, adminPin: string) =>
+      request<{ ok: true }>(`/api/admin/sellers/${id}/admin-pin`, {
+        method: 'POST', body: JSON.stringify({ admin_pin: adminPin }),
+      }),
   },
   orders: {
     create: (input: AdminBookingInput) =>
