@@ -1,4 +1,5 @@
 import type { ProductOption } from '../../types/api';
+import MenuBlock from '../MenuBlock';
 
 const DAY = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -110,6 +111,20 @@ export function OptionInfoCard({ option, productAvailableDays, productAcceptsChi
             ))}
           </ul>
         </div>
+      )}
+
+      {option.menu && option.menu.content_html && (
+        // Arranca cerrado — un menú con varios cursos/platos puede ser largo y no
+        // queremos alargar la card por defecto (mismo criterio que ProductPage).
+        <details className="group">
+          <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold">
+            <span className="transition-transform group-open:rotate-90">▸</span>
+            Ver menú
+          </summary>
+          <div className="mt-2">
+            <MenuBlock menu={option.menu} />
+          </div>
+        </details>
       )}
 
       {onBook && (
