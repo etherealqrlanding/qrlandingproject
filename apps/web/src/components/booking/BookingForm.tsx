@@ -4,6 +4,7 @@ import type { SellerBookingInput } from '../../lib/sellerApi';
 import type { ProductOption } from '../../types/api';
 import TransferSection from '../TransferSection';
 import Spinner from '../Spinner';
+import AvailabilityCalendar from '../AvailabilityCalendar';
 
 // Núcleo del formulario de reserva manual: datos del pasajero, disponibilidad en vivo,
 // cálculo de precios, traslado y método de pago. Lo comparten el portal de vendedores
@@ -147,35 +148,49 @@ export default function BookingForm({
   // Validación manual en vez de la nativa del navegador (los popups por defecto no
   // se pueden estilizar) — el form usa noValidate y este chequeo decide qué mensaje
   // mostrar en el cartel de error ya existente, en el mismo orden en que aparecen los campos.
-  const validate = (): string | null => {
-    if (form.name.trim().length < 2) return 'Ingresá el nombre completo del pasajero.';
-    if (!form.email.trim()) return 'Ingresá el email del pasajero.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Ingresá un email válido.';
+  // Cada error trae el id del campo que lo causó, para poder hacerle scroll + foco.
+  const validate = (): { message: string; fieldId: string } | null => {
+    if (form.name.trim().length < 2) return { message: 'Ingresá el nombre completo del pasajero.', fieldId: 'bf-name' };
+    if (!form.email.trim()) return { message: 'Ingresá el email del pasajero.', fieldId: 'bf-email' };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return { message: 'Ingresá un email válido.', fieldId: 'bf-email' };
     if (form.email.trim().toLowerCase() !== emailConfirm.trim().toLowerCase()) {
-      return 'El email y su confirmación no coinciden.';
+      return { message: 'El email y su confirmación no coinciden.', fieldId: 'bf-email-confirm' };
     }
     if (form.phone.trim() && !/^\d{8,15}$/.test(form.phone.trim())) {
-      return 'El teléfono debe tener solo números, sin "+", espacios ni guiones (ej: 5491132368312).';
+      return { message: 'El teléfono debe tener solo números, sin "+", espacios ni guiones (ej: 5491132368312).', fieldId: 'bf-phone' };
     }
-    if (!form.nationality) return 'Seleccioná la nacionalidad del pasajero.';
+    if (!form.nationality) return { message: 'Seleccioná la nacionalidad del pasajero.', fieldId: 'bf-nationality' };
     if (isDateBlocked) {
       if (selectedDateStatus === 'closed') {
-        return selectedDay?.reason === 'cutoff'
-          ? 'El horario límite de reservas del día ya pasó.'
-          : selectedDay?.reason === 'not_operating_day'
-            ? 'El servicio no opera ese día de la semana.'
-            : 'La casa no opera esa fecha.';
+        return {
+          fieldId: 'bf-date',
+          message: selectedDay?.reason === 'cutoff'
+            ? 'El horario límite de reservas del día ya pasó.'
+            : selectedDay?.reason === 'not_operating_day'
+              ? 'El servicio no opera ese día de la semana.'
+              : 'La casa no opera esa fecha.',
+        };
       }
-      return 'Sin cupos para esa fecha.';
+      return { message: 'Sin cupos para esa fecha.', fieldId: 'bf-date' };
     }
     return null;
+  };
+
+  // Lleva la vista (y el foco, si aplica) hasta el campo que falló la validación —
+  // el form puede ser largo y sin esto el vendedor no siempre nota qué le falta.
+  const scrollToField = (fieldId: string) => {
+    const el = document.getElementById(fieldId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) el.focus({ preventScroll: true });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validationError = validate();
     if (validationError) {
-      setLocalError(validationError);
+      setLocalError(validationError.message);
+      scrollToField(validationError.fieldId);
       return;
     }
     setLocalError(null);
@@ -215,6 +230,7 @@ export default function BookingForm({
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="Nombre completo" required>
             <input
+              id="bf-name"
               type="text" maxLength={120}
               value={form.name} onChange={(e) => updateField('name', e.target.value)}
               className="input" placeholder="Nombre Apellido"
@@ -222,6 +238,7 @@ export default function BookingForm({
           </Field>
           <Field label="Email" required>
             <input
+              id="bf-email"
               type="email" maxLength={160}
               value={form.email} onChange={(e) => updateField('email', e.target.value)}
               className="input" placeholder="pasajero@email.com"
@@ -229,6 +246,7 @@ export default function BookingForm({
           </Field>
           <Field label="Confirmar email" required hint="Volvé a escribirlo — no se puede pegar, para evitar errores de tipeo.">
             <input
+              id="bf-email-confirm"
               type="email" maxLength={160}
               value={emailConfirm} onChange={(e) => setEmailConfirm(e.target.value)}
               onPaste={(e) => e.preventDefault()}
@@ -241,6 +259,7 @@ export default function BookingForm({
             hint={'Sin "+" ni espacios ni guiones: código de país + código de área (sin el 0) + número (sin el 15). Ej: Buenos Aires → 5491132368312.'}
           >
             <input
+              id="bf-phone"
               type="tel" maxLength={40}
               value={form.phone} onChange={(e) => updateField('phone', e.target.value)}
               className="input" placeholder="5491132368312"
@@ -256,6 +275,7 @@ export default function BookingForm({
           </Field>
           <Field label="Nacionalidad" required>
             <select
+              id="bf-nationality"
               value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
               className="input"
             >
@@ -263,13 +283,15 @@ export default function BookingForm({
               {NATIONALITIES.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </Field>
-          <Field label="Fecha del servicio" required>
-            <input
-              type="date" min={today} max={horizonDate}
-              value={form.service_date}
-              onChange={(e) => updateField('service_date', e.target.value)}
-              className={`input ${isDateBlocked ? 'border-bordeaux-light/60' : ''}`}
-            />
+          <div className="sm:col-span-2" id="bf-date">
+            <Field label="Fecha del servicio" required>
+              <AvailabilityCalendar
+                optionId={option.id}
+                value={form.service_date}
+                currentDate={form.service_date}
+                onChange={(date) => updateField('service_date', date)}
+              />
+            </Field>
             {availabilityLoading && (
               <p className="mt-1 text-xs text-cream/40">Verificando disponibilidad...</p>
             )}
@@ -292,7 +314,7 @@ export default function BookingForm({
                   : 'Quedan pocos lugares.'}
               </p>
             )}
-          </Field>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Adultos" required>
               <NumberStepper
