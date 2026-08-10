@@ -48,9 +48,11 @@ export type ResolveMemberResult =
 
 /**
  * Valida que seller_member_id pertenezca al vendedor autenticado, esté activo, y que
- * el PIN ingresado coincida — punto único usado en todos los lugares donde se
- * atribuye una venta a un sub-vendedor (alta de reserva, confirmación de cobro en
- * efectivo, tag-eo posterior de una orden ya creada).
+ * el PIN ingresado coincida — usado donde el propio sub-vendedor se identifica en
+ * persona (alta de reserva, confirmación de cobro en efectivo). Para el tag-eo
+ * posterior de una orden ya creada (asignarle a alguien una venta que no cerró él
+ * mismo) se usa `findActiveSellerMember` + `requireAdminPin` en su lugar — ahí quien
+ * autoriza es el administrador del vendedor, no el sub-vendedor asignado.
  */
 export async function resolveSellerMember(
   sellerId: number,
@@ -68,9 +70,26 @@ export async function resolveSellerMember(
 }
 
 /**
+ * Igual que `resolveSellerMember` pero sin pedir el PIN del sub-vendedor — para
+ * cuando quien autoriza la asignación es el administrador del vendedor (con su
+ * propio PIN, ver `requireAdminPin`), no la persona que se está asignando.
+ */
+export async function findActiveSellerMember(
+  sellerId: number,
+  sellerMemberId: number,
+): Promise<{ id: number; name: string } | null> {
+  const { rows } = await pool.query<{ id: number; name: string }>(
+    `SELECT id, name FROM seller_members WHERE id = $1 AND seller_id = $2 AND is_active = TRUE LIMIT 1`,
+    [sellerMemberId, sellerId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
  * PIN de administrador del vendedor (distinto del PIN de cada seller_member): lo carga
  * el equipo (admin panel) al dar de alta un vendedor con sub-vendedores. Gatea crear
- * miembros y editar el registro de OTRO miembro (activar/desactivar, resetear su PIN).
+ * miembros y editar el registro de OTRO miembro (activar/desactivar, resetear su PIN),
+ * y asignar/corregir retroactivamente qué sub-vendedor cerró una venta.
  */
 export async function getSellerAdminPinHash(sellerId: number): Promise<string | null> {
   const { rows } = await pool.query<{ admin_pin_hash: string | null }>(
@@ -78,6 +97,21 @@ export async function getSellerAdminPinHash(sellerId: number): Promise<string | 
     [sellerId],
   );
   return rows[0]?.admin_pin_hash ?? null;
+}
+
+/**
+ * Da un mensaje distinto según si el PIN admin directamente no está configurado
+ * (nosotros tenemos que activarlo) vs. si el que se ingresó está mal.
+ */
+export async function requireAdminPin(
+  sellerId: number,
+  adminPin: string | undefined,
+): Promise<{ ok: true } | { ok: false; httpStatus: number; error: string }> {
+  if (!adminPin) return { ok: false, httpStatus: 400, error: 'Ingresá el PIN de administrador.' };
+  const hash = await getSellerAdminPinHash(sellerId);
+  if (!hash) return { ok: false, httpStatus: 409, error: 'Todavía no tenés un PIN de administrador configurado. Contactanos para activarlo.' };
+  if (!verifyPin(adminPin, hash)) return { ok: false, httpStatus: 403, error: 'PIN de administrador incorrecto.' };
+  return { ok: true };
 }
 
 export async function sellerHasActiveMembers(sellerId: number): Promise<boolean> {

@@ -11,7 +11,9 @@ interface Props {
 
 // Fila editable "¿quién de mi equipo cerró esta venta?" dentro del detalle de una
 // orden — permite tag-ear (o corregir) después de creada, típicamente para ventas
-// online (Mercado Pago) donde nadie del equipo tocó el sistema al momento de vender.
+// online (Mercado Pago/PIX) donde nadie del equipo tocó el sistema al momento de
+// vender. Lo autoriza el PIN de administrador del vendedor (no el de la persona
+// que se está asignando) — lo pide tanto para asignar como para limpiar.
 export default function AttributionPicker({ publicId, currentName, members, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [memberId, setMemberId] = useState<number | ''>('');
@@ -23,13 +25,13 @@ export default function AttributionPicker({ publicId, currentName, members, onSa
 
   const handleSave = async () => {
     setError(null);
-    if (memberId !== '' && !/^\d{4,6}$/.test(pin)) {
-      setError('Ingresá el PIN (4-6 dígitos).');
+    if (!/^\d{4,6}$/.test(pin)) {
+      setError('Ingresá el PIN de administrador (4-6 dígitos).');
       return;
     }
     setSaving(true);
     try {
-      await sellerApi.setOrderAttribution(publicId, memberId === '' ? null : memberId, memberId === '' ? undefined : pin);
+      await sellerApi.setOrderAttribution(publicId, memberId === '' ? null : memberId, pin);
       setEditing(false);
       setPin('');
       setMemberId('');
@@ -70,15 +72,13 @@ export default function AttributionPicker({ publicId, currentName, members, onSa
           <option value="">— Sin especificar —</option>
           {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
-        {memberId !== '' && (
-          <input
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="PIN"
-            inputMode="numeric"
-            className="w-20 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
-          />
-        )}
+        <input
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="PIN de administrador"
+          inputMode="numeric"
+          className="w-28 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+        />
         <button
           type="button"
           onClick={handleSave}

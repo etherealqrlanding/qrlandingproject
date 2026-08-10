@@ -7,7 +7,7 @@ import { requireSeller } from '../../middleware/requireSeller.js';
 import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
 import {
-  resolveSellerMember, requireMemberIfTeamExists,
+  resolveSellerMember, requireMemberIfTeamExists, findActiveSellerMember, requireAdminPin,
   getPinResetPreview, consumePinReset,
 } from '../../repos/sellerMembers.js';
 import { sellerMembersRouter } from './members.js';
@@ -625,19 +625,25 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
 
 const attributionSchema = z.object({
   seller_member_id: z.number().int().positive().nullable(),
-  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 // PATCH /api/seller/me/orders/:publicId/attribution — marca (o corrige) qué persona de
 // mi equipo cerró esta venta. Sirve para las que no tuvieron touchpoint humano al
 // crearse (ej. el pasajero pagó por Mercado Pago solo desde la habitación) y el hotel
 // se entera después de quién la asistió. Mandar seller_member_id: null la limpia.
+// Autoriza el PIN de ADMINISTRADOR del vendedor (no el del sub-vendedor asignado) —
+// es la persona con jerarquía sobre el equipo quien hace esta corrección, no hace
+// falta que la persona asignada esté presente con su propio PIN.
 sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     const parsed = attributionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
-    const { seller_member_id, seller_member_pin } = parsed.data;
+    const { seller_member_id, admin_pin } = parsed.data;
+
+    const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
+    if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
 
     const { rows } = await pool.query<{ id: number }>(
       `SELECT o.id
@@ -652,12 +658,9 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
 
     let sellerMemberId: number | null = null;
     if (seller_member_id != null) {
-      if (!seller_member_pin) {
-        return res.status(400).json({ error: 'Ingresá el PIN de la persona que cerró la venta.' });
-      }
-      const resolved = await resolveSellerMember(req.seller!.sellerId, seller_member_id, seller_member_pin);
-      if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
-      sellerMemberId = resolved.memberId;
+      const member = await findActiveSellerMember(req.seller!.sellerId, seller_member_id);
+      if (!member) return res.status(404).json({ error: 'No encontramos a esa persona en tu equipo.' });
+      sellerMemberId = member.id;
     }
 
     await pool.query(

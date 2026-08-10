@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { hashPin, verifyPin } from '../../services/pin.js';
-import { listSellerMembers, listSellerMemberStats, getSellerAdminPinHash, resolveSellerMember, createPinResetToken } from '../../repos/sellerMembers.js';
+import { listSellerMembers, listSellerMemberStats, getSellerAdminPinHash, resolveSellerMember, requireAdminPin, createPinResetToken } from '../../repos/sellerMembers.js';
 import { sendSellerMemberPinReset } from '../../services/email.js';
 import { config } from '../../config.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
@@ -24,15 +24,6 @@ sellerMembersRouter.get('/stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Da un mensaje distinto según si el PIN admin directamente no está configurado
-// (nosotros tenemos que activarlo) vs. si el que se ingresó está mal.
-async function requireAdminPin(sellerId: number, adminPin: string | undefined): Promise<{ ok: true } | { ok: false; httpStatus: number; error: string }> {
-  if (!adminPin) return { ok: false, httpStatus: 400, error: 'Ingresá el PIN de administrador.' };
-  const hash = await getSellerAdminPinHash(sellerId);
-  if (!hash) return { ok: false, httpStatus: 409, error: 'Todavía no tenés un PIN de administrador configurado. Contactanos para activarlo.' };
-  if (!verifyPin(adminPin, hash)) return { ok: false, httpStatus: 403, error: 'PIN de administrador incorrecto.' };
-  return { ok: true };
-}
 
 const createSchema = z.object({
   name: z.string().trim().min(2).max(60),
