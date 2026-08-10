@@ -1,9 +1,13 @@
-import { useState } from 'react';
-import { adminApi, AdminApiError, type AdminSeller } from '../../../lib/adminApi';
+import { useEffect, useState } from 'react';
+import { adminApi, AdminApiError, type AdminSeller, type AdminSellerMember } from '../../../lib/adminApi';
 
 interface Props {
   seller: AdminSeller;
   onUpdated: (s: AdminSeller) => void;
+}
+
+function fmtArs(n: number) {
+  return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 }
 
 // PIN de administrador de "Mi equipo" (sub-vendedores) del vendedor — lo cargamos
@@ -16,6 +20,14 @@ export default function TeamAdminPinSection({ seller, onUpdated }: Readonly<Prop
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [members, setMembers] = useState<AdminSellerMember[] | null>(null);
+  const [membersError, setMembersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi.sellers.members(seller.id)
+      .then(setMembers)
+      .catch((err) => setMembersError((err as AdminApiError).message));
+  }, [seller.id]);
 
   const handleSave = async () => {
     setError(null);
@@ -80,6 +92,45 @@ export default function TeamAdminPinSection({ seller, onUpdated }: Readonly<Prop
           {error}
         </p>
       )}
+
+      {/* Equipo cargado — solo lectura, lo autogestiona el vendedor desde su portal */}
+      <div className="mt-5 pt-5 border-t border-gold/10">
+        <p className="text-xs uppercase tracking-widest text-gold-soft mb-3">Su equipo</p>
+
+        {membersError && <p className="text-xs text-bordeaux-light">{membersError}</p>}
+
+        {members == null && !membersError && (
+          <div className="space-y-2">
+            {['a', 'b'].map((k) => <div key={k} className="h-10 rounded-lg bg-ink/30 animate-pulse" />)}
+          </div>
+        )}
+
+        {members != null && members.length === 0 && (
+          <p className="text-xs text-cream/40">Todavía no cargó a nadie en su equipo.</p>
+        )}
+
+        {members != null && members.length > 0 && (
+          <div className="space-y-1.5">
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center justify-between gap-3 rounded-lg border border-gold/10 bg-ink/30 px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-cream/85 truncate">{m.name}</span>
+                    {!m.is_active && (
+                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] border border-cream/15 bg-cream/5 text-cream/40">Inactivo</span>
+                    )}
+                  </div>
+                  {m.email && <p className="text-[11px] text-cream/35 truncate">{m.email}</p>}
+                </div>
+                <span className="shrink-0 text-xs text-cream/45">
+                  {m.orders_paid} venta{m.orders_paid !== 1 ? 's' : ''}
+                  {m.orders_paid > 0 && <> · {fmtArs(m.revenue_paid_ars)}</>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

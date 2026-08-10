@@ -187,6 +187,7 @@ export interface SellerOrder {
 export interface SellerMember {
   id: number;
   name: string;
+  email: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -351,10 +352,21 @@ export const sellerApi = {
   members: {
     list: () => request<SellerMember[]>('/api/seller/me/members'),
     stats: () => request<SellerMemberStats[]>('/api/seller/me/members/stats'),
-    create: (name: string, pin: string, adminPin: string) =>
-      request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, pin, admin_pin: adminPin }) }),
-    update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; admin_pin?: string; current_pin?: string }) =>
+    create: (name: string, pin: string, adminPin: string, email?: string) =>
+      request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, pin, email: email || undefined, admin_pin: adminPin }) }),
+    update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; email?: string | null; admin_pin?: string; current_pin?: string }) =>
       request<SellerMember>(`/api/seller/me/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    // Interno: hay que estar logueado en esta cuenta de vendedor y saber el email
+    // exacto que tenemos cargado para esa persona (ver POST /me/members/:id/forgot-pin).
+    forgotPin: (id: number, email: string) =>
+      request<{ ok: true }>(`/api/seller/me/members/${id}/forgot-pin`, { method: 'POST', body: JSON.stringify({ email }) }),
+    // Públicos — completar el reset con el link del email no requiere sesión.
+    resetPinPreview: (token: string) =>
+      publicRequest<{ member_name: string }>(`/api/seller/members/reset-pin/${encodeURIComponent(token)}`),
+    resetPin: (token: string, newPin: string) =>
+      publicRequest<{ ok: true }>(`/api/seller/members/reset-pin/${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ new_pin: newPin }),
+      }),
   },
   reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string; seller_member_id?: number; seller_member_pin?: string }) =>
     request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(

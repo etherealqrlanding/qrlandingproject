@@ -327,6 +327,16 @@ export interface AdminSeller {
   net_pending_settlement_ars?: number;
 }
 
+export interface AdminSellerMember {
+  id: number;
+  name: string;
+  email: string | null;
+  is_active: boolean;
+  created_at: string;
+  orders_paid: number;
+  revenue_paid_ars: number;
+}
+
 export interface AdminSellerOrder {
   order_id: number;
   public_id: string;
@@ -739,6 +749,8 @@ export const adminApi = {
       request<{ ok: true }>(`/api/admin/sellers/${id}/admin-pin`, {
         method: 'POST', body: JSON.stringify({ admin_pin: adminPin }),
       }),
+    // Sub-vendedores (ej. conserjes) que el vendedor cargó en su equipo — solo lectura.
+    members: (id: number) => request<AdminSellerMember[]>(`/api/admin/sellers/${id}/members`),
   },
   orders: {
     create: (input: AdminBookingInput) =>

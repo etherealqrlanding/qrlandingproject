@@ -52,12 +52,14 @@ import SellerHelp from './pages/seller/SellerHelp';
 import SellerSettings from './pages/seller/SellerSettings';
 import SellerArchive from './pages/seller/SellerArchive';
 import ActionPage from './pages/ActionPage';
+import ResetMemberPinPage from './pages/ResetMemberPinPage';
 
 export default function App() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
   const isSellerRoute = location.pathname.startsWith('/seller');
   const isActionRoute = location.pathname.startsWith('/accion/');
+  const isResetPinRoute = location.pathname.startsWith('/reset-pin/');
 
   useEffect(() => {
     // Si venimos del selector rápido de la home con un servicio elegido (?option=),
@@ -70,6 +72,14 @@ export default function App() {
     return (
       <Routes>
         <Route path="/accion/:token" element={<ActionPage />} />
+      </Routes>
+    );
+  }
+
+  if (isResetPinRoute) {
+    return (
+      <Routes>
+        <Route path="/reset-pin/:token" element={<ResetMemberPinPage />} />
       </Routes>
     );
   }

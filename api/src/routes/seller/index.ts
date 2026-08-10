@@ -6,7 +6,10 @@ import { RouteValidationError } from '../../errors.js';
 import { requireSeller } from '../../middleware/requireSeller.js';
 import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
-import { resolveSellerMember, requireMemberIfTeamExists } from '../../repos/sellerMembers.js';
+import {
+  resolveSellerMember, requireMemberIfTeamExists,
+  getPinResetPreview, consumePinReset,
+} from '../../repos/sellerMembers.js';
 import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
 import { supabaseAdmin } from '../../services/supabase.js';
@@ -62,6 +65,33 @@ sellerRouter.post('/auth/forgot-password', authLimiter, async (req, res, next) =
     }
 
     // Respuesta genérica siempre
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/seller/members/reset-pin/:token — preview del token (nombre, para el saludo)
+sellerRouter.get('/members/reset-pin/:token', async (req, res, next) => {
+  try {
+    const token = req.params.token;
+    if (!/^[0-9a-f-]{36}$/i.test(token)) return res.status(400).json({ error: 'Token inválido' });
+    const preview = await getPinResetPreview(token);
+    if (!preview) return res.status(410).json({ error: 'Este link venció o ya se usó. Pedí uno nuevo.' });
+    res.json({ data: { member_name: preview.memberName } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/members/reset-pin/:token — setea el PIN nuevo y consume el token
+const resetPinSchema = z.object({ new_pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos') });
+
+sellerRouter.post('/members/reset-pin/:token', authLimiter, async (req, res, next) => {
+  try {
+    const token = req.params.token;
+    if (!/^[0-9a-f-]{36}$/i.test(token)) return res.status(400).json({ error: 'Token inválido' });
+    const parsed = resetPinSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const ok = await consumePinReset(token, parsed.data.new_pin);
+    if (!ok) return res.status(410).json({ error: 'Este link venció o ya se usó. Pedí uno nuevo.' });
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });

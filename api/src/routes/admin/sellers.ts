@@ -9,6 +9,7 @@ import { config } from '../../config.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
 import { hashPin } from '../../services/pin.js';
+import { listSellerMemberStats } from '../../repos/sellerMembers.js';
 import { sendSellerPortalInvite, sendSellerPasswordReset, sendSellerCommissionPaid, sendNetSettledConfirmation } from '../../services/email.js';
 import { createCommissionPaidNotification, createNetSettledNotification } from '../../repos/notifications.js';
 
@@ -169,6 +170,18 @@ adminSellersRouter.post('/:id/admin-pin', async (req, res, next) => {
     );
     if (!rowCount) return res.status(404).json({ error: 'Not found' });
     res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/admin/sellers/:id/members — sub-vendedores (ej. conserjes) que el vendedor
+// cargó en su equipo, con sus ventas atribuidas. Solo lectura: el admin no crea ni
+// edita miembros acá (eso lo autogestiona el vendedor con su PIN admin).
+adminSellersRouter.get('/:id/members', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const rows = await listSellerMemberStats(id);
+    res.json({ data: rows });
   } catch (err) { next(err); }
 });
 
