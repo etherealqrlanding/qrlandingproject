@@ -780,7 +780,7 @@ export const adminApi = {
       request<{ archived: number }>('/api/admin/orders/bulk-archive', {
         method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
       }),
-    archiveList: (params?: { page?: number; limit?: number; search?: string; status?: string }) => {
+    archiveList: (params?: { page?: number; limit?: number; search?: string; status?: string; ref?: string; from?: string; to?: string }) => {
       const qs = params
         ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
         : '';
@@ -790,7 +790,7 @@ export const adminApi = {
       request<{ restored: number }>('/api/admin/orders/archive/restore', {
         method: 'POST', body: JSON.stringify({ public_ids: publicIds }),
       }),
-    archiveDownloadUrl: (params?: { status?: string; search?: string }) => {
+    archiveDownloadUrl: (params?: { status?: string; search?: string; ref?: string; from?: string; to?: string }) => {
       const base = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
       const qs = params
         ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')

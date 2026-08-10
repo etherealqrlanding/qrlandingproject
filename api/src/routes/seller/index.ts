@@ -1136,10 +1136,13 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
 // Incluye automáticamente: canceladas, reintegradas, vencidas, fallidas y rendidas.
 
 const sellerArchiveQuery = z.object({
-  page:   z.coerce.number().int().min(1).optional(),
-  limit:  z.coerce.number().int().min(1).max(100).optional(),
-  status: z.enum(['cancelled', 'refunded', 'expired', 'settled']).optional(),
-  search: z.string().max(120).optional(),
+  page:      z.coerce.number().int().min(1).optional(),
+  limit:     z.coerce.number().int().min(1).max(100).optional(),
+  status:    z.enum(['cancelled', 'refunded', 'expired', 'settled']).optional(),
+  search:    z.string().max(120).optional(),
+  member_id: z.coerce.number().int().optional(),
+  from:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // GET /api/seller/me/orders/archive
@@ -1147,7 +1150,8 @@ sellerRouter.get('/me/orders/archive', async (req, res, next) => {
   try {
     const parsed = sellerArchiveQuery.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: 'Filtros inválidos', details: parsed.error.flatten() });
-    const result = await listSellerArchive(req.seller!.sellerId, parsed.data);
+    const { member_id, ...rest } = parsed.data;
+    const result = await listSellerArchive(req.seller!.sellerId, { ...rest, memberId: member_id });
     res.json({ data: result });
   } catch (err) { next(err); }
 });
@@ -1185,7 +1189,8 @@ sellerRouter.get('/me/orders/archive/download', async (req, res, next) => {
   try {
     const parsed = sellerArchiveQuery.safeParse(req.query);
     if (!parsed.success) return res.status(400).json({ error: 'Filtros inválidos' });
-    const result = await listSellerArchive(req.seller!.sellerId, { ...parsed.data, page: 1, limit: 5000 });
+    const { member_id, ...rest } = parsed.data;
+    const result = await listSellerArchive(req.seller!.sellerId, { ...rest, memberId: member_id, page: 1, limit: 5000 });
     const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const header = ['public_id', 'status', 'customer_name', 'customer_email', 'total_usd', 'total_ars', 'payment_method', 'product_name', 'option_name', 'service_date', 'adults', 'children', 'created_at', 'archived_at'].join(',');
     const lines = result.orders.map((r) =>

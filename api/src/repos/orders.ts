@@ -584,6 +584,8 @@ export interface ArchivedOrder {
   service_date: string | null;
   adults: number | null;
   children: number | null;
+  seller_member_id: number | null;
+  seller_member_name: string | null;
 }
 
 export interface ArchivePage {
@@ -607,7 +609,8 @@ const ARCHIVE_SELECT = `
   oi.product_name_snapshot AS product_name,
   oi.option_name_snapshot AS option_name,
   to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-  oi.adults, oi.children`;
+  oi.adults, oi.children,
+  a.seller_member_id, m.name AS seller_member_name`;
 
 export async function archiveOrders(publicIds: string[], adminId: string): Promise<number> {
   if (publicIds.length === 0) return 0;
@@ -642,6 +645,9 @@ export async function restoreFromArchive(publicIds: string[]): Promise<number> {
 export async function listAdminArchive(params: {
   search?: string;
   status?: string;
+  ref?: string;
+  from?: string;
+  to?: string;
   page?: number;
   limit?: number;
 }): Promise<ArchivePage> {
@@ -657,6 +663,9 @@ export async function listAdminArchive(params: {
   };
 
   if (params.status) add(`o.status = $${args.length + 1}`, params.status);
+  if (params.ref) add(`o.ref_code = $${args.length + 1}`, params.ref);
+  if (params.from) add(`o.created_at >= $${args.length + 1}::date`, params.from);
+  if (params.to) add(`o.created_at < ($${args.length + 1}::date + INTERVAL '1 day')`, params.to);
   if (params.search) {
     const term = `%${params.search.toLowerCase()}%`;
     args.push(term);
@@ -672,6 +681,7 @@ export async function listAdminArchive(params: {
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN order_attributions a ON a.order_id = o.id
        LEFT JOIN sellers s ON s.id = a.seller_id
+       LEFT JOIN seller_members m ON m.id = a.seller_member_id
       ${whereSql}
       ORDER BY o.archived_at DESC
       LIMIT $${args.length - 1} OFFSET $${args.length}`,
@@ -687,6 +697,9 @@ export async function listSellerArchive(sellerId: number, params: {
   page?: number;
   limit?: number;
   search?: string;
+  memberId?: number;
+  from?: string;
+  to?: string;
 }): Promise<ArchivePage> {
   const page  = Math.max(1, params.page  ?? 1);
   const limit = Math.min(100, Math.max(1, params.limit ?? 20));
@@ -726,6 +739,18 @@ export async function listSellerArchive(sellerId: number, params: {
     args.push(term);
     extra.push(`(LOWER(o.customer_name) LIKE $${args.length} OR LOWER(o.customer_email) LIKE $${args.length})`);
   }
+  if (params.memberId) {
+    args.push(params.memberId);
+    extra.push(`a.seller_member_id = $${args.length}`);
+  }
+  if (params.from) {
+    args.push(params.from);
+    extra.push(`o.created_at >= $${args.length}::date`);
+  }
+  if (params.to) {
+    args.push(params.to);
+    extra.push(`o.created_at < ($${args.length}::date + INTERVAL '1 day')`);
+  }
 
   const whereSql = `WHERE ${baseWhere}${extra.length ? ' AND ' + extra.join(' AND ') : ''}`;
   args.push(limit, offset);
@@ -736,6 +761,7 @@ export async function listSellerArchive(sellerId: number, params: {
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN sellers s ON s.id = a.seller_id
+       LEFT JOIN seller_members m ON m.id = a.seller_member_id
       ${whereSql}
       ORDER BY COALESCE(o.archived_at, o.cancelled_at, o.updated_at) DESC
       LIMIT $${args.length - 1} OFFSET $${args.length}`,

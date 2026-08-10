@@ -4,6 +4,8 @@ import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerOrder,
 import DetailRow from '../../components/DetailRow';
 import AttributionPicker from '../../components/seller/AttributionPicker';
 import MemberPinGate, { isMemberPinMissing } from '../../components/seller/MemberPinGate';
+import DateRangePicker from '../../components/DateRangePicker';
+import SimpleSelect from '../../components/SimpleSelect';
 
 function isWindowBlocked(hours: number | null, serviceDate: string): boolean {
   if (!hours) return false;
@@ -38,6 +40,16 @@ const STATUS_CLASS: Record<DerivedKey, string> = {
   refunded: 'bg-blue-900/30 text-blue-400 border border-blue-800/40',
   failed: 'bg-bordeaux-deep/40 text-bordeaux-light border border-bordeaux-light/30',
 };
+
+const STATUS_FILTER_OPTIONS = [
+  { value: '', label: 'Todas' },
+  { value: 'pending', label: 'Pendientes' },
+  { value: 'collected', label: 'Cobradas' },
+  { value: 'settled', label: 'Rendidas' },
+  { value: 'paid', label: 'Pagadas (MP)' },
+  { value: 'expired', label: 'Caducadas' },
+  { value: 'cancelled', label: 'Canceladas' },
+];
 
 const DERIVED_LABEL: Record<DerivedKey, string> = {
   pending: 'Pendiente',
@@ -159,6 +171,9 @@ export default function SellerOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>(''); // '' = Todas (default)
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [memberFilter, setMemberFilter] = useState<string>(''); // '' = todos
   const [expanded, setExpanded] = useState<number | null>(null);
   const [collecting, setCollecting] = useState<string | null>(null);
   const [confirmPublicId, setConfirmPublicId] = useState<string | null>(null);
@@ -441,9 +456,21 @@ export default function SellerOrders() {
     return () => window.removeEventListener(SELLER_NOTIFICATION_EVENT, handler);
   }, []);
 
-  const visible = useMemo(
-    () => (filter ? orders.filter((o) => derivedStatus(o).key === filter) : orders),
-    [orders, filter],
+  const visible = useMemo(() => {
+    let list = orders;
+    if (filter) list = list.filter((o) => derivedStatus(o).key === filter);
+    if (dateFrom) list = list.filter((o) => o.created_at.slice(0, 10) >= dateFrom);
+    if (dateTo) list = list.filter((o) => o.created_at.slice(0, 10) <= dateTo);
+    if (memberFilter) list = list.filter((o) => String(o.seller_member_id ?? '') === memberFilter);
+    return list;
+  }, [orders, filter, dateFrom, dateTo, memberFilter]);
+
+  const hasActiveFilters = Boolean(filter || dateFrom || dateTo || memberFilter);
+  function clearFilters() { setFilter(''); setDateFrom(''); setDateTo(''); setMemberFilter(''); }
+
+  const memberFilterOptions = useMemo(
+    () => [{ value: '', label: 'Todos (equipo)' }, ...members.map((m) => ({ value: String(m.id), label: m.name }))],
+    [members],
   );
 
   const pendingOrder = confirmPublicId
@@ -703,29 +730,29 @@ export default function SellerOrders() {
       </div>
     )}
     <div className="p-4 md:p-8 max-w-6xl">
-      <header className="mb-4 md:mb-6 flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="font-display text-3xl md:text-4xl text-cream">Mis Órdenes</h1>
-          <p className="mt-0.5 text-xs md:text-sm text-cream/50">Órdenes generadas con tu código</p>
+      <header className="mb-4 md:mb-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <div>
+            <h1 className="font-display text-3xl md:text-4xl text-cream">Mis Órdenes</h1>
+            <p className="mt-0.5 text-xs md:text-sm text-cream/50">Órdenes generadas con tu código</p>
+          </div>
         </div>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input w-36 md:w-44 text-sm">
-          <option value="">Todas</option>
-          <option value="pending">Pendientes</option>
-          <option value="collected">Cobradas</option>
-          <option value="settled">Rendidas</option>
-          <option value="paid">Pagadas (MP)</option>
-          <option value="expired">Caducadas</option>
-          <option value="cancelled">Canceladas</option>
-        </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <SimpleSelect className="w-36 md:w-44" options={STATUS_FILTER_OPTIONS} value={filter} onChange={setFilter} />
+          <DateRangePicker className="w-56" from={dateFrom} to={dateTo}
+            onChange={(from, to) => { setDateFrom(from); setDateTo(to); }} />
+          {members.length > 0 && (
+            <SimpleSelect className="w-44" options={memberFilterOptions} value={memberFilter} onChange={setMemberFilter} />
+          )}
+        </div>
       </header>
 
-      {filter && !loading && (
+      {hasActiveFilters && !loading && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2 text-xs md:text-sm">
-          <span className="text-gold-soft">Filtro:</span>
-          <span className="text-cream/80 font-medium">{DERIVED_LABEL[filter as DerivedKey] ?? filter}</span>
+          <span className="text-gold-soft">Filtros aplicados</span>
           <span className="text-cream/40">·</span>
           <span className="text-cream/50">{visible.length} resultado{visible.length !== 1 ? 's' : ''}</span>
-          <button type="button" onClick={() => setFilter('')}
+          <button type="button" onClick={clearFilters}
             className="ml-auto text-xs text-gold-soft hover:text-gold transition underline underline-offset-2">
             Ver todas
           </button>

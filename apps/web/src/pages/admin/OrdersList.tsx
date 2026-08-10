@@ -3,6 +3,9 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
 import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
 import AdminBookingModal from '../../components/admin/AdminBookingModal';
+import SellerFilterSelect from '../../components/admin/SellerFilterSelect';
+import DateRangePicker from '../../components/DateRangePicker';
+import SimpleSelect from '../../components/SimpleSelect';
 import Checkbox from '../../components/Checkbox';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
@@ -262,6 +265,7 @@ export default function OrdersList() {
   const [searchParams] = useSearchParams();
   const highlight = searchParams.get('highlight');
   const [orders, setOrders] = useState<AdminOrderListItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState({ status: '', ref: '', from: '', to: '', search: '' });
   const [page, setPage] = useState(0);
@@ -284,13 +288,17 @@ export default function OrdersList() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const extraFilterCount = [filters.search, filters.ref, filters.from, filters.to].filter(Boolean).length;
 
+  // No vaciamos `orders` al arrancar un reload: si ya había datos en pantalla
+  // (ej. el admin tocó un filtro) los dejamos mientras llega la respuesta nueva,
+  // así la tabla/cards no desaparecen y vuelven a aparecer en cada búsqueda —
+  // solo se atenúan un toque (ver `loading` en el wrapper de mainContent).
   const reload = (currentFilters = filters) => {
-    setOrders(null);
+    setLoading(true);
     setError(null);
     const params = Object.fromEntries(Object.entries(currentFilters).filter(([, v]) => v));
     adminApi.orders.list(params)
-      .then(setOrders)
-      .catch((err) => setError((err as Error).message));
+      .then((data) => { setOrders(data); setLoading(false); })
+      .catch((err) => { setError((err as Error).message); setLoading(false); });
   };
 
   useEffect(() => {
@@ -393,7 +401,7 @@ export default function OrdersList() {
   }
 
   let mainContent: React.ReactNode;
-  if (!orders && !error) {
+  if (!orders && loading) {
     mainContent = (
       <div className="space-y-3">
         {SKELETON_KEYS.map((k) => (
@@ -666,10 +674,8 @@ export default function OrdersList() {
 
       {/* ── Mobile: Estado siempre visible (el filtro más usado) + botón "Más filtros" ── */}
       <div className="md:hidden flex items-center gap-2 mb-4">
-        <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          className="input flex-1">
-          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <SimpleSelect className="flex-1" options={STATUS_OPTIONS} value={filters.status}
+          onChange={(v) => setFilters({ ...filters, status: v })} />
         <button
           type="button"
           onClick={() => setFiltersOpen(true)}
@@ -685,21 +691,16 @@ export default function OrdersList() {
       </div>
 
       {/* ── Desktop: todos los filtros inline ── */}
-      <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-[1fr_1fr_140px_140px_140px] gap-2 mb-4">
+      <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_140px] gap-2 mb-4">
         <input type="search" placeholder="Email o nombre..." value={filters.search}
           onChange={(e) => setFilters({ ...filters, search: e.target.value })}
           className="input" />
-        <input type="text" placeholder="Cód. vendedor" value={filters.ref}
-          onChange={(e) => setFilters({ ...filters, ref: e.target.value })}
-          className="input font-mono text-sm" />
-        <input type="date" value={filters.from}
-          onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="input" />
-        <input type="date" value={filters.to}
-          onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="input" />
-        <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          className="input">
-          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <SellerFilterSelect value={filters.ref}
+          onChange={(v) => setFilters({ ...filters, ref: v })} />
+        <DateRangePicker from={filters.from} to={filters.to}
+          onChange={(from, to) => setFilters({ ...filters, from, to })} />
+        <SimpleSelect options={STATUS_OPTIONS} value={filters.status}
+          onChange={(v) => setFilters({ ...filters, status: v })} />
       </div>
 
       {filtersOpen && (
@@ -739,23 +740,15 @@ export default function OrdersList() {
                   className="input w-full" />
               </label>
               <label className="block">
-                <span className="block text-xs text-cream/50 mb-1">Código de vendedor</span>
-                <input type="text" placeholder="Cód. vendedor" value={filters.ref}
-                  onChange={(e) => setFilters({ ...filters, ref: e.target.value })}
-                  className="input w-full font-mono text-sm" />
+                <span className="block text-xs text-cream/50 mb-1">Vendedor</span>
+                <SellerFilterSelect value={filters.ref} className="w-full"
+                  onChange={(v) => setFilters({ ...filters, ref: v })} />
               </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="block text-xs text-cream/50 mb-1">Desde</span>
-                  <input type="date" value={filters.from}
-                    onChange={(e) => setFilters({ ...filters, from: e.target.value })} className="input w-full" />
-                </label>
-                <label className="block">
-                  <span className="block text-xs text-cream/50 mb-1">Hasta</span>
-                  <input type="date" value={filters.to}
-                    onChange={(e) => setFilters({ ...filters, to: e.target.value })} className="input w-full" />
-                </label>
-              </div>
+              <label className="block">
+                <span className="block text-xs text-cream/50 mb-1">Rango de fechas</span>
+                <DateRangePicker from={filters.from} to={filters.to} className="block w-full"
+                  onChange={(from, to) => setFilters({ ...filters, from, to })} />
+              </label>
             </div>
           </div>
         </div>
@@ -765,7 +758,9 @@ export default function OrdersList() {
         <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90 mb-4">{error}</div>
       )}
 
-      {mainContent}
+      <div className={`transition-opacity duration-150 ${loading && orders ? 'opacity-50' : 'opacity-100'}`}>
+        {mainContent}
+      </div>
 
       <SelectionBar
         count={selected.size}

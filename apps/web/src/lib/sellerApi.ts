@@ -415,13 +415,13 @@ export const sellerApi = {
     }>('/api/seller/me/settings'),
   faq: () => request<{ items: { q_es: string; a_es: string }[]; updated_at: string | null }>('/api/seller/me/faq'),
   archive: {
-    list: (params?: { page?: number; limit?: number; status?: string; search?: string }) => {
+    list: (params?: { page?: number; limit?: number; status?: string; search?: string; member_id?: number; from?: string; to?: string }) => {
       const qs = params
         ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
         : '';
       return request<ArchivePage<SellerArchivedOrder>>(`/api/seller/me/orders/archive${qs}`);
     },
-    downloadUrl: (params?: { status?: string; search?: string }) => {
+    downloadUrl: (params?: { status?: string; search?: string; member_id?: number; from?: string; to?: string }) => {
       const qs = params
         ? '?' + Object.entries(params).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
         : '';

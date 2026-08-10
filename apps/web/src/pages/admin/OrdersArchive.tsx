@@ -4,6 +4,8 @@ import { adminApi, type ArchivedOrderItem } from '../../lib/adminApi';
 import Checkbox from '../../components/Checkbox';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
+import SellerFilterSelect from '../../components/admin/SellerFilterSelect';
+import DateRangePicker from '../../components/DateRangePicker';
 import { useReturnHighlight } from '../../hooks/useReturnHighlight';
 
 const LAST_VIEWED_KEY = 'lastViewedArchivedOrderId';
@@ -88,6 +90,9 @@ export default function OrdersArchive() {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [status, setStatus] = useState('');
+  const [ref, setRef] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -98,7 +103,7 @@ export default function OrdersArchive() {
   const [msg, setMsg] = useState<string | null>(null);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const load = useCallback(async (p = page, s = search, st = status) => {
+  const load = useCallback(async (p = page, s = search, st = status, r = ref, f = from, t = to) => {
     setLoading(true);
     setError(null);
     setSelected(new Set());
@@ -107,6 +112,9 @@ export default function OrdersArchive() {
         page: p, limit: PAGE_SIZE,
         ...(s ? { search: s } : {}),
         ...(st ? { status: st } : {}),
+        ...(r ? { ref: r } : {}),
+        ...(f ? { from: f } : {}),
+        ...(t ? { to: t } : {}),
       });
       setOrders(res.orders);
       setTotal(res.total);
@@ -116,9 +124,9 @@ export default function OrdersArchive() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status]);
+  }, [page, search, status, ref, from, to]);
 
-  useEffect(() => { load(page, search, status); }, [page, search, status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(page, search, status, ref, from, to); }, [page, search, status, ref, from, to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -128,6 +136,17 @@ export default function OrdersArchive() {
 
   function handleStatus(v: string) {
     setStatus(v);
+    setPage(1);
+  }
+
+  function handleRef(v: string) {
+    setRef(v);
+    setPage(1);
+  }
+
+  function handleDateRange(f: string, t: string) {
+    setFrom(f);
+    setTo(t);
     setPage(1);
   }
 
@@ -150,7 +169,7 @@ export default function OrdersArchive() {
     try {
       const res = await adminApi.orders.archiveRestore([...selected]);
       setMsg(`✓ ${res.restored} orden(es) restauradas al panel activo.`);
-      load(page, search, status);
+      load(page, search, status, ref, from, to);
     } catch (e) { setMsg(`Error: ${(e as Error).message}`); }
     finally { setBusy(false); }
   }
@@ -158,7 +177,13 @@ export default function OrdersArchive() {
   async function handleDownload() {
     const token = (await (await import('../../lib/supabase')).supabase.auth.getSession()).data.session?.access_token;
     if (!token) return;
-    const url = adminApi.orders.archiveDownloadUrl(status ? { status } : search ? { search } : undefined);
+    const url = adminApi.orders.archiveDownloadUrl({
+      ...(status ? { status } : {}),
+      ...(search ? { search } : {}),
+      ...(ref ? { ref } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    });
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
     if (!res.ok) return;
     const blob = await res.blob();
@@ -205,6 +230,10 @@ export default function OrdersArchive() {
           )}
         </form>
 
+        <SellerFilterSelect className="w-56" value={ref} onChange={handleRef} />
+
+        <DateRangePicker className="w-56" from={from} to={to} onChange={handleDateRange} />
+
         <div className="flex gap-1 flex-wrap">
           {STATUS_FILTERS.map((f) => (
             <button key={f.value} type="button" onClick={() => handleStatus(f.value)}
@@ -239,8 +268,10 @@ export default function OrdersArchive() {
         </div>
       )}
 
-      {/* Tabla */}
-      {loading ? (
+      {/* Tabla — mientras se refresca (loading con datos ya en pantalla) no la
+          desmontamos, solo se atenúa un toque; así cambiar de filtro no hace que
+          la tabla desaparezca y vuelva a aparecer. */}
+      {loading && orders.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-14 rounded-xl bg-ink-soft/60 animate-pulse" />
@@ -250,11 +281,11 @@ export default function OrdersArchive() {
         <div className="rounded-xl border border-gold/10 bg-ink-soft/30 p-12 text-center">
           <p className="text-4xl mb-3">📁</p>
           <p className="text-cream/50 text-sm">
-            {search || status ? 'Sin resultados para ese filtro.' : 'El archivo está vacío.'}
+            {search || status || ref || from || to ? 'Sin resultados para ese filtro.' : 'El archivo está vacío.'}
           </p>
         </div>
       ) : (
-        <div className="rounded-xl border border-gold/10 overflow-hidden">
+        <div className={`rounded-xl border border-gold/10 overflow-hidden transition-opacity duration-150 ${loading ? 'opacity-50' : 'opacity-100'}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
-import { sellerApi, SellerApiError, type SellerArchivedOrder, type ArchivePage } from '../../lib/sellerApi';
+import { useEffect, useMemo, useState } from 'react';
+import { sellerApi, SellerApiError, type SellerArchivedOrder, type SellerMember, type ArchivePage } from '../../lib/sellerApi';
 import DetailRow from '../../components/DetailRow';
+import SimpleSelect from '../../components/SimpleSelect';
+import DateRangePicker from '../../components/DateRangePicker';
 
 const STATUS_TABS = [
   { value: '', label: 'Todas' },
@@ -43,6 +45,10 @@ const PAGE_SIZE = 20;
 export default function SellerArchive() {
   const [data, setData] = useState<ArchivePage<SellerArchivedOrder> | null>(null);
   const [status, setStatus] = useState('');
+  const [memberId, setMemberId] = useState(''); // '' = todos
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [members, setMembers] = useState<SellerMember[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,10 +56,25 @@ export default function SellerArchive() {
   const [restoring, setRestoring] = useState<string | null>(null);
   const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    sellerApi.members.list().then((list) => setMembers(list.filter((m) => m.is_active))).catch(() => {});
+  }, []);
+
+  const memberOptions = useMemo(
+    () => [{ value: '', label: 'Todos (equipo)' }, ...members.map((m) => ({ value: String(m.id), label: m.name }))],
+    [members],
+  );
+
   const load = () => {
     setLoading(true);
     setError(null);
-    return sellerApi.archive.list({ page, limit: PAGE_SIZE, ...(status ? { status } : {}) })
+    return sellerApi.archive.list({
+      page, limit: PAGE_SIZE,
+      ...(status ? { status } : {}),
+      ...(memberId ? { member_id: Number(memberId) } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    })
       .then((res) => { setData(res); setLoading(false); })
       .catch((e) => { setError((e as Error).message); setLoading(false); });
   };
@@ -62,13 +83,21 @@ export default function SellerArchive() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    sellerApi.archive.list({ page, limit: PAGE_SIZE, ...(status ? { status } : {}) })
+    sellerApi.archive.list({
+      page, limit: PAGE_SIZE,
+      ...(status ? { status } : {}),
+      ...(memberId ? { member_id: Number(memberId) } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    })
       .then((res) => { if (!cancelled) { setData(res); setLoading(false); } })
       .catch((e) => { if (!cancelled) { setError((e as Error).message); setLoading(false); } });
     return () => { cancelled = true; };
-  }, [page, status]);
+  }, [page, status, memberId, from, to]);
 
   function handleStatus(v: string) { setStatus(v); setPage(1); setExpanded(null); }
+  function handleMember(v: string) { setMemberId(v); setPage(1); setExpanded(null); }
+  function handleDateRange(f: string, t: string) { setFrom(f); setTo(t); setPage(1); setExpanded(null); }
 
   async function handleRestore(publicId: string) {
     setRestoring(publicId);
@@ -89,7 +118,12 @@ export default function SellerArchive() {
     const { supabase } = await import('../../lib/supabase');
     const token = (await supabase.auth.getSession()).data.session?.access_token;
     if (!token) return;
-    const url = sellerApi.archive.downloadUrl(status ? { status } : undefined);
+    const url = sellerApi.archive.downloadUrl({
+      ...(status ? { status } : {}),
+      ...(memberId ? { member_id: Number(memberId) } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    });
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, 'ngrok-skip-browser-warning': 'true' } });
     if (!res.ok) return;
     const blob = await res.blob();
@@ -102,11 +136,11 @@ export default function SellerArchive() {
   const totalPages = data?.total_pages ?? 1;
 
   return (
-    <div className="px-4 pb-24 pt-4 max-w-2xl mx-auto">
-      <header className="mb-6 flex items-start justify-between gap-3">
+    <div className="p-4 md:p-8 max-w-3xl">
+      <header className="mb-4 md:mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-3xl text-cream">Archivo</h1>
-          <p className="mt-1 text-xs text-cream/50">
+          <h1 className="font-display text-3xl md:text-4xl text-cream">Archivo</h1>
+          <p className="mt-0.5 text-xs md:text-sm text-cream/50">
             Tus órdenes terminadas o rendidas. No se borran — siempre disponibles acá.
           </p>
         </div>
@@ -116,18 +150,26 @@ export default function SellerArchive() {
         </button>
       </header>
 
-      {/* Tabs de estado */}
-      <div className="flex gap-1 overflow-x-auto pb-1 mb-5 scrollbar-none">
-        {STATUS_TABS.map((t) => (
-          <button key={t.value} type="button" onClick={() => handleStatus(t.value)}
-            className={`px-3 py-1.5 rounded-full text-xs border whitespace-nowrap transition flex-shrink-0 ${
-              status === t.value
-                ? 'border-gold bg-gold/15 text-gold'
-                : 'border-cream/15 text-cream/50 hover:border-cream/30 hover:text-cream/80'
-            }`}>
-            {t.label}
-          </button>
-        ))}
+      {/* Tabs de estado + filtro de sub-vendedor (si tiene equipo) + rango de fechas */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+          {STATUS_TABS.map((t) => (
+            <button key={t.value} type="button" onClick={() => handleStatus(t.value)}
+              className={`px-3 py-1.5 rounded-full text-xs border whitespace-nowrap transition flex-shrink-0 ${
+                status === t.value
+                  ? 'border-gold bg-gold/15 text-gold'
+                  : 'border-cream/15 text-cream/50 hover:border-cream/30 hover:text-cream/80'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          {members.length > 0 && (
+            <SimpleSelect className="w-40 shrink-0" options={memberOptions} value={memberId} onChange={handleMember} />
+          )}
+          <DateRangePicker className="w-56 shrink-0" from={from} to={to} onChange={handleDateRange} />
+        </div>
       </div>
 
       {restoreMsg && (
@@ -137,7 +179,7 @@ export default function SellerArchive() {
         <div className="rounded-xl border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90 mb-4">{error}</div>
       )}
 
-      {loading ? (
+      {loading && orders.length === 0 ? (
         <div className="space-y-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-20 rounded-xl bg-ink-soft/60 animate-pulse" />
@@ -147,11 +189,11 @@ export default function SellerArchive() {
         <div className="rounded-xl border border-gold/10 bg-ink-soft/30 p-12 text-center">
           <p className="text-4xl mb-3">📁</p>
           <p className="text-cream/50 text-sm">
-            {status ? 'Sin órdenes en esta categoría.' : 'Tu archivo está vacío.'}
+            {status || memberId || from || to ? 'Sin órdenes en esta categoría.' : 'Tu archivo está vacío.'}
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className={`space-y-3 transition-opacity duration-150 ${loading ? 'opacity-50' : 'opacity-100'}`}>
           {orders.map((o) => {
             const isOpen = expanded === o.public_id;
             const canRestore = (!!o.archived_at || !!o.net_settled_at) && !['cancelled', 'refunded', 'expired', 'failed'].includes(o.status);

@@ -378,6 +378,9 @@ const archiveListQuery = z.object({
   limit:  z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().max(120).optional(),
   status: z.enum(['pending', 'paid', 'failed', 'cancelled', 'refunded', 'expired']).optional(),
+  ref:    z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional(),
+  from:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 // GET /api/admin/orders/archive — lista paginada del archivo
