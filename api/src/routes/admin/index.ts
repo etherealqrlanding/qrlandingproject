@@ -170,7 +170,9 @@ adminRouter.get('/categories', async (_req, res, next) => {
 // ─── Storage ─────────────────────────────────────────────
 const uploadSchema = z.object({
   filename: z.string().min(1).max(200),
-  content_type: z.string().regex(/^image\/(jpeg|png|webp|avif)$/i),
+  // svg+xml incluido para logos vectoriales — se sirve siempre vía <img src>, nunca
+  // inline/objeto, así que el navegador no ejecuta scripts embebidos (sin riesgo XSS).
+  content_type: z.string().regex(/^image\/(jpeg|png|webp|avif|svg\+xml)$/i),
 });
 
 // POST /api/admin/uploads/sign — genera path único y signed URL para subir
@@ -203,19 +205,22 @@ adminRouter.post('/uploads/sign', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Crea el bucket si no existe (público, solo lectura)
+const BUCKET_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/svg+xml'];
+
+// Crea el bucket si no existe, o actualiza su config si ya existía con una lista de
+// mime types vieja (ej. antes de sumar svg+xml para logos) — idempotente.
 let bucketEnsured = false;
 async function ensureStorageBucket() {
   if (bucketEnsured) return;
   const { data: buckets, error: listErr } = await supabaseAdmin.storage.listBuckets();
   if (listErr) throw listErr;
+  const bucketConfig = { public: true, fileSizeLimit: '8MB', allowedMimeTypes: BUCKET_MIME_TYPES };
   if (!buckets.some((b) => b.name === STORAGE_BUCKET)) {
-    const { error: createErr } = await supabaseAdmin.storage.createBucket(STORAGE_BUCKET, {
-      public: true,
-      fileSizeLimit: '8MB',
-      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/avif'],
-    });
+    const { error: createErr } = await supabaseAdmin.storage.createBucket(STORAGE_BUCKET, bucketConfig);
     if (createErr && !createErr.message.includes('already exists')) throw createErr;
+  } else {
+    const { error: updateErr } = await supabaseAdmin.storage.updateBucket(STORAGE_BUCKET, bucketConfig);
+    if (updateErr) throw updateErr;
   }
   bucketEnsured = true;
 }

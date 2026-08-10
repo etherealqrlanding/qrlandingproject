@@ -170,6 +170,7 @@ export interface AdminProductSummary {
   category_id: number; category_slug: string; category_name_es: string;
   options_count: string; images_count: string;
   hero_image_url: string | null;
+  logo_url: string | null;
   updated_at: string;
   options: AdminProductOptionPreview[];
 }
@@ -188,6 +189,7 @@ export interface AdminProductDetail {
   is_active: boolean; display_order: number;
   available_days: number[];
   accepts_children: boolean;
+  logo_url: string | null;
   options: AdminOption[];
   images: AdminImage[];
   menus: AdminMenu[];

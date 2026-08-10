@@ -68,6 +68,7 @@ export interface ProductSummary {
   badge_en: string | null;
   starting_price_usd: number | null;
   hero_image: string | null;
+  logo_url: string | null;
   option_names_es: string[];
   option_names_en: string[];
 }

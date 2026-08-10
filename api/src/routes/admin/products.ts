@@ -85,6 +85,7 @@ const productSchema = z.object({
   available_days: z.array(z.number().int().min(1).max(7)).max(7).optional(),
   accepts_children: z.boolean().optional(),
   children_age_label: z.string().max(80).optional().nullable(),
+  logo_url: z.string().url().max(800).optional().nullable(),
 });
 
 adminProductsRouter.get('/', async (_req, res, next) => {

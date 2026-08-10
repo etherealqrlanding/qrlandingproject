@@ -76,6 +76,7 @@ export async function listProducts(opts?: { categorySlug?: string }): Promise<Pr
        p.tagline_es, p.tagline_en,
        p.badge_es, p.badge_en,
        p.starting_price_usd::float AS starting_price_usd,
+       p.logo_url,
        (
          SELECT pi.url FROM product_images pi
           WHERE pi.product_id = p.id
@@ -120,7 +121,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
        p.video_url,
        p.available_days,
        p.starting_price_usd::float AS starting_price_usd,
-       p.accepts_children, p.children_age_label
+       p.accepts_children, p.children_age_label, p.logo_url
        FROM products p
        JOIN categories c ON c.id = p.category_id
       WHERE p.slug = $1 AND p.is_active = TRUE

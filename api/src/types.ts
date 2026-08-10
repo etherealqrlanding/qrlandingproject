@@ -76,6 +76,9 @@ export interface ProductSummary {
   badge_en: string | null;
   starting_price_usd: number | null;
   hero_image: string | null;
+  // Logo de la casa — si está cargado, reemplaza hero_image como imagen de la card
+  // (ver ProductCard.tsx). Independiente de la galería de fotos.
+  logo_url: string | null;
   // Nombres de los product_options activos (tiers: "Cena VIP", "Solo Show", etc.)
   // Se usan como preview rápido en el selector de la home, sin pedir el detalle completo.
   option_names_es: string[];

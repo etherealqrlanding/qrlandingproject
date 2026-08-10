@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminCategory, type AdminProductDetail } from '../../lib/adminApi';
 import OptionsEditor from './sections/OptionsEditor';
 import ImagesEditor from './sections/ImagesEditor';
+import ProductLogoEditor from './sections/ProductLogoEditor';
 import GeneralSection from './sections/GeneralSection';
 import ProductAvailabilityEditor from './sections/ProductAvailabilityEditor';
 import MenuEditor from './sections/MenuEditor';
@@ -147,7 +148,10 @@ export default function ProductForm() {
             <ProductAvailabilityEditor product={product} />
           )}
           {tab === 'images' && product && (
-            <ImagesEditor product={product} onChange={handleUpdated} />
+            <>
+              <ProductLogoEditor product={product} onChange={handleUpdated} />
+              <ImagesEditor product={product} onChange={handleUpdated} />
+            </>
           )}
         </>
       )}

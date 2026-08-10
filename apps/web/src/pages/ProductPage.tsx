@@ -230,12 +230,14 @@ export default function ProductPage() {
                   productAvailableDays={product.available_days}
                   productAcceptsChildren={product.accepts_children}
                   productChildrenAgeLabel={product.children_age_label}
-                  // Las opciones no tienen fotos propias — se recorren las de la casa
-                  // (en el mismo orden que el carrusel de arriba) para que cada card
-                  // se vea distinta en vez de repetir siempre la misma.
-                  imageUrl={product.images.length > 0
+                  // Si la casa tiene logo, se usa el mismo en todos los tiers (marca
+                  // unificada). Si no, las opciones no tienen fotos propias — se
+                  // recorren las de la casa (mismo orden que el carrusel de arriba)
+                  // para que cada card se vea distinta en vez de repetir siempre la misma.
+                  imageUrl={product.logo_url ?? (product.images.length > 0
                     ? product.images[i % product.images.length].url
-                    : product.hero_image}
+                    : product.hero_image)}
+                  isLogo={Boolean(product.logo_url)}
                   selected={opt.id === selectedOptionId}
                   onSelect={() => setSelectedOptionId(opt.id)}
                   onBook={() => {
@@ -328,13 +330,16 @@ export default function ProductPage() {
 }
 
 function OptionCard({
-  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, selected, onSelect, onBook, onCheckAvailability, lang,
+  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, isLogo, selected, onSelect, onBook, onCheckAvailability, lang,
 }: {
   option: ProductOption;
   productAvailableDays: number[];
   productAcceptsChildren: boolean;
   productChildrenAgeLabel: string | null;
   imageUrl: string | null;
+  // El logo es el mismo para todos los tiers de la casa — a diferencia de una foto,
+  // no se recorta (object-contain) porque suele venir con transparencia.
+  isLogo?: boolean;
   selected: boolean;
   onSelect: () => void;
   onBook: () => void;
@@ -376,12 +381,18 @@ function OptionCard({
           flex-1 del bloque de título. */}
       <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
         {imageUrl && (
-          <img
-            src={imageUrl}
-            alt=""
-            loading="lazy"
-            className="h-20 w-28 sm:h-24 sm:w-32 shrink-0 rounded-md object-cover border border-gold/10"
-          />
+          isLogo ? (
+            <div className="h-20 w-28 sm:h-24 sm:w-32 shrink-0 rounded-md border border-gold/10 bg-ink/40 flex items-center justify-center p-2">
+              <img src={imageUrl} alt="" loading="lazy" className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <img
+              src={imageUrl}
+              alt=""
+              loading="lazy"
+              className="h-20 w-28 sm:h-24 sm:w-32 shrink-0 rounded-md object-cover border border-gold/10"
+            />
+          )
         )}
         <div className="min-w-0 flex-1">
           <h3 className="font-display text-xl text-cream">{name}</h3>

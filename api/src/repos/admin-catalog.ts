@@ -40,6 +40,9 @@ export interface AdminProductInput {
   accepts_children?: boolean;
   // Texto libre del rango de edad (ej. "3 a 10 años"), solo relevante si accepts_children.
   children_age_label?: string | null;
+  // Logo de la casa — reemplaza la foto de portada en las cards (catálogo público y
+  // listado del admin). Independiente de la galería de fotos (product_images).
+  logo_url?: string | null;
 }
 
 export async function adminListProducts() {
@@ -47,7 +50,7 @@ export async function adminListProducts() {
     `SELECT
        p.id, p.slug, p.name, p.venue_name, p.is_active, p.display_order,
        p.starting_price_usd::float AS starting_price_usd,
-       p.accepts_children, p.children_age_label,
+       p.accepts_children, p.children_age_label, p.logo_url,
        c.id AS category_id, c.slug AS category_slug, c.name_es AS category_name_es,
        p.updated_at,
        (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id) AS options_count,
@@ -126,8 +129,9 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        badge_es, badge_en,
        schedule_summary_es, schedule_summary_en,
        video_url,
-       starting_price_usd, is_active, display_order, available_days, accepts_children, children_age_label
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+       starting_price_usd, is_active, display_order, available_days, accepts_children, children_age_label,
+       logo_url
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -145,6 +149,7 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.available_days ?? [1, 2, 3, 4, 5, 6, 7],
       input.accepts_children ?? false,
       input.children_age_label ?? null,
+      input.logo_url ?? null,
     ],
   );
   return rows[0].id;
