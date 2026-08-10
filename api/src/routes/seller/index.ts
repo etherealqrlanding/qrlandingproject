@@ -626,27 +626,28 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
 const attributionSchema = z.object({
   seller_member_id: z.number().int().positive().nullable(),
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 // PATCH /api/seller/me/orders/:publicId/attribution — marca (o corrige) qué persona de
 // mi equipo cerró esta venta. Sirve para las que no tuvieron touchpoint humano al
 // crearse (ej. el pasajero pagó por Mercado Pago solo desde la habitación) y el hotel
 // se entera después de quién la asistió. Mandar seller_member_id: null la limpia.
-// Autoriza el PIN de ADMINISTRADOR del vendedor (no el del sub-vendedor asignado) —
-// es la persona con jerarquía sobre el equipo quien hace esta corrección, no hace
-// falta que la persona asignada esté presente con su propio PIN.
+//
+// Quién autoriza depende del medio de pago (chequeado contra el pedido real en la
+// base, no contra lo que mande el cliente): en efectivo, la persona que toma la
+// orden se identifica con su PROPIO PIN — igual que al cobrar. En Mercado Pago/PIX
+// (o al limpiar la atribución, sea cual sea el medio) no hay quién se identifique en
+// persona, así que lo autoriza el PIN de ADMINISTRADOR del vendedor.
 sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     const parsed = attributionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
-    const { seller_member_id, admin_pin } = parsed.data;
+    const { seller_member_id, admin_pin, seller_member_pin } = parsed.data;
 
-    const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
-    if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
-
-    const { rows } = await pool.query<{ id: number }>(
-      `SELECT o.id
+    const { rows } = await pool.query<{ id: number; payment_method: string }>(
+      `SELECT o.id, o.payment_method
          FROM orders o
          JOIN order_attributions a ON a.order_id = o.id
         WHERE o.public_id = $1 AND a.seller_id = $2
@@ -657,10 +658,19 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
     if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
 
     let sellerMemberId: number | null = null;
-    if (seller_member_id != null) {
-      const member = await findActiveSellerMember(req.seller!.sellerId, seller_member_id);
-      if (!member) return res.status(404).json({ error: 'No encontramos a esa persona en tu equipo.' });
-      sellerMemberId = member.id;
+    if (order.payment_method === 'cash' && seller_member_id != null) {
+      if (!seller_member_pin) return res.status(400).json({ error: 'Ingresá tu PIN para tomar esta orden.' });
+      const resolved = await resolveSellerMember(req.seller!.sellerId, seller_member_id, seller_member_pin);
+      if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
+      sellerMemberId = resolved.memberId;
+    } else {
+      const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
+      if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+      if (seller_member_id != null) {
+        const member = await findActiveSellerMember(req.seller!.sellerId, seller_member_id);
+        if (!member) return res.status(404).json({ error: 'No encontramos a esa persona en tu equipo.' });
+        sellerMemberId = member.id;
+      }
     }
 
     await pool.query(

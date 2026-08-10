@@ -6,15 +6,17 @@ interface Props {
   publicId: string;
   currentName: string | null;
   members: SellerMember[];
+  paymentMethod: string;
   onSaved: () => void;
 }
 
 // Fila editable "¿quién de mi equipo cerró esta venta?" dentro del detalle de una
-// orden — permite tag-ear (o corregir) después de creada, típicamente para ventas
-// online (Mercado Pago/PIX) donde nadie del equipo tocó el sistema al momento de
-// vender. Lo autoriza el PIN de administrador del vendedor (no el de la persona
-// que se está asignando) — lo pide tanto para asignar como para limpiar.
-export default function AttributionPicker({ publicId, currentName, members, onSaved }: Props) {
+// orden — permite tag-ear (o corregir) después de creada. Quién autoriza depende
+// del medio de pago: en efectivo, la persona que toma la orden entra su PROPIO PIN
+// (igual que al cobrar); en Mercado Pago/PIX — o al limpiar la atribución, sea cual
+// sea el medio — nadie se identificó en persona, así que lo autoriza el PIN de
+// administrador del vendedor.
+export default function AttributionPicker({ publicId, currentName, members, paymentMethod, onSaved }: Props) {
   const [editing, setEditing] = useState(false);
   const [memberId, setMemberId] = useState<number | ''>('');
   const [pin, setPin] = useState('');
@@ -23,15 +25,17 @@ export default function AttributionPicker({ publicId, currentName, members, onSa
 
   if (members.length === 0 && !currentName) return null;
 
+  const needsAdminPin = paymentMethod !== 'cash' || memberId === '';
+
   const handleSave = async () => {
     setError(null);
     if (!/^\d{4,6}$/.test(pin)) {
-      setError('Ingresá el PIN de administrador (4-6 dígitos).');
+      setError(needsAdminPin ? 'Ingresá el PIN de administrador (4-6 dígitos).' : 'Ingresá tu PIN (4-6 dígitos).');
       return;
     }
     setSaving(true);
     try {
-      await sellerApi.setOrderAttribution(publicId, memberId === '' ? null : memberId, pin);
+      await sellerApi.setOrderAttribution(publicId, memberId === '' ? null : memberId, pin, needsAdminPin ? 'admin' : 'member');
       setEditing(false);
       setPin('');
       setMemberId('');
@@ -75,7 +79,7 @@ export default function AttributionPicker({ publicId, currentName, members, onSa
         <input
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="PIN de administrador"
+          placeholder={needsAdminPin ? 'PIN de administrador' : 'Tu PIN'}
           inputMode="numeric"
           className="w-28 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
         />

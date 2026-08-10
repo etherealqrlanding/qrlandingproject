@@ -855,7 +855,7 @@ export default function SellerOrders() {
                         );
                       })()}
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                      <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} onSaved={() => reload()} />
+                      <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method} onSaved={() => reload()} />
                       {o.payment_method !== 'cash' && (
                         <>
                           <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
@@ -1092,7 +1092,7 @@ export default function SellerOrders() {
                               <div className="space-y-1.5">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y liquidación</p>
                                 <DetailRow label="Medio">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                                <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} onSaved={() => reload()} />
+                                <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method} onSaved={() => reload()} />
                                 {o.payment_method !== 'cash' && (
                                   <>
                                     <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>

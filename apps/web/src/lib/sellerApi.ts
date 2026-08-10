@@ -344,10 +344,13 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify({ currency, ...member }),
     }),
-  setOrderAttribution: (publicId: string, sellerMemberId: number | null, adminPin: string) =>
+  setOrderAttribution: (publicId: string, sellerMemberId: number | null, pin: string, pinType: 'admin' | 'member') =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution`, {
       method: 'PATCH',
-      body: JSON.stringify({ seller_member_id: sellerMemberId, admin_pin: adminPin }),
+      body: JSON.stringify({
+        seller_member_id: sellerMemberId,
+        ...(pinType === 'admin' ? { admin_pin: pin } : { seller_member_pin: pin }),
+      }),
     }),
   members: {
     list: () => request<SellerMember[]>('/api/seller/me/members'),
