@@ -117,6 +117,14 @@ export default function SellerLayout() {
     navigate('/seller/login');
   };
 
+  // Abre el sitio público en otra pestaña ya con SU propio código de referido — a
+  // diferencia del admin (que no es un vendedor real y necesita un código "preview"
+  // generado por el backend), el vendedor ya tiene el suyo a mano.
+  const handlePreviewSite = () => {
+    if (!me) return;
+    window.open(buildShareUrl('/', me.code), '_blank', 'noopener');
+  };
+
   // Compartir el código propio a un click desde el header móvil: comparte el link
   // de referido (mismo link/mensaje que ya arma SellerDashboard) vía el share nativo
   // del sistema si está disponible; si no, lo copia y avisa brevemente en el mismo lugar.
@@ -235,6 +243,14 @@ export default function SellerLayout() {
         </nav>
 
         <div className="px-3 py-4 border-t border-gold/10">
+          <button
+            type="button"
+            onClick={handlePreviewSite}
+            title={collapsed ? 'Ver sitio' : undefined}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-3 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition"
+          >
+            {collapsed ? '↗' : <>Ver sitio ↗</>}
+          </button>
           {me && !collapsed && (
             <div className="px-3 mb-3">
               <p className="text-xs text-cream/50">Conectado como</p>
@@ -268,6 +284,13 @@ export default function SellerLayout() {
                 {codeCopied ? '✓ Copiado' : <>{me.code} <span aria-hidden>↗</span></>}
               </button>
             )}
+            <button
+              type="button"
+              onClick={handlePreviewSite}
+              className="text-xs text-gold-soft hover:text-gold transition"
+            >
+              Ver sitio ↗
+            </button>
             <button
               type="button"
               onClick={handleSignOut}
