@@ -119,7 +119,13 @@ export interface ApplyAddonResult {
  * vuelve a aplicar. NO re-chequea cupo (ya estaba reservado por el addon pendiente); al
  * marcarlo 'paid' y subir order_items en la misma transacción, el cupo total no cambia.
  */
-export async function applyAddonPayment(publicId: string, mpPaymentId: string | null): Promise<ApplyAddonResult> {
+export async function applyAddonPayment(
+  publicId: string,
+  mpPaymentId: string | null,
+  // Solo lo manda el portal de vendedores (cobro en efectivo con PIN) — el webhook
+  // de MP y el admin panel no tienen a quién nombrar acá, siguen sin pasar nada.
+  actorMember?: { id: number; name: string } | null,
+): Promise<ApplyAddonResult> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -270,6 +276,7 @@ export async function applyAddonPayment(publicId: string, mpPaymentId: string | 
         extra_adults: addon.extra_adults, extra_children: addon.extra_children,
         new_adults: newAdults, new_children: newChildren,
         charge_usd: addon.charge_usd, charge_ars: addon.charge_ars,
+        ...(actorMember ? { seller_member_id: actorMember.id, seller_member_name: actorMember.name } : {}),
       })],
     );
 

@@ -11,6 +11,10 @@ interface Props {
   options: SimpleSelectOption[];
   className?: string;
   disabled?: boolean;
+  // 'sm' = versión compacta para convivir en una fila junto a un input de PIN y
+  // botones chicos (gates de identificación); 'md' (default) = tamaño estándar de
+  // filtro, igual que siempre.
+  size?: 'sm' | 'md';
 }
 
 /**
@@ -19,20 +23,25 @@ interface Props {
  * oscura/dorada del resto de los filtros. Mismo look que los otros controles de
  * filtro (SellerFilterSelect, DateRangePicker): trigger con clase `.input`.
  */
-export default function SimpleSelect({ value, onChange, options, className, disabled }: Props) {
+export default function SimpleSelect({ value, onChange, options, className, disabled, size = 'md' }: Props) {
   const selected = options.find((o) => o.value === value) ?? options[0];
+  const isSm = size === 'sm';
 
   return (
     <Listbox value={value} onChange={onChange} disabled={disabled}>
       <div className={`relative ${className ?? ''}`}>
         <ListboxButton
-          className={`input flex items-center justify-between gap-2 text-left text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={
+            isSm
+              ? `w-full flex items-center justify-between gap-1.5 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs text-cream text-left focus:outline-none focus:border-gold/40 transition ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
+              : `input flex items-center justify-between gap-2 text-left text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
+          }
         >
           {({ open }) => (
             <>
               <span className="truncate">{selected?.label}</span>
               <svg aria-hidden viewBox="0 0 20 20" fill="none"
-                className={`h-4 w-4 shrink-0 text-gold/70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
+                className={`${isSm ? 'h-3 w-3' : 'h-4 w-4'} shrink-0 text-gold/70 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>
                 <path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </>
@@ -42,19 +51,19 @@ export default function SimpleSelect({ value, onChange, options, className, disa
         <ListboxOptions
           transition
           anchor="bottom start"
-          className="z-50 w-[var(--button-width)] mt-2 max-h-72 overflow-auto rounded-lg border border-gold/25 bg-ink-soft py-1.5 shadow-2xl shadow-black/50 focus:outline-none transition duration-150 ease-out data-[closed]:opacity-0 data-[closed]:-translate-y-1"
+          className={`z-50 w-[var(--button-width)] mt-2 overflow-auto rounded-lg border border-gold/25 bg-ink-soft shadow-2xl shadow-black/50 focus:outline-none transition duration-150 ease-out data-[closed]:opacity-0 data-[closed]:-translate-y-1 ${isSm ? 'max-h-56 py-1' : 'max-h-72 py-1.5'}`}
         >
           {options.map((o) => (
             <ListboxOption
               key={o.value}
               value={o.value}
-              className="cursor-pointer select-none px-4 py-2 flex items-center justify-between gap-3 text-sm text-cream/90 data-[focus]:bg-gold/10 data-[selected]:text-gold"
+              className={`cursor-pointer select-none flex items-center justify-between gap-3 text-cream/90 data-[focus]:bg-gold/10 data-[selected]:text-gold ${isSm ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'}`}
             >
               {({ selected: isSelected }) => (
                 <>
                   <span className="truncate">{o.label}</span>
                   {isSelected && (
-                    <svg aria-hidden viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0 text-gold">
+                    <svg aria-hidden viewBox="0 0 20 20" fill="none" className={`${isSm ? 'h-3.5 w-3.5' : 'h-4 w-4'} shrink-0 text-gold`}>
                       <path d="M4 10.5L8 14.5L16 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}

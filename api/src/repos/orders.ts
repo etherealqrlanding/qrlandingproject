@@ -378,6 +378,8 @@ export interface OrderReductionInput {
   newNetTotalUsd: number | null;
   noteLine: string;
   actor?: 'admin' | 'seller';
+  actorMemberId?: number | null;
+  actorMemberName?: string | null;
 }
 
 /**
@@ -449,6 +451,8 @@ export async function applyOrderReduction(input: OrderReductionInput, externalCl
         new_transfer: input.newTransferRequested,
         refund_usd: input.refundUsd, refund_ars: input.refundArs,
         actor: input.actor ?? null,
+        seller_member_id: input.actorMemberId ?? null,
+        seller_member_name: input.actorMemberName ?? null,
       })],
     );
 

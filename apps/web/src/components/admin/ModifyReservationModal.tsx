@@ -4,7 +4,7 @@ import Checkbox from '../Checkbox';
 import type { SellerMember } from '../../lib/sellerApi';
 import MemberPinGate, { isMemberPinMissing } from '../seller/MemberPinGate';
 
-type MemberFields = { seller_member_id?: number; seller_member_pin?: string };
+type MemberFields = { seller_member_id?: number; seller_member_pin?: string; admin_pin?: string };
 type ReduceBody = MemberFields & {
   adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean;
   // Presente solo cuando la misma acción también reprograma la fecha: así el backend
@@ -51,12 +51,21 @@ interface Props {
   // Solo lo pasa el portal de vendedores (no el admin): si el vendedor tiene equipo
   // cargado, exige elegir quién hace el cambio + su PIN antes de dejar confirmar.
   members?: SellerMember[];
+  // Identidad ya validada para esta orden (ver OrderMemberGate en SellerOrders) —
+  // si viene, se usa directo y no se pide el PIN de nuevo acá.
+  unlockedMember?: { memberId: number; pin: string } | null;
+  onMemberValidated?: (memberId: number, pin: string) => void;
+  // Idem, pero para cuando el administrador del vendedor ya se identificó con su
+  // propio PIN para esta orden (ver OrderMemberGate) — se usa directo, sin volver
+  // a pedirlo ni mostrar el toggle de "usar PIN de administrador".
+  unlockedAdminPin?: string | null;
+  onAdminValidated?: (pin: string) => void;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const fmtArs = (n: number) => `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 
-export default function ModifyReservationModal({ order, item, handlers, onClose, onDone, members }: Props) {
+export default function ModifyReservationModal({ order, item, handlers, onClose, onDone, members, unlockedMember, onMemberValidated, unlockedAdminPin, onAdminValidated }: Props) {
   const origAdults = item.adults;
   const origChildren = item.children;
   const unitAdult = Number(item.unit_price_adult_usd);
@@ -80,14 +89,25 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const [mpLink, setMpLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Equipo cargado → hay que identificarse con PIN antes de poder confirmar cualquier cambio.
+  // Equipo cargado → hay que identificarse con PIN antes de poder confirmar cualquier
+  // cambio, salvo que ya se haya validado antes para esta orden (unlockedMember). Si la
+  // persona no está disponible y nadie tiene su PIN, el administrador del vendedor puede
+  // autorizar con el suyo (useAdminOverride) — queda anotado en el historial como hecho
+  // por el admin.
   const teamMembers = members ?? [];
   const [memberId, setMemberId] = useState<number | ''>('');
   const [memberPin, setMemberPin] = useState('');
-  const memberFields: MemberFields = memberId !== ''
-    ? { seller_member_id: memberId, seller_member_pin: memberPin }
-    : {};
-  const memberMissing = isMemberPinMissing(teamMembers, memberId, memberPin);
+  const [useAdminOverride, setUseAdminOverride] = useState(false);
+  const memberFields: MemberFields = unlockedMember
+    ? { seller_member_id: unlockedMember.memberId, seller_member_pin: unlockedMember.pin }
+    : unlockedAdminPin
+      ? { ...(memberId !== '' ? { seller_member_id: memberId } : {}), admin_pin: unlockedAdminPin }
+      : useAdminOverride
+        ? { ...(memberId !== '' ? { seller_member_id: memberId } : {}), admin_pin: memberPin }
+        : (memberId !== '' ? { seller_member_id: memberId, seller_member_pin: memberPin } : {});
+  const memberMissing = !unlockedMember && !unlockedAdminPin && (
+    useAdminOverride ? !/^\d{4,6}$/.test(memberPin) : isMemberPinMissing(teamMembers, memberId, memberPin)
+  );
 
   const newPax = adults + children;
   const isIncreasing = newPax > origAdults + origChildren;
@@ -165,6 +185,12 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         }
       } else if (hasDateChange) {
         onDone();
+      }
+      // Llegamos hasta acá sin excepción → algo se validó recién con el backend, lo
+      // cacheamos para esta orden (así las próximas acciones no lo vuelven a pedir).
+      if (!unlockedMember && !unlockedAdminPin) {
+        if (useAdminOverride) onAdminValidated?.(memberPin);
+        else if (memberId !== '') onMemberValidated?.(memberId, memberPin);
       }
     } catch (err) {
       setError((err as Error).message);
@@ -315,14 +341,30 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             <p className="text-xs text-cream/40">El cliente recibe el email de confirmación cuando confirmás el cobro.</p>
           )}
 
-          <MemberPinGate
-            members={teamMembers}
-            memberId={memberId}
-            memberPin={memberPin}
-            onMemberIdChange={setMemberId}
-            onPinChange={setMemberPin}
-            label="¿Quién sos? Tu equipo está cargado — necesitamos tu PIN para confirmar este cambio."
-          />
+          {!unlockedMember && !unlockedAdminPin && (
+            <div>
+              <MemberPinGate
+                members={teamMembers}
+                memberId={memberId}
+                memberPin={memberPin}
+                onMemberIdChange={setMemberId}
+                onPinChange={setMemberPin}
+                label={useAdminOverride
+                  ? 'PIN de administrador — autorizás vos porque la persona no está disponible.'
+                  : '¿Quién sos? Tu equipo está cargado — necesitamos tu PIN para confirmar este cambio.'}
+                pinPlaceholder={useAdminOverride ? 'PIN de administrador' : undefined}
+              />
+              {teamMembers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setUseAdminOverride((v) => !v); setMemberPin(''); }}
+                  className="-mt-3 mb-5 text-[10px] text-cream/40 hover:text-cream/70 transition underline underline-offset-2"
+                >
+                  {useAdminOverride ? 'usar el PIN de la persona' : '¿la persona no está? usar PIN de administrador'}
+                </button>
+              )}
+            </div>
+          )}
 
           {error && <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90">{error}</div>}
         </div>

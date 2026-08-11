@@ -4,6 +4,7 @@ import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerOrder,
 import DetailRow from '../../components/DetailRow';
 import AttributionPicker from '../../components/seller/AttributionPicker';
 import MemberPinGate, { isMemberPinMissing } from '../../components/seller/MemberPinGate';
+import OrderMemberGate from '../../components/seller/OrderMemberGate';
 import DateRangePicker from '../../components/DateRangePicker';
 import SimpleSelect from '../../components/SimpleSelect';
 
@@ -86,6 +87,22 @@ function canArchiveManually(o: SellerOrder): boolean {
 function archiveButtonLabel(o: SellerOrder, archiving: boolean): string {
   if (archiving) return 'Archivando...';
   return o.restored_at ? '📁 Volver a archivar' : '📁 Archivar ahora';
+}
+
+// Además del estado (que siempre se muestra), a lo sumo UNA etiqueta secundaria por
+// fila — mostrar varias hacía quebrar la línea y rompía la tabla. Prioridad: lo más
+// inusual/alertante primero (restaurada, reducida) antes que lo puramente informativo
+// (efectivo, manual), que ya se puede ver al expandir la orden.
+type ExtraBadgeKey = 'restored' | 'reduced' | 'cash' | 'manual';
+
+function topExtraBadge(o: SellerOrder, includePayment: boolean): ExtraBadgeKey | null {
+  if (o.restored_at) return 'restored';
+  if (o.was_reduced) return 'reduced';
+  if (includePayment) {
+    if (o.payment_method === 'cash') return 'cash';
+    if (o.utm_source === 'seller_portal') return 'manual';
+  }
+  return null;
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -194,7 +211,28 @@ export default function SellerOrders() {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelMemberId, setCancelMemberId] = useState<number | ''>('');
   const [cancelMemberPin, setCancelMemberPin] = useState('');
+  const [cancelAdminOverride, setCancelAdminOverride] = useState(false);
   const [archivingOrder, setArchivingOrder] = useState<string | null>(null);
+
+  // Identidad ya validada por orden (public_id -> {memberId, pin}) — una vez que el
+  // vendedor confirma su PIN una vez para una orden (por el gate dedicado o por
+  // cualquiera de las acciones de abajo), el resto de las acciones sobre ESA misma
+  // orden lo reusan en vez de volver a pedirlo. Vive solo en memoria — se pierde al
+  // recargar la página, no se persiste en el navegador.
+  const [unlockedMembers, setUnlockedMembers] = useState<Record<string, { memberId: number; pin: string }>>({});
+  const markUnlocked = (publicId: string, memberId: number, pin: string) =>
+    setUnlockedMembers((prev) => ({ ...prev, [publicId]: { memberId, pin } }));
+  const relock = (publicId: string) =>
+    setUnlockedMembers((prev) => { const next = { ...prev }; delete next[publicId]; return next; });
+
+  // Misma idea que arriba, pero para cuando quien identifica la orden es el
+  // administrador del vendedor (con su propio PIN) en vez de un sub-vendedor —
+  // por ejemplo porque la persona correspondiente no está disponible.
+  const [unlockedAdmin, setUnlockedAdmin] = useState<Record<string, string>>({});
+  const markAdminUnlocked = (publicId: string, pin: string) =>
+    setUnlockedAdmin((prev) => ({ ...prev, [publicId]: pin }));
+  const relockAdmin = (publicId: string) =>
+    setUnlockedAdmin((prev) => { const next = { ...prev }; delete next[publicId]; return next; });
 
   const reload = async () => {
     const data = await sellerApi.orders(filter || undefined);
@@ -257,9 +295,11 @@ export default function SellerOrders() {
   const [addonPromptError, setAddonPromptError] = useState<string | null>(null);
 
   const requestAddonAction = (orderPublicId: string, addonPublicId: string, action: 'collect' | 'cancel') => {
-    if (members.length === 0) {
-      if (action === 'collect') handleCollectAddon(orderPublicId, addonPublicId);
-      else handleCancelAddon(orderPublicId, addonPublicId);
+    const unlocked = unlockedMembers[orderPublicId];
+    if (members.length === 0 || unlocked) {
+      const member = unlocked ? { seller_member_id: unlocked.memberId, seller_member_pin: unlocked.pin } : undefined;
+      if (action === 'collect') handleCollectAddon(orderPublicId, addonPublicId, member);
+      else handleCancelAddon(orderPublicId, addonPublicId, member);
       return;
     }
     setAddonPrompt({ orderPublicId, addonPublicId, action });
@@ -276,6 +316,7 @@ export default function SellerOrders() {
     }
     const member = { seller_member_id: addonMemberId as number, seller_member_pin: addonMemberPin };
     const { orderPublicId, addonPublicId, action } = addonPrompt;
+    markUnlocked(orderPublicId, addonMemberId as number, addonMemberPin);
     setAddonPrompt(null);
     if (action === 'collect') await handleCollectAddon(orderPublicId, addonPublicId, member);
     else await handleCancelAddon(orderPublicId, addonPublicId, member);
@@ -287,22 +328,40 @@ export default function SellerOrders() {
     setCancelError(null);
     setCancelMemberId('');
     setCancelMemberPin('');
+    setCancelAdminOverride(false);
   };
 
   const handleCancelConfirm = async () => {
     if (!cancelConfirmOrder) return;
-    if (isMemberPinMissing(members, cancelMemberId, cancelMemberPin)) {
-      setCancelError('Elegí quién sos y tu PIN para confirmar.');
-      return;
+    const unlocked = unlockedMembers[cancelConfirmOrder.public_id];
+    const adminUnlocked = unlockedAdmin[cancelConfirmOrder.public_id];
+    if (!unlocked && !adminUnlocked) {
+      if (cancelAdminOverride) {
+        if (!/^\d{4,6}$/.test(cancelMemberPin)) {
+          setCancelError('Ingresá el PIN de administrador (4-6 dígitos).');
+          return;
+        }
+      } else if (isMemberPinMissing(members, cancelMemberId, cancelMemberPin)) {
+        setCancelError('Elegí quién sos y tu PIN para confirmar.');
+        return;
+      }
     }
     setCancelingOrder(cancelConfirmOrder.public_id);
     setCancelError(null);
     try {
       const publicId = cancelConfirmOrder.public_id;
-      await sellerApi.cancelOrder(
-        publicId, cancelReason.trim() || undefined,
-        cancelMemberId !== '' ? { seller_member_id: cancelMemberId, seller_member_pin: cancelMemberPin } : undefined,
-      );
+      const member = unlocked
+        ? { seller_member_id: unlocked.memberId, seller_member_pin: unlocked.pin }
+        : adminUnlocked
+          ? { ...(cancelMemberId !== '' ? { seller_member_id: cancelMemberId } : {}), admin_pin: adminUnlocked }
+          : cancelAdminOverride
+            ? { ...(cancelMemberId !== '' ? { seller_member_id: cancelMemberId } : {}), admin_pin: cancelMemberPin }
+            : (cancelMemberId !== '' ? { seller_member_id: cancelMemberId, seller_member_pin: cancelMemberPin } : undefined);
+      await sellerApi.cancelOrder(publicId, cancelReason.trim() || undefined, member);
+      if (!unlocked && !adminUnlocked) {
+        if (cancelAdminOverride) markAdminUnlocked(publicId, cancelMemberPin);
+        else if (cancelMemberId !== '') markUnlocked(publicId, cancelMemberId, cancelMemberPin);
+      }
       setCancelConfirmOrder(null);
       // Cancelar agrega un evento nuevo al histórico — sin esto, si se reabre la fila
       // después de cancelar, se seguía viendo el histórico viejo hasta recargar la página.
@@ -395,18 +454,19 @@ export default function SellerOrders() {
   };
 
   const handleCollect = async (publicId: string) => {
-    if (isMemberPinMissing(members, collectMemberId, collectMemberPin)) {
+    const unlocked = unlockedMembers[publicId];
+    if (!unlocked && isMemberPinMissing(members, collectMemberId, collectMemberPin)) {
       setCollectError('Elegí quién cobró y su PIN para confirmar.');
       return;
     }
     setCollecting(publicId);
     setCollectError(null);
     try {
-      await sellerApi.collectCash(
-        publicId,
-        collectCurrency,
-        collectMemberId !== '' ? { seller_member_id: collectMemberId, seller_member_pin: collectMemberPin } : undefined,
-      );
+      const member = unlocked
+        ? { seller_member_id: unlocked.memberId, seller_member_pin: unlocked.pin }
+        : (collectMemberId !== '' ? { seller_member_id: collectMemberId, seller_member_pin: collectMemberPin } : undefined);
+      await sellerApi.collectCash(publicId, collectCurrency, member);
+      if (!unlocked && collectMemberId !== '') markUnlocked(publicId, collectMemberId, collectMemberPin);
       setConfirmPublicId(null);
       setCollectMemberId('');
       setCollectMemberPin('');
@@ -508,6 +568,10 @@ export default function SellerOrders() {
             : {}),
         }}
         members={members}
+        unlockedMember={unlockedMembers[modifyOrder.public_id] ?? null}
+        onMemberValidated={(memberId, pin) => markUnlocked(modifyOrder.public_id, memberId, pin)}
+        unlockedAdminPin={unlockedAdmin[modifyOrder.public_id] ?? null}
+        onAdminValidated={(pin) => markAdminUnlocked(modifyOrder.public_id, pin)}
         onClose={() => setModifyOrder(null)}
         onDone={() => {
           const pid = modifyOrder.public_id;
@@ -580,14 +644,16 @@ export default function SellerOrders() {
                 </button>
               </div>
             </div>
-            <MemberPinGate
-              members={members}
-              memberId={collectMemberId}
-              memberPin={collectMemberPin}
-              onMemberIdChange={setCollectMemberId}
-              onPinChange={setCollectMemberPin}
-              label="¿Quién de tu equipo cobró? Necesitamos el PIN para confirmar."
-            />
+            {!(confirmPublicId && unlockedMembers[confirmPublicId]) && (
+              <MemberPinGate
+                members={members}
+                memberId={collectMemberId}
+                memberPin={collectMemberPin}
+                onMemberIdChange={setCollectMemberId}
+                onPinChange={setCollectMemberPin}
+                label="¿Quién de tu equipo cobró? Necesitamos el PIN para confirmar."
+              />
+            )}
             <p className="text-xs text-cream/40 mb-5">
               El monto que le cobrás al pasajero lo definís vos. Al confirmar, la reserva pasa a <strong className="text-cream/60">Cobrada</strong> y se envía el email de confirmación al pasajero.
             </p>
@@ -606,7 +672,7 @@ export default function SellerOrders() {
               <button
                 type="button"
                 onClick={() => handleCollect(confirmPublicId)}
-                disabled={collecting === confirmPublicId || isMemberPinMissing(members, collectMemberId, collectMemberPin)}
+                disabled={collecting === confirmPublicId || (!(confirmPublicId && unlockedMembers[confirmPublicId]) && isMemberPinMissing(members, collectMemberId, collectMemberPin))}
                 className="flex-1 rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:bg-gold/90 transition-colors disabled:opacity-60"
               >
                 {collecting === confirmPublicId ? 'Procesando...' : 'Sí, cobré el dinero'}
@@ -655,14 +721,30 @@ export default function SellerOrders() {
                 className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2.5 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40 resize-none"
               />
             </label>
-            <MemberPinGate
-              members={members}
-              memberId={cancelMemberId}
-              memberPin={cancelMemberPin}
-              onMemberIdChange={setCancelMemberId}
-              onPinChange={setCancelMemberPin}
-              label="¿Quién sos? Necesitamos tu PIN para confirmar la cancelación."
-            />
+            {!unlockedMembers[cancelConfirmOrder.public_id] && !unlockedAdmin[cancelConfirmOrder.public_id] && (
+              <div>
+                <MemberPinGate
+                  members={members}
+                  memberId={cancelMemberId}
+                  memberPin={cancelMemberPin}
+                  onMemberIdChange={setCancelMemberId}
+                  onPinChange={setCancelMemberPin}
+                  label={cancelAdminOverride
+                    ? 'PIN de administrador — autorizás vos porque la persona no está disponible.'
+                    : '¿Quién sos? Necesitamos tu PIN para confirmar la cancelación.'}
+                  pinPlaceholder={cancelAdminOverride ? 'PIN de administrador' : undefined}
+                />
+                {members.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setCancelAdminOverride((v) => !v); setCancelMemberPin(''); }}
+                    className="-mt-3 mb-5 text-[10px] text-cream/40 hover:text-cream/70 transition underline underline-offset-2"
+                  >
+                    {cancelAdminOverride ? 'usar el PIN de la persona' : '¿la persona no está? usar PIN de administrador'}
+                  </button>
+                )}
+              </div>
+            )}
             {cancelError && (
               <p className="text-xs text-red-400 mb-4">⚠ {cancelError}</p>
             )}
@@ -678,7 +760,7 @@ export default function SellerOrders() {
               <button
                 type="button"
                 onClick={handleCancelConfirm}
-                disabled={cancelingOrder === cancelConfirmOrder.public_id || isMemberPinMissing(members, cancelMemberId, cancelMemberPin)}
+                disabled={cancelingOrder === cancelConfirmOrder.public_id || (!unlockedMembers[cancelConfirmOrder.public_id] && !unlockedAdmin[cancelConfirmOrder.public_id] && (cancelAdminOverride ? !/^\d{4,6}$/.test(cancelMemberPin) : isMemberPinMissing(members, cancelMemberId, cancelMemberPin)))}
                 className="flex-1 rounded-lg bg-red-600/80 border border-red-500/50 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-600 transition-colors disabled:opacity-60"
               >
                 {cancelingOrder === cancelConfirmOrder.public_id ? 'Cancelando...' : 'Sí, cancelar reserva'}
@@ -796,13 +878,10 @@ export default function SellerOrders() {
                         <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs ${derivedStatus(o).cls}`}>
                           {derivedStatus(o).label}
                         </span>
-                        {o.was_reduced && (
+                        {topExtraBadge(o, false) === 'reduced' && (
                           <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-sky-500/30 bg-sky-950/20 text-sky-300">↓ Reducida</span>
                         )}
-                        {o.has_paid_addon && (
-                          <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-gold/30 bg-gold/5 text-gold-soft">↑ Ampliada</span>
-                        )}
-                        {o.restored_at && (
+                        {topExtraBadge(o, false) === 'restored' && (
                           <span className="shrink-0 px-2 py-0.5 rounded-full text-xs border border-emerald-500/30 bg-emerald-950/20 text-emerald-300">↺ Restaurada</span>
                         )}
                       </div>
@@ -813,6 +892,7 @@ export default function SellerOrders() {
                         <span>·</span>
                         <span>{paxLabel(o.adults ?? 0, o.children ?? 0)}</span>
                         {o.payment_method === 'cash' && <span className="text-cream/30">· Efectivo</span>}
+                        {members.length > 0 && o.seller_member_name && <span className="text-gold-soft/70">· {o.seller_member_name}</span>}
                       </div>
                       <p className="text-[10px] text-cream/30 mt-0.5">Ord. {fmtDateTime(o.created_at)}</p>
                     </div>
@@ -839,6 +919,15 @@ export default function SellerOrders() {
                   {isOpen && (
                     <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20 space-y-1.5">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
+                      <OrderMemberGate
+                        members={members}
+                        unlocked={unlockedMembers[o.public_id] ?? null}
+                        onUnlock={(memberId, pin) => markUnlocked(o.public_id, memberId, pin)}
+                        onRelock={() => relock(o.public_id)}
+                        adminUnlocked={unlockedAdmin[o.public_id] ?? null}
+                        onAdminUnlock={(pin) => markAdminUnlocked(o.public_id, pin)}
+                        onAdminRelock={() => relockAdmin(o.public_id)}
+                      />
                       <DetailRow label="Pasajero">{o.customer_name}</DetailRow>
                       <DetailRow label="Email">{o.customer_email}</DetailRow>
                       {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
@@ -855,7 +944,12 @@ export default function SellerOrders() {
                         );
                       })()}
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                      <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method} onSaved={() => reload()} />
+                      <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method}
+                        unlockedMember={unlockedMembers[o.public_id] ?? null}
+                        onMemberValidated={(memberId, pin) => markUnlocked(o.public_id, memberId, pin)}
+                        unlockedAdminPin={unlockedAdmin[o.public_id] ?? null}
+                        onAdminValidated={(pin) => markAdminUnlocked(o.public_id, pin)}
+                        onSaved={() => reload()} />
                       {o.payment_method !== 'cash' && (
                         <>
                           <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
@@ -984,6 +1078,7 @@ export default function SellerOrders() {
                   <th className="text-left px-3 py-2">Show / Opción</th>
                   <th className="text-left px-3 py-2">Pasajeros</th>
                   <th className="text-left px-3 py-2">Estado</th>
+                  {members.length > 0 && <th className="text-left px-3 py-2">Asignado</th>}
                   <th className="text-right px-3 py-2">Venta</th>
                   <th className="text-right px-3 py-2">Comisión / Neto</th>
                   <th className="text-center px-3 py-2">Liquidado</th>
@@ -1016,27 +1111,29 @@ export default function SellerOrders() {
                         </td>
                         <td className="px-3 py-2 text-cream/70 text-[11px] whitespace-nowrap">{paxLabel(o.adults ?? 0, o.children ?? 0)}</td>
                         <td className="px-3 py-2">
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] whitespace-nowrap ${derivedStatus(o).cls}`}>
                               {derivedStatus(o).label}
                             </span>
-                            {o.utm_source === 'seller_portal' && (
+                            {topExtraBadge(o, true) === 'manual' && (
                               <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-gold/30 bg-gold/5 text-gold-soft whitespace-nowrap">Manual</span>
                             )}
-                            {o.payment_method === 'cash' && (
+                            {topExtraBadge(o, true) === 'cash' && (
                               <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-cream/15 bg-cream/5 text-cream/40 whitespace-nowrap">Efectivo</span>
                             )}
-                            {o.was_reduced && (
+                            {topExtraBadge(o, true) === 'reduced' && (
                               <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-sky-500/30 bg-sky-950/20 text-sky-300 whitespace-nowrap">↓ Reducida</span>
                             )}
-                            {o.has_paid_addon && (
-                              <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-gold/30 bg-gold/5 text-gold-soft whitespace-nowrap">↑ Ampliada</span>
-                            )}
-                            {o.restored_at && (
+                            {topExtraBadge(o, true) === 'restored' && (
                               <span className="px-1.5 py-0.5 rounded-full text-[10px] border border-emerald-500/30 bg-emerald-950/20 text-emerald-300 whitespace-nowrap">↺ Restaurada</span>
                             )}
                           </div>
                         </td>
+                        {members.length > 0 && (
+                          <td className="px-3 py-2 text-[11px] text-cream/60 whitespace-nowrap max-w-[120px] truncate">
+                            {o.seller_member_name ?? <span className="text-cream/25">—</span>}
+                          </td>
+                        )}
                         <td className="px-3 py-2 text-right font-mono whitespace-nowrap text-[11px]">
                           {o.payment_method === 'cash'
                             ? <span className="text-cream/30">—</span>
@@ -1063,7 +1160,16 @@ export default function SellerOrders() {
 
                       {isOpen && (
                         <tr key={`${o.order_id}-detail`} className="border-b border-gold/10 bg-ink-soft/20">
-                          <td colSpan={9} className="px-5 py-4">
+                          <td colSpan={members.length > 0 ? 10 : 9} className="px-5 py-4">
+                            <OrderMemberGate
+                              members={members}
+                              unlocked={unlockedMembers[o.public_id] ?? null}
+                              onUnlock={(memberId, pin) => markUnlocked(o.public_id, memberId, pin)}
+                              onRelock={() => relock(o.public_id)}
+                              adminUnlocked={unlockedAdmin[o.public_id] ?? null}
+                              onAdminUnlock={(pin) => markAdminUnlocked(o.public_id, pin)}
+                              onAdminRelock={() => relockAdmin(o.public_id)}
+                            />
                             <div className="grid sm:grid-cols-3 gap-4">
                               <div className="space-y-1.5">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pasajero</p>
@@ -1092,7 +1198,12 @@ export default function SellerOrders() {
                               <div className="space-y-1.5">
                                 <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Pago y liquidación</p>
                                 <DetailRow label="Medio">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
-                                <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method} onSaved={() => reload()} />
+                                <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method}
+                        unlockedMember={unlockedMembers[o.public_id] ?? null}
+                        onMemberValidated={(memberId, pin) => markUnlocked(o.public_id, memberId, pin)}
+                        unlockedAdminPin={unlockedAdmin[o.public_id] ?? null}
+                        onAdminValidated={(pin) => markAdminUnlocked(o.public_id, pin)}
+                        onSaved={() => reload()} />
                                 {o.payment_method !== 'cash' && (
                                   <>
                                     <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>

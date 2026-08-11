@@ -42,18 +42,28 @@ function strVal(v: unknown): string | null {
   return typeof v === 'string' && v.trim() ? v : null;
 }
 
+// Quién hizo el movimiento: prioriza el nombre puntual del sub-vendedor
+// (guardado en el evento cuando se identificó con su propio PIN) — solo cuando
+// no hay nombre (autorizado con el PIN de administrador, que no es de una
+// persona en particular) cae al rol genérico.
+function actorLabel(payload: Record<string, unknown>): string | null {
+  const name = strVal(payload.seller_member_name);
+  if (name) return name;
+  if (payload.actor === 'admin') return 'administrador';
+  if (payload.actor === 'seller') return 'vendedor';
+  return null;
+}
+
 // Sufijo de actor para eventos de modificación
 function actorSuffix(payload: Record<string, unknown>): string {
-  if (payload.actor === 'admin') return ' (por admin)';
-  if (payload.actor === 'seller') return ' (por vendedor)';
-  return '';
+  const label = actorLabel(payload);
+  return label ? ` (${label})` : '';
 }
 
 // Prefijo de actor para eventos de cancelación
 function actorPrefix(payload: Record<string, unknown>): string {
-  if (payload.actor === 'admin') return 'Por admin';
-  if (payload.actor === 'seller') return 'Por vendedor';
-  return '';
+  const label = actorLabel(payload);
+  return label ? `Por ${label}` : '';
 }
 
 function detailRescheduled(payload: Record<string, unknown>): string {
@@ -104,7 +114,14 @@ function detailAddonCreated(payload: Record<string, unknown>): string | null {
   const parts: string[] = [];
   if (a > 0) parts.push(`+${a} ad`);
   if (c > 0) parts.push(`+${c} men`);
-  return parts.length > 0 ? parts.join(' · ') : null;
+  const actor = actorSuffix(payload);
+  if (parts.length > 0) return `${parts.join(' · ')}${actor}`;
+  return actor.trim() || null;
+}
+
+function detailAttributionSetByAdmin(payload: Record<string, unknown>): string | null {
+  const name = strVal(payload.seller_member_name);
+  return name ? `Asignada a ${name}` : 'Atribución removida';
 }
 
 function detailCreatedByAdmin(payload: Record<string, unknown>): string | null {
@@ -124,7 +141,23 @@ function detailAddonCollected(payload: Record<string, unknown>): string | null {
   if (a > 0) parts.push(`+${a} ad`);
   if (c > 0) parts.push(`+${c} men`);
   if (payload.charge_ars != null) parts.push(`cobrado ${fmtArs(payload.charge_ars)}`);
-  return parts.length > 0 ? parts.join(' · ') : null;
+  const actor = actorSuffix(payload);
+  if (parts.length > 0) return `${parts.join(' · ')}${actor}`;
+  return actor.trim() || null;
+}
+
+function detailCashCollected(payload: Record<string, unknown>): string | null {
+  const currency = strVal(payload.currency);
+  const actor = actorSuffix(payload);
+  const parts: string[] = [];
+  if (currency) parts.push(`en ${currency}`);
+  if (parts.length > 0) return `${parts.join(' · ')}${actor}`;
+  return actor.trim() || null;
+}
+
+function detailAttributionSetByMember(payload: Record<string, unknown>): string | null {
+  const name = strVal(payload.seller_member_name);
+  return name ? `Autoasignada por ${name}` : null;
 }
 
 function eventDetail(type: string, payload: Record<string, unknown> | null | undefined): string | null {
@@ -136,6 +169,9 @@ function eventDetail(type: string, payload: Record<string, unknown> | null | und
   if (type === 'refund_partial_processed') return detailRefund(payload, true);
   if (type === 'addon_cash_created') return detailAddonCreated(payload);
   if (type === 'cash_order_created_by_admin' || type === 'preference_created_by_admin') return detailCreatedByAdmin(payload);
+  if (type === 'attribution_set_by_admin') return detailAttributionSetByAdmin(payload);
+  if (type === 'attribution_set_by_member') return detailAttributionSetByMember(payload);
+  if (type === 'cash_collected_by_seller' || type === 'cash_collected_by_admin') return detailCashCollected(payload);
   if (type === 'addon_cash_collected' || type === 'addon_paid' || type === 'order_increased_cash') {
     return detailAddonCollected(payload);
   }

@@ -172,6 +172,11 @@ export async function createCashAddonForOrder(params: {
   adults: number;
   children: number;
   restrictSellerId?: number;
+  // Solo los manda el portal de vendedores — el admin panel no los pasa, así que
+  // ahí sigue sin guardarse nada (como hasta ahora).
+  actor?: 'admin' | 'seller';
+  actorMemberId?: number | null;
+  actorMemberName?: string | null;
 }): Promise<CashAddonResult> {
   const { rows } = await pool.query<{
     order_id: number; status: string; payment_method: string; exchange_rate_used: number;
@@ -248,6 +253,8 @@ export async function createCashAddonForOrder(params: {
   await logPaymentEvent(row.order_id, 'addon_cash_created', null, {
     addon_id: addon.id, extra_adults: calc.extraAdults, extra_children: calc.extraChildren,
     charge_usd: calc.chargeUsd,
+    ...(params.actor ? { actor: params.actor } : {}),
+    ...(params.actorMemberId != null ? { seller_member_id: params.actorMemberId, seller_member_name: params.actorMemberName } : {}),
   });
 
   return {

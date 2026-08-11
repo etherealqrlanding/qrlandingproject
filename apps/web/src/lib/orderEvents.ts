@@ -30,6 +30,8 @@ const LABELS: Record<string, { label: string; tone: EventTone }> = {
   modify_refund_failed: { label: 'Reintegro de modificación rechazado', tone: 'bad' },
   order_expired_auto: { label: 'Caducada por falta de pago', tone: 'warn' },
   admin_status_change: { label: 'Cambio de estado manual (admin)', tone: 'neutral' },
+  attribution_set_by_admin: { label: 'Venta asignada por admin', tone: 'neutral' },
+  attribution_set_by_member: { label: 'Venta autoasignada', tone: 'neutral' },
 };
 
 export interface OrderEvent {
