@@ -1080,7 +1080,7 @@ export default function SellerOrders() {
                   <th className="text-left px-3 py-2">Estado</th>
                   {members.length > 0 && <th className="text-left px-3 py-2">Asignado</th>}
                   <th className="text-right px-3 py-2">Venta</th>
-                  <th className="text-right px-3 py-2">Comisión / Neto</th>
+                  <th className="text-right px-3 py-2">Incentivo / Neto</th>
                   <th className="text-center px-3 py-2">Liquidado</th>
                   <th className="w-8 px-2 py-2" />
                 </tr>

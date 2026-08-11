@@ -54,7 +54,7 @@ export default function SellerFilterSelect({ value, onChange, className }: Props
         <div className="relative">
           <ComboboxInput
             className="input font-mono text-sm pr-8"
-            placeholder="Todos los vendedores"
+            placeholder="Todos los recomendadores"
             displayValue={() => (selected ? `${selected.code} — ${selected.name}` : value ? value : '')}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -74,7 +74,7 @@ export default function SellerFilterSelect({ value, onChange, className }: Props
             value=""
             className="cursor-pointer select-none px-4 py-2 text-sm text-cream/70 data-[focus]:bg-gold/10 data-[selected]:text-gold"
           >
-            Todos los vendedores
+            Todos los recomendadores
           </ComboboxOption>
           {filtered.map((s) => (
             <ComboboxOption

@@ -177,7 +177,7 @@ export default function SellersList() {
   } else if (filtered?.length === 0) {
     mainContent = (
       <p className="text-cream/60 text-sm">
-        {sellers?.length === 0 ? 'No hay vendedores aún. Creá el primero.' : 'No hay resultados.'}
+        {sellers?.length === 0 ? 'No hay recomendadores aún. Creá el primero.' : 'No hay resultados.'}
       </p>
     );
   } else if (filtered && filtered.length > 0) {
@@ -201,7 +201,7 @@ export default function SellersList() {
           <table className="w-full text-sm">
             <thead className="bg-ink-soft/60 text-cream/60 text-xs uppercase tracking-wider">
               <tr>
-                <th className="text-left py-2.5 px-3">Vendedor</th>
+                <th className="text-left py-2.5 px-3">Recomendador</th>
                 <th className="text-left py-2.5 px-3">Código</th>
                 <th className="text-right py-2.5 px-3">Com.%</th>
                 <th className="text-right py-2.5 px-3">Ventas</th>
@@ -264,7 +264,7 @@ export default function SellersList() {
         </div>
 
         <p className="mt-3 text-xs text-cream/30 text-right">
-          {filtered.length} vendedor{filtered.length === 1 ? '' : 'es'}
+          {filtered.length} recomendador{filtered.length === 1 ? '' : 'es'}
         </p>
       </>
     );
@@ -274,8 +274,8 @@ export default function SellersList() {
     <div className="p-4 md:p-8 max-w-7xl">
       <header className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mb-8">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Comisiones</p>
-          <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Vendedores</h1>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Incentivos</p>
+          <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Recomendadores</h1>
         </div>
         <Link to="/admin/sellers/new" className="btn-primary text-sm">+ Nuevo</Link>
       </header>
@@ -297,9 +297,9 @@ export default function SellersList() {
 
           <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
             <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por Mercado Pago · afiliados externos" />
-            <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Comisiones de afiliados externos" />
-            <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight />
-            <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" />
+            <SummaryCard label="Incentivos" value={`ARS ${totals.paid.toLocaleString()}`} hint="Incentivos de afiliados externos" />
+            <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de MP a liquidar a recomendadores" highlight />
+            <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los recomendadores nos deben rendir" />
           </div>
         </>
       )}
@@ -324,9 +324,9 @@ export default function SellersList() {
             <p className="text-xs uppercase tracking-[0.3em] text-gold-soft mb-4">Estadísticas</p>
             <div className="grid grid-cols-1 gap-3">
               <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por Mercado Pago · afiliados externos" showHintOnMobile />
-              <SummaryCard label="Comisiones" value={`ARS ${totals.paid.toLocaleString()}`} hint="Comisiones de afiliados externos" showHintOnMobile />
-              <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Comisiones de MP a liquidar a vendedores" highlight showHintOnMobile />
-              <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los vendedores nos deben rendir" showHintOnMobile />
+              <SummaryCard label="Incentivos" value={`ARS ${totals.paid.toLocaleString()}`} hint="Incentivos de afiliados externos" showHintOnMobile />
+              <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de MP a liquidar a recomendadores" highlight showHintOnMobile />
+              <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los recomendadores nos deben rendir" showHintOnMobile />
             </div>
           </div>
         </div>

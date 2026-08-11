@@ -143,7 +143,7 @@ export async function createOrderPaidNotification(orderId: number): Promise<void
     seller_id: row.seller_id,
     type: 'order_paid',
     title: '¡Nueva venta confirmada!',
-    body: `Tu código generó una venta de ${fmtArs(row.total_ars)} para "${row.option_name}" — ${row.service_date}. Te corresponde una comisión de ${fmtArs(row.commission_amount_ars)}.`,
+    body: `Tu código generó una venta de ${fmtArs(row.total_ars)} para "${row.option_name}" — ${row.service_date}. Te corresponde un incentivo por recomendación de ${fmtArs(row.commission_amount_ars)}.`,
     metadata: { order_id: orderId, order_public_id: row.public_id, product_name: row.product_name, total_ars: row.total_ars },
   });
 }
@@ -316,7 +316,7 @@ export async function createOrderCreatedByAdminNotification(input: {
     title: isCash ? '💵 El equipo te cargó una reserva' : '✎ El equipo te cargó una reserva',
     body: isCash
       ? `Ingresamos una reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}) a tu nombre, por ${fmtArs(input.totalArs)}. Coordiná el cobro con el pasajero y marcala como Cobrada desde "Mis ventas".`
-      : `Ingresamos una reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}) a tu nombre, por ${fmtArs(input.totalArs)}. Le enviamos el link de pago al pasajero — la comisión te queda acreditada cuando pague.`,
+      : `Ingresamos una reserva de ${input.customerName} para "${input.optionName}" (${input.serviceDate}) a tu nombre, por ${fmtArs(input.totalArs)}. Le enviamos el link de pago al pasajero — el incentivo por recomendación te queda acreditado cuando pague.`,
     metadata: {
       order_id: input.orderId, order_public_id: input.orderPublicId,
       payment_method: input.paymentMethod, total_ars: input.totalArs, service_date: input.serviceDate,

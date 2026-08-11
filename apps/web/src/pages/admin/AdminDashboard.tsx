@@ -10,9 +10,9 @@ const MODULES = [
   },
   {
     icon: '✦',
-    label: 'Vendedores',
+    label: 'Recomendadores',
     href: '/admin/sellers',
-    body: 'Cada vendedor tiene un código QR único y un % de comisión. Pueden cobrar en efectivo o generar links de Mercado Pago. Desde el listado podés contactarlos directo por WhatsApp.',
+    body: 'Cada recomendador tiene un código QR único y un % de incentivo por recomendación. Pueden cobrar en efectivo o generar links de Mercado Pago. Desde el listado podés contactarlos directo por WhatsApp.',
   },
   {
     icon: '◆',
@@ -30,15 +30,15 @@ const MODULES = [
     icon: '✎',
     label: 'Contenido',
     href: '/admin/content',
-    body: 'Editá las secciones Nosotros y FAQ del sitio público (bilingüe), y las preguntas frecuentes del portal de vendedores. Sin tocar código.',
+    body: 'Editá las secciones Nosotros y FAQ del sitio público (bilingüe), y las preguntas frecuentes del portal de recomendadores. Sin tocar código.',
   },
 ];
 
 const TIPS = [
   {
     num: '01',
-    title: 'Invitá a un vendedor en segundos',
-    body: 'Creá el vendedor, guardalo y abrí el tab "Código QR". Desde ahí podés reenviar el link de invitación al portal o descargar el QR para compartirlo.',
+    title: 'Invitá a un recomendador en segundos',
+    body: 'Creá el recomendador, guardalo y abrí el tab "Código QR". Desde ahí podés reenviar el link de invitación al portal o descargar el QR para compartirlo.',
   },
   {
     num: '02',
@@ -48,22 +48,22 @@ const TIPS = [
   {
     num: '03',
     title: 'Actualizá el tipo de cambio frecuentemente',
-    body: 'Los montos en pesos se calculan multiplicando el precio en USD por el tipo de cambio del momento de la compra. Mantenerlo al día asegura que las comisiones y los montos sean precisos.',
+    body: 'Los montos en pesos se calculan multiplicando el precio en USD por el tipo de cambio del momento de la compra. Mantenerlo al día asegura que los incentivos por recomendación y los montos sean precisos.',
   },
   {
     num: '04',
     title: 'La ventana de cancelación es global',
-    body: 'Si configurás 48 hs, ni vendedores ni el admin pueden cancelar dentro de ese plazo. Ajustala según la política del momento; en temporada alta puede convenir ajustarla.',
+    body: 'Si configurás 48 hs, ni recomendadores ni el admin pueden cancelar dentro de ese plazo. Ajustala según la política del momento; en temporada alta puede convenir ajustarla.',
   },
   {
     num: '05',
     title: 'El historial de una orden no miente',
-    body: 'Cada pago, modificación, cobro y cancelación queda registrado en los eventos de la orden. Ante cualquier disputa con un vendedor o pasajero, ese es el primer lugar donde mirar.',
+    body: 'Cada pago, modificación, cobro y cancelación queda registrado en los eventos de la orden. Ante cualquier disputa con un recomendador o pasajero, ese es el primer lugar donde mirar.',
   },
   {
     num: '06',
-    title: 'Vendedor sin teléfono = sin botón de WhatsApp',
-    body: 'El botón de WhatsApp solo aparece si el vendedor tiene teléfono cargado. Si no aparece, editá el vendedor y completá el campo "Teléfono de contacto".',
+    title: 'Recomendador sin teléfono = sin botón de WhatsApp',
+    body: 'El botón de WhatsApp solo aparece si el recomendador tiene teléfono cargado. Si no aparece, editá el recomendador y completá el campo "Teléfono de contacto".',
   },
 ];
 
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
     {
       label: 'Neto pendiente',
       value: fmtArs(me.stats.net_pending_ars),
-      hint: 'Efectivo que los vendedores todavía tienen que rendir',
+      hint: 'Efectivo que los recomendadores todavía tienen que rendir',
       href: '/admin/orders',
     },
   ];

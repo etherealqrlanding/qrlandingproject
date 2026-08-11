@@ -356,10 +356,10 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
   </div>
   ${data.seller_name ? `
   <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Atribución a vendedor</p>
-    <div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(data.seller_name)}</strong></div>
+    <p style="${baseStyles.eyebrow}">Atribución a recomendador</p>
+    <div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Comisión a pagar</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, data.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Incentivo por recomendación a pagar</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, data.exchange_rate_used)}</strong></div>
   </div>` : ''}
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
@@ -371,22 +371,22 @@ function htmlForSellerRefund(data: OrderEmailData & {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya fue cancelada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, te avisamos que una venta atribuida a tu código fue ${data.is_partial ? 'reintegrada parcialmente' : 'cancelada y reintegrada al cliente'}${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   ${data.is_partial
-    ? `<p>La comisión correspondiente a esta venta se ajustará proporcionalmente.</p>`
-    : `<p><strong>La comisión de ${arsOf(data.commission_usd, data.exchange_rate_used)} que correspondía a esta venta ya no aplica.</strong></p>`}
+    ? `<p>El incentivo por recomendación correspondiente a esta venta se ajustará proporcionalmente.</p>`
+    : `<p><strong>El incentivo por recomendación de ${arsOf(data.commission_usd, data.exchange_rate_used)} que correspondía a esta venta ya no aplica.</strong></p>`}
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio cancelado</span><strong>${escapeHtml(data.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(data.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Cliente</span><span>${escapeHtml(data.customer_name)}</span></div>
     <div style="${baseStyles.row}"><span>Fecha solicitada</span><strong>${data.service_date}</strong></div>
-    <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Incentivo por recomendación que no aplica</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
   </div>
   <p>Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
 }
 
@@ -409,13 +409,13 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">¡Tenés una nueva venta!</h1>
-  <p>Hola ${escapeHtml(data.seller_name)}, un cliente que escaneó tu QR acaba de comprar una experiencia. Te corresponde una comisión.</p>
+  <p>Hola ${escapeHtml(data.seller_name)}, un cliente que escaneó tu QR acaba de comprar una experiencia. Te corresponde un incentivo por recomendación.</p>
   <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Tu comisión</p>
+    <p style="${baseStyles.eyebrow}">Tu incentivo por recomendación</p>
     <div style="${baseStyles.row}"><span>Valor de la venta</span><strong>${fmtArs(data.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
   </div>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Datos de la reserva</p>
@@ -428,9 +428,9 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
     ${data.transfer_requested ? emailRow('Traslado', `Incluido${data.transfer_hotel ? ` — retiro en ${escapeHtml(data.transfer_hotel)}` : ''}`) : ''}
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
-  <p>Vamos a procesar el pago de tu comisión junto con las del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
+  <p>Vamos a procesar el pago de tu incentivo por recomendación junto con los del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
 }
 
@@ -579,7 +579,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
   if (data.seller_name && data.seller_email && data.commission_usd != null) {
     await send(
       data.seller_email,
-      `¡Nueva venta tuya! +${arsOf(data.commission_usd, orderData.exchange_rate_used)} de comisión`,
+      `¡Nueva venta tuya! +${arsOf(data.commission_usd, orderData.exchange_rate_used)} de incentivo por recomendación`,
       htmlForSeller({
         ...orderData,
         seller_name: data.seller_name,
@@ -623,12 +623,12 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   </div>
   ${data.seller_name ? `
   <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Vendedor que cobra</p>
+    <p style="${baseStyles.eyebrow}">Recomendador que cobra</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>` : ''}
-  <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el vendedor confirme el cobro desde su portal.</p>
+  <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el recomendador confirme el cobro desde su portal.</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, adminHtml, 'ADMIN');
@@ -666,7 +666,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Tenés una reserva para cobrar</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, registramos una reserva a tu nombre. Coordiná el cobro con el cliente.</p>
   <div style="${baseStyles.card}">
@@ -680,7 +680,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">Al pasajero le cobrás el monto que definas; a nosotros nos rendís el neto.</p>
   ${actionButtons}
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml, 'VENDEDOR');
   }
@@ -717,8 +717,8 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   // 2) Admin — indica quién confirmó el cobro
   if (config.ADMIN_NOTIFICATION_EMAIL) {
     const actorNote = actor === 'admin'
-      ? '✓ El admin confirmó el cobro en nombre del vendedor. La orden fue marcada como <strong>pagada</strong>.'
-      : '✓ El vendedor confirmó la recepción del dinero. La orden fue marcada como <strong>pagada</strong>.';
+      ? '✓ El admin confirmó el cobro en nombre del recomendador. La orden fue marcada como <strong>pagada</strong>.'
+      : '✓ El recomendador confirmó la recepción del dinero. La orden fue marcada como <strong>pagada</strong>.';
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -736,7 +736,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   </div>
   ${data.seller_name ? `
   <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Vendedor</p>
+    <p style="${baseStyles.eyebrow}">Recomendador</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${cashNetDisplay(data, baseData)}</strong></div>
@@ -755,7 +755,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">¡Cobro registrado!</h1>
   <p>${sellerIntro}</p>
   <div style="${baseStyles.card}">
@@ -767,7 +767,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   </div>
   <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">El monto que le cobraste al pasajero lo definiste vos; lo que nos rendís es el neto.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml, 'VENDEDOR');
   }
@@ -782,10 +782,10 @@ export async function sendSellerPortalInvite(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de recomendadores</p>
   <h1 style="${baseStyles.title}">¡Bienvenido al portal!</h1>
   <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets te invitó a acceder a tu portal de ventas.</p>
-  <p>Desde ahí vas a poder ver tus ventas, comisiones y liquidaciones en tiempo real.</p>
+  <p>Desde ahí vas a poder ver tus ventas, incentivos por recomendación y liquidaciones en tiempo real.</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic en el botón para crear tu contraseña e ingresar:</p>
     <a href="${inviteLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
@@ -797,7 +797,7 @@ export async function sendSellerPortalInvite(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo pediste vos, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
   return send(sellerEmail, 'Acceso a tu portal de ventas — Tangos y Milongas Tickets', html, 'VENDEDOR');
 }
@@ -810,7 +810,7 @@ export async function sendSellerPasswordReset(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de recomendadores</p>
   <h1 style="${baseStyles.title}">Acceso a tu portal</h1>
   <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets te envió un nuevo link de acceso.</p>
   <div style="${baseStyles.card}">
@@ -824,7 +824,7 @@ export async function sendSellerPasswordReset(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo pediste vos, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
   return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html, 'VENDEDOR');
 }
@@ -866,7 +866,7 @@ export async function sendSellerAdminPinReset(
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Mi equipo</p>
   <h1 style="${baseStyles.title}">Restablecer el PIN de administrador</h1>
-  <p>Hola, pidieron restablecer el PIN de administrador de la cuenta de ${escapeHtml(sellerName)} (el que gestiona el equipo de sub-vendedores).</p>
+  <p>Hola, pidieron restablecer el PIN de administrador de la cuenta de ${escapeHtml(sellerName)} (el que gestiona el equipo de sub-recomendadores).</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic para elegir un PIN nuevo:</p>
     <a href="${resetLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
@@ -1038,7 +1038,7 @@ export async function sendOrderModifiedNotifications(
   const orderData = toOrderData(data);
   const arsStr = refundedArs.toLocaleString('es-AR');
   const refundLine = viaCash
-    ? `<p><strong style="color:#c8a85a">El vendedor te devuelve ARS ${arsStr}</strong> en efectivo.</p>`
+    ? `<p><strong style="color:#c8a85a">El recomendador te devuelve ARS ${arsStr}</strong> en efectivo.</p>`
     : `<p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>`;
   const dateChangeLine = dateChange
     ? `<p style="color:rgba(245,239,230,0.8)">También reprogramamos tu fecha de servicio: de <strong style="color:#e0c787">${dateChange.prevDate}</strong> a <strong style="color:#e0c787">${dateChange.newDate}</strong>.</p>`
@@ -1089,17 +1089,17 @@ export async function sendOrderModifiedNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya se modificó</h1>
-  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código se redujo${reason ? ` — ${escapeHtml(reason)}` : ''}. Tu comisión se ajustó al nuevo total.</p>
+  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código se redujo${reason ? ` — ${escapeHtml(reason)}` : ''}. Tu incentivo por recomendación se ajustó al nuevo total.</p>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta modificada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
@@ -1164,17 +1164,17 @@ export async function sendOrderIncreasedNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya se amplió</h1>
-  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código sumó pasajeros. Tu comisión se ajustó al nuevo total.</p>
+  <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código sumó pasajeros. Tu incentivo por recomendación se ajustó al nuevo total.</p>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu comisión ajustada</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
@@ -1197,7 +1197,7 @@ export async function sendOrderRescheduledNotifications(
   if (!data) return;
 
   const orderData = toOrderData(data);
-  const actorLabel = actor === 'seller' ? 'tu vendedor' : 'nuestro equipo';
+  const actorLabel = actor === 'seller' ? 'tu recomendador' : 'nuestro equipo';
 
   // 1) Cliente
   const customerHtml = `
@@ -1228,7 +1228,7 @@ export async function sendOrderRescheduledNotifications(
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha anterior</span><strong>${prevDate}</strong></div>
     <div style="${baseStyles.row}"><span>Fecha nueva</span><strong style="color:#c8a85a">${newDate}</strong></div>
-    <div style="${baseStyles.row}"><span>Reprogramado por</span><strong>${actor === 'seller' ? 'Vendedor' : 'Admin'}</strong></div>
+    <div style="${baseStyles.row}"><span>Reprogramado por</span><strong>${actor === 'seller' ? 'Recomendador' : 'Admin'}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
@@ -1241,7 +1241,7 @@ export async function sendOrderRescheduledNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya se reprogramó</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código cambió de fecha${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <div style="${baseStyles.card}">
@@ -1250,7 +1250,7 @@ export async function sendOrderRescheduledNotifications(
     <div style="${baseStyles.row}"><span>Fecha nueva</span><strong style="color:#c8a85a">${newDate}</strong></div>
   </div>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta reprogramada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
@@ -1271,7 +1271,7 @@ export async function sendSellerCancelledNotifications(
   if (!data) return;
 
   const orderData = toOrderData(data);
-  const sellerLabel = data.seller_name ? escapeHtml(data.seller_name) : 'el vendedor';
+  const sellerLabel = data.seller_name ? escapeHtml(data.seller_name) : 'el recomendador';
   const reasonLine = reason ? `<p style="color:rgba(245,239,230,0.7)">Motivo indicado: ${escapeHtml(reason)}</p>` : '';
   // Esta función solo se usa para cancelaciones de reservas en EFECTIVO (el vendedor no
   // puede cancelar Mercado Pago). Si nunca se llegó a cobrar, no hay nada que devolver —
@@ -1307,7 +1307,7 @@ export async function sendSellerCancelledNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Cancelación registrada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, confirmamos que cancelaste la siguiente reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <p>${wasCollected
@@ -1323,7 +1323,7 @@ export async function sendSellerCancelledNotifications(
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">Si necesitás asistencia para coordinar la devolución, escribinos por WhatsApp.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(
       data.seller_email,
@@ -1339,7 +1339,7 @@ export async function sendSellerCancelledNotifications(
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
-  <h1 style="${baseStyles.title}">Reserva cancelada por vendedor</h1>
+  <h1 style="${baseStyles.title}">Reserva cancelada por recomendador</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden cancelada</p>
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
@@ -1351,21 +1351,21 @@ export async function sendSellerCancelledNotifications(
   </div>
   ${data.seller_name ? `
   <div style="${baseStyles.card}">
-    <p style="${baseStyles.eyebrow}">Vendedor que canceló</p>
+    <p style="${baseStyles.eyebrow}">Recomendador que canceló</p>
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     ${data.seller_email ? `<div style="${baseStyles.row}"><span>Email</span><span>${escapeHtml(data.seller_email)}</span></div>` : ''}
-    <div style="${baseStyles.row}"><span>Comisión que no aplica</span><strong>${arsOf(data.commission_usd ?? 0, orderData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Incentivo por recomendación que no aplica</span><strong>${arsOf(data.commission_usd ?? 0, orderData.exchange_rate_used)}</strong></div>
   </div>` : ''}
   ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
   <p style="color:rgba(245,239,230,0.55);font-size:13px;">${wasCollected
-    ? '⚠ El cliente fue notificado para coordinar la devolución del dinero directamente con el vendedor.'
+    ? '⚠ El cliente fue notificado para coordinar la devolución del dinero directamente con el recomendador.'
     : 'ℹ La reserva no había sido cobrada — el cliente fue notificado de que no hay ningún trámite de devolución pendiente.'}</p>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
     await send(
       config.ADMIN_NOTIFICATION_EMAIL,
-      `[Cancelada por vendedor] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`,
+      `[Cancelada por recomendador] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`,
       adminHtml,
       'ADMIN',
     );
@@ -1393,7 +1393,7 @@ export async function sendAdminCancelledNotifications(
   const wasCollected = data.cash_collected_at != null;
   const refundLine = isCash
     ? (wasCollected
-        ? '<strong style="color:#c8a85a">El vendedor se pondrá en contacto para coordinar la devolución del dinero.</strong>'
+        ? '<strong style="color:#c8a85a">El recomendador se pondrá en contacto para coordinar la devolución del dinero.</strong>'
         : 'Como todavía no se había realizado ningún cobro, no tenés que hacer ningún trámite de devolución.')
     : 'Esta cancelación no generó un reintegro automático. Si corresponde una devolución, nuestro equipo se va a contactar para coordinarla.';
 
@@ -1418,7 +1418,7 @@ export async function sendAdminCancelledNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Vendedores</p>
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una reserva tuya fue cancelada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, el administrador canceló la siguiente reserva atribuida a tu código${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <div style="${baseStyles.card}">
@@ -1431,7 +1431,7 @@ export async function sendAdminCancelledNotifications(
   ${reasonLine}
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">El pasajero fue notificado. Si tenés dudas escribinos por WhatsApp.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `[Cancelada por admin] ${escapeHtml(orderData.customer_name)} — ${escapeHtml(orderData.option_name)}`, sellerHtml, 'VENDEDOR');
   }
@@ -1450,7 +1450,7 @@ export async function sendAdminCancelledNotifications(
     <div style="${baseStyles.row}"><span>Fecha servicio</span><strong>${orderData.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${fmtArs(orderData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
-    ${data.seller_name ? `<div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(data.seller_name)}</strong></div>` : ''}
+    ${data.seller_name ? `<div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(data.seller_name)}</strong></div>` : ''}
   </div>
   ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
@@ -1475,13 +1475,13 @@ export async function sendSellerCommissionPaid(input: {
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Liquidaciones</p>
   <h1 style="${baseStyles.title}">¡Liquidación procesada!</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets procesó una liquidación de comisiones a tu favor.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets procesó una liquidación de incentivos por recomendación a tu favor.</p>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Detalle de la liquidación</p>
     <div style="${baseStyles.row}"><span>Ventas liquidadas</span><strong>${ordersCount} venta${ordersCount === 1 ? '' : 's'}</strong></div>
     <div style="${baseStyles.row}"><span>Total acreditado</span><strong style="color:#c8a85a;font-size:22px">USD ${totalCommissionUsd.toFixed(2)}</strong></div>
   </div>
-  <p>Podés ver el detalle completo en tu portal de vendedores.</p>
+  <p>Podés ver el detalle completo en tu portal de recomendadores.</p>
   <div style="${baseStyles.card}">
     <a href="${portalUrl}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
       Ver mi portal
@@ -1489,7 +1489,7 @@ export async function sendSellerCommissionPaid(input: {
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Tenés alguna duda sobre el monto o las ventas incluidas? Escribinos por WhatsApp y te respondemos a la brevedad.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
   await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html, 'VENDEDOR');
 
@@ -1500,10 +1500,10 @@ export async function sendSellerCommissionPaid(input: {
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
   <h1 style="${baseStyles.title}">Liquidación MP confirmada</h1>
   <div style="${baseStyles.card}">
-    <div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(sellerName)}</strong></div>
+    <div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(sellerName)}</strong></div>
     <div style="${baseStyles.row}"><span>Ventas liquidadas</span><strong>${ordersCount}</strong></div>
     <div style="${baseStyles.row}"><span>Total pagado</span><strong style="color:#c8a85a">${fmtArs(totalCommissionArs)} (USD ${totalCommissionUsd.toFixed(2)})</strong></div>
-    <div style="${baseStyles.row}"><span>Vendedor ID</span><span style="font-family:monospace">${sellerId}</span></div>
+    <div style="${baseStyles.row}"><span>Recomendador ID</span><span style="font-family:monospace">${sellerId}</span></div>
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;
@@ -1534,7 +1534,7 @@ export async function sendNetSettledConfirmation(input: {
     <div style="${baseStyles.row}"><span>Ventas rendidas</span><strong>${ordersCount} venta${ordersCount === 1 ? '' : 's'}</strong></div>
     <div style="${baseStyles.row}"><span>Neto recibido</span><strong style="color:#c8a85a;font-size:22px">${fmtArs(totalNetArs)}</strong></div>
   </div>
-  <p>Podés ver el detalle completo en tu portal de vendedores.</p>
+  <p>Podés ver el detalle completo en tu portal de recomendadores.</p>
   <div style="${baseStyles.card}">
     <a href="${portalUrl}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
       Ver mi portal
@@ -1542,7 +1542,7 @@ export async function sendNetSettledConfirmation(input: {
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Alguna diferencia en el monto? Escribinos por WhatsApp y lo revisamos.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de comisiones</p>
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
 </div></body></html>`;
   await send(sellerEmail, `Rendición confirmada — ${fmtArs(totalNetArs)} recibidos`, html, 'VENDEDOR');
 
@@ -1553,10 +1553,10 @@ export async function sendNetSettledConfirmation(input: {
   <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
   <h1 style="${baseStyles.title}">Rendición en efectivo confirmada</h1>
   <div style="${baseStyles.card}">
-    <div style="${baseStyles.row}"><span>Vendedor</span><strong>${escapeHtml(sellerName)}</strong></div>
+    <div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(sellerName)}</strong></div>
     <div style="${baseStyles.row}"><span>Ventas rendidas</span><strong>${ordersCount}</strong></div>
     <div style="${baseStyles.row}"><span>Neto recibido</span><strong style="color:#c8a85a">${fmtArs(totalNetArs)}</strong></div>
-    <div style="${baseStyles.row}"><span>Vendedor ID</span><span style="font-family:monospace">${sellerId}</span></div>
+    <div style="${baseStyles.row}"><span>Recomendador ID</span><span style="font-family:monospace">${sellerId}</span></div>
   </div>
   <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
 </div></body></html>`;

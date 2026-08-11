@@ -18,7 +18,7 @@ const ITEMS: FaqItem[] = [
   {
     q_es: '¿Por qué necesito un link o código para entrar a la plataforma?',
     q_en: 'Why do I need a link or code to access the platform?',
-    a_es: 'Es una plataforma exclusiva para clientes recomendados por nuestra red de vendedores autorizados (hoteles, guías, choferes, agencias). El link o QR que te compartieron te da acceso a precios oficiales con la garantía de Tangos y Milongas Tickets. Si lo perdiste, pedile a esa persona que te lo reenvíe.',
+    a_es: 'Es una plataforma exclusiva para clientes recomendados por nuestra red de recomendadores autorizados (hoteles, guías, choferes, agencias). El link o QR que te compartieron te da acceso a precios oficiales con la garantía de Tangos y Milongas Tickets. Si lo perdiste, pedile a esa persona que te lo reenvíe.',
     a_en: 'This is an exclusive platform for guests referred by our network of authorized sellers (hotels, guides, drivers, agencies). The link or QR code you were given grants access to official prices backed by Tangos y Milongas Tickets. If you lost it, ask that person to resend it to you.',
   },
   {

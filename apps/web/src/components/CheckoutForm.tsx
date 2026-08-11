@@ -87,7 +87,6 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     emailConfirm: '',
     phone: '',
     nationality: '',
-    dni: '',
     service_date: initialDate ?? today,
     adults: initialAdults ?? 2,
     // Si la casa no acepta menores, arranca en 0 sin importar lo precargado — el campo
@@ -185,7 +184,6 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
       email: form.email.trim().toLowerCase(),
       phone: form.phone.trim() || null,
       nationality: form.nationality || null,
-      dni: form.dni.trim() || null,
     },
     ref_code: storedRef,
     transfer_requested: option.has_transfer ? wantsTransfer : false,
@@ -307,15 +305,6 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               {touched.phone && phoneError && (
                 <p className="mt-1 text-xs text-bordeaux-light">⚠ {phoneError}</p>
               )}
-            </Field>
-            <Field label={t('checkout.dni')} hint={t('checkout.dni_hint')}>
-              <input
-                type="text" maxLength={40}
-                value={form.dni} onChange={(e) => updateField('dni', e.target.value)}
-                className="input"
-                placeholder="12345678 / AB123456"
-                autoComplete="off"
-              />
             </Field>
             <Field label={t('checkout.email')} required>
               <input

@@ -7,7 +7,7 @@ type FaqItem = { q_es: string; a_es: string };
 const BENEFITS = [
   {
     icon: '◆',
-    title: 'Comisión por cada venta',
+    title: 'Incentivo por cada venta',
     body: 'Ganás un porcentaje fijo de cada reserva generada con tu código, ya sea que el pasajero pague en efectivo o por Mercado Pago.',
   },
   {
@@ -23,7 +23,7 @@ const BENEFITS = [
   {
     icon: '⬡',
     title: 'Liquidaciones transparentes',
-    body: 'Cada centavo queda registrado. Ves en tiempo real tu comisión ganada, pendiente y ya cobrada, con historial completo en la sección Liquidaciones.',
+    body: 'Cada centavo queda registrado. Ves en tiempo real tu incentivo por recomendación ganado, pendiente y ya cobrado, con historial completo en la sección Liquidaciones.',
   },
 ];
 
@@ -61,7 +61,7 @@ export default function SellerHelp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supportWhatsapp = useSupportWhatsapp();
-  const waUrl = `https://wa.me/${supportWhatsapp}?text=${encodeURIComponent('Hola, soy vendedor de Tangos y Milongas Tickets y necesito ayuda con el portal.')}`;
+  const waUrl = `https://wa.me/${supportWhatsapp}?text=${encodeURIComponent('Hola, soy recomendador de Tangos y Milongas Tickets y necesito ayuda con el portal.')}`;
 
   useEffect(() => {
     sellerApi.faq()
@@ -83,7 +83,7 @@ export default function SellerHelp() {
           <div className="flex-1">
             <p className="text-cream font-medium mb-1">¿Necesitás ayuda o tenés alguna duda?</p>
             <p className="text-sm text-cream/55">
-              Escribinos por WhatsApp y te respondemos a la brevedad. Reservas, comisiones, liquidaciones o cualquier consulta del portal.
+              Escribinos por WhatsApp y te respondemos a la brevedad. Reservas, incentivos por recomendación, liquidaciones o cualquier consulta del portal.
             </p>
           </div>
           <a

@@ -147,8 +147,8 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
           <p className="text-sm text-cream/70 mb-6">
             Quedó asignada a <strong className="text-cream/90">{result.seller.name} ({result.seller.code})</strong>.{' '}
             {result.payment_method === 'cash'
-              ? 'El vendedor va a coordinar el cobro en efectivo y marcarla como Cobrada desde su portal.'
-              : 'Le enviamos el link de pago al pasajero — la comisión se acredita cuando pague.'}
+              ? 'El recomendador va a coordinar el cobro en efectivo y marcarla como Cobrada desde su portal.'
+              : 'Le enviamos el link de pago al pasajero — el incentivo se acredita cuando pague.'}
           </p>
           <div className="flex gap-3">
             <button
@@ -182,9 +182,9 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
               ×
             </button>
             <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Nueva reserva manual</p>
-            <h2 className="mt-2 font-display text-2xl text-cream">¿A qué vendedor se asigna?</h2>
+            <h2 className="mt-2 font-display text-2xl text-cream">¿A qué recomendador se asigna?</h2>
             <p className="mt-2 text-sm text-cream/60">
-              La reserva, su comisión y su historial van a quedar atribuidos a este vendedor.
+              La reserva, su incentivo y su historial van a quedar atribuidos a este recomendador.
             </p>
 
             <input
@@ -217,14 +217,14 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                         <span className="text-xs font-mono text-gold-soft shrink-0">{s.code}</span>
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-cream/50">
-                        <span>{s.commission_percent}% comisión</span>
+                        <span>{s.commission_percent}% incentivo</span>
                         {s.is_permanent && <span className="text-emerald-400/80">Efectivo habilitado</span>}
                       </div>
                     </button>
                   </li>
                 ))}
                 {filteredSellers.length === 0 && (
-                  <p className="text-sm text-cream/40 text-center py-6">Ningún vendedor coincide con la búsqueda.</p>
+                  <p className="text-sm text-cream/40 text-center py-6">Ningún recomendador coincide con la búsqueda.</p>
                 )}
               </ul>
             )}
@@ -237,7 +237,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
   const sellerBadge = (
     <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-2.5 flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-widest text-gold-soft">Vendedor asignado</p>
+        <p className="text-[10px] uppercase tracking-widest text-gold-soft">Recomendador asignado</p>
         <p className="text-sm text-cream font-medium truncate">
           {selectedSeller.name} <span className="font-mono text-gold-soft">({selectedSeller.code})</span>
         </p>
@@ -384,7 +384,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                   <span className="text-gold text-base mt-0.5" aria-hidden>✦</span>
                   <div className="text-xs text-cream/70 leading-relaxed">
                     <strong className="text-cream/90">Reserva manual del equipo.</strong>{' '}
-                    Antes de crearla vas a poder revisar un resumen con el vendedor asignado.
+                    Antes de crearla vas a poder revisar un resumen con el recomendador asignado.
                   </div>
                 </div>
               )}
@@ -397,7 +397,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                 <p className="text-xs uppercase tracking-widest text-gold-soft mb-3">Confirmá antes de crear la reserva</p>
 
                 <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-3">
-                  <p className="text-[10px] uppercase tracking-widest text-gold-soft">Vendedor asignado</p>
+                  <p className="text-[10px] uppercase tracking-widest text-gold-soft">Recomendador asignado</p>
                   <p className="font-display text-xl text-gold">
                     {selectedSeller.name} <span className="text-sm font-mono text-gold-soft">({selectedSeller.code})</span>
                   </p>
@@ -414,7 +414,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                   <SummaryRow
                     label="Pago"
                     value={pending.payload.payment_method === 'cash'
-                      ? 'Efectivo (lo cobra el vendedor)'
+                      ? 'Efectivo (lo cobra el recomendador)'
                       : pending.payload.payment_method === 'pix'
                         ? 'PIX en reales (link al pasajero)'
                         : 'Mercado Pago (link al pasajero)'}

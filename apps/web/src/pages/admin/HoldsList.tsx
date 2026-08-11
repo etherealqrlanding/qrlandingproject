@@ -40,7 +40,7 @@ function HoldExtraDetails({ h, twoColumns }: Readonly<{ h: AdminHoldRow; twoColu
         <DetailRow label="Traslado">{h.transfer_hotel ?? '—'}{h.transfer_room ? ` · Hab. ${h.transfer_room}` : ''}</DetailRow>
       )}
       <DetailRow label="Tasa de cambio">{h.exchange_rate_used}</DetailRow>
-      {h.ref_code && <DetailRow label="Vendedor">{h.ref_code}</DetailRow>}
+      {h.ref_code && <DetailRow label="Recomendador">{h.ref_code}</DetailRow>}
       {(h.utm_source || h.utm_medium || h.utm_campaign) && (
         <DetailRow label="UTM">{[h.utm_source, h.utm_medium, h.utm_campaign].filter(Boolean).join(' / ')}</DetailRow>
       )}
@@ -167,7 +167,7 @@ export default function HoldsList() {
                   <th className="text-right py-2.5 px-3">Pax</th>
                   <th className="text-left py-2.5 px-3">Medio</th>
                   <th className="text-right py-2.5 px-3">Total</th>
-                  <th className="text-left py-2.5 px-3">Vendedor</th>
+                  <th className="text-left py-2.5 px-3">Recomendador</th>
                   <th className="text-right py-2.5 px-3">Vence en</th>
                   <th className="text-right py-2.5 px-3" />
                 </tr>

@@ -119,7 +119,7 @@ export default function OrderDetail() {
   const handleCollectCash = async (currency: 'ARS' | 'USD') => {
     if (!order || !publicId) return;
     const currencyLabel = currency === 'USD' ? 'dólares' : 'pesos';
-    if (!confirm(`¿Confirmar que se cobró en efectivo (en ${currencyLabel}) la orden de ${order.customer_name}?\n\nSugerido: ARS ${order.total_ars.toLocaleString('es-AR')} (el monto lo define el vendedor)\n\nQuedará registrado como cobrado por el admin.`)) return;
+    if (!confirm(`¿Confirmar que se cobró en efectivo (en ${currencyLabel}) la orden de ${order.customer_name}?\n\nSugerido: ARS ${order.total_ars.toLocaleString('es-AR')} (el monto lo define el recomendador)\n\nQuedará registrado como cobrado por el admin.`)) return;
     try {
       setCollectingCash(true);
       await adminApi.orders.collectCash(publicId, currency);
@@ -191,7 +191,7 @@ export default function OrderDetail() {
   const handleMarkCommissionPaid = async () => {
     if (!order || !order.seller_id) return;
     const confirm1 = confirm(
-      `¿Marcar la comisión de esta orden como liquidada al vendedor?\n\nVendedor: ${order.seller_name}\nComisión: ${fmtArs(order.commission_amount_ars ?? 0)}\n\nSe notificará al vendedor automáticamente.`,
+      `¿Marcar el incentivo por recomendación de esta orden como liquidado al recomendador?\n\nRecomendador: ${order.seller_name}\nIncentivo: ${fmtArs(order.commission_amount_ars ?? 0)}\n\nSe notificará al recomendador automáticamente.`,
     );
     if (!confirm1) return;
     try {
@@ -334,10 +334,10 @@ export default function OrderDetail() {
         <div className="mb-8 rounded-xl border-2 border-emerald-500/50 bg-emerald-950/20 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-widest text-emerald-400">Cobro en efectivo pendiente</p>
-            <p className="mt-1 font-display text-xl text-cream">Confirmar cobro en nombre del vendedor</p>
+            <p className="mt-1 font-display text-xl text-cream">Confirmar cobro en nombre del recomendador</p>
             <p className="mt-1 text-sm text-cream/70">
-              El vendedor no pudo operar el portal. Confirmá que el dinero fue recibido en efectivo.
-              Sugerido: <strong className="text-cream">ARS {order.total_ars.toLocaleString('es-AR')}</strong> <span className="text-cream/50">(el monto lo define el vendedor)</span>.
+              El recomendador no pudo operar el portal. Confirmá que el dinero fue recibido en efectivo.
+              Sugerido: <strong className="text-cream">ARS {order.total_ars.toLocaleString('es-AR')}</strong> <span className="text-cream/50">(el monto lo define el recomendador)</span>.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 shrink-0">
@@ -418,7 +418,7 @@ export default function OrderDetail() {
               <Row label={order.payment_method === 'cash' ? 'Sugerido USD' : 'Total USD'} highlight>USD {order.total_usd}</Row>
               <Row label={order.payment_method === 'cash' ? 'Sugerido ARS' : 'Total ARS'}>ARS {order.total_ars.toLocaleString('es-AR')}</Row>
               {order.payment_method === 'cash' && (
-                <p className="text-[11px] text-cream/40 leading-snug">Referencia — el vendedor le cobra al pasajero el monto que define; no lo registramos.</p>
+                <p className="text-[11px] text-cream/40 leading-snug">Referencia — el recomendador le cobra al pasajero el monto que define; no lo registramos.</p>
               )}
               <Row label="Tipo de cambio">{Number(order.exchange_rate_used).toFixed(2)}</Row>
               {order.paid_at && <Row label="Pagada">{new Date(order.paid_at).toLocaleString()}</Row>}
@@ -436,7 +436,7 @@ export default function OrderDetail() {
                 <p className="mt-2 text-sm text-cream/60">
                   Sumá o bajá pasajeros / traslado. {order.payment_method === 'mercadopago'
                     ? 'Reducir reintegra por MP; agregar genera un link para el cliente.'
-                    : 'En efectivo: el vendedor devuelve o cobra la diferencia en el momento.'}
+                    : 'En efectivo: el recomendador devuelve o cobra la diferencia en el momento.'}
                 </p>
                 {blocked && <p className="mt-2 text-xs text-amber-400">{windowBlockMsg(modifyWindow)}</p>}
                 <button type="button" onClick={() => setModifyOpen(true)}
@@ -515,7 +515,7 @@ export default function OrderDetail() {
                     )}
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ El vendedor le cobra al pasajero el monto que define (no lo registramos) y <strong>nos rinde el neto ({cashNetDisplay(order)})</strong>.
+                    ➜ El recomendador le cobra al pasajero el monto que define (no lo registramos) y <strong>nos rinde el neto ({cashNetDisplay(order)})</strong>.
                   </p>
                   <div className="mt-2">
                     <Row label="Neto cobrado">
@@ -540,14 +540,14 @@ export default function OrderDetail() {
                   {/* Mercado Pago: nosotros cobramos y le liquidamos su comisión */}
                   <div className="mt-3 space-y-1.5">
                     <Row label="Venta total">{fmtArs(order.total_ars)}</Row>
-                    <Row label="Comisión">{Number(order.commission_percent_snapshot ?? 0).toFixed(1)}%</Row>
+                    <Row label="Incentivo">{Number(order.commission_percent_snapshot ?? 0).toFixed(1)}%</Row>
                     <Row label="Le liquidamos" highlight>{fmtArs(order.commission_amount_ars ?? 0)}</Row>
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ Cobramos por Mercado Pago y <strong>le liquidamos su comisión ({fmtArs(order.commission_amount_ars ?? 0)})</strong> al vendedor.
+                    ➜ Cobramos por Mercado Pago y <strong>le liquidamos su incentivo por recomendación ({fmtArs(order.commission_amount_ars ?? 0)})</strong> al recomendador.
                   </p>
                   <div className="mt-2">
-                    <Row label="Pago al vendedor">
+                    <Row label="Pago al recomendador">
                       {order.paid_to_seller_at
                         ? <span className="text-gold-soft">✓ {new Date(order.paid_to_seller_at).toLocaleDateString()}</span>
                         : <span className="text-bordeaux-light">Pendiente</span>}
@@ -569,7 +569,7 @@ export default function OrderDetail() {
           ) : (
             <div className="rounded-lg border border-cream/10 bg-ink-soft/40 p-5">
               <p className="text-xs uppercase tracking-widest text-cream/40">Atribución</p>
-              <p className="mt-2 text-sm text-cream/50">Sin vendedor atribuido</p>
+              <p className="mt-2 text-sm text-cream/50">Sin recomendador atribuido</p>
               {order.ref_code && (
                 <p className="mt-1 text-xs text-cream/40">Ref: <span className="font-mono">{order.ref_code}</span></p>
               )}
@@ -775,13 +775,13 @@ export default function OrderDetail() {
 
               <label className="flex items-center gap-2">
                 <Checkbox checked={refundNotify} onChange={setRefundNotify} />
-                <span className="text-sm text-cream/80">Notificar por email a cliente, admin y vendedor</span>
+                <span className="text-sm text-cream/80">Notificar por email a cliente, admin y recomendador</span>
               </label>
 
               <div className="rounded-md border border-gold/15 bg-gold/5 p-3 text-xs text-cream/70 space-y-1">
                 <p>💡 El cliente verá el crédito en su medio de pago en 2-5 días hábiles.</p>
                 {refundMode === 'total' && (
-                  <p>⚠ Refund total: la orden pasa a <strong className="text-cream">"Reintegrada"</strong>, la comisión al vendedor (si la había) deja de aplicar.</p>
+                  <p>⚠ Refund total: la orden pasa a <strong className="text-cream">"Reintegrada"</strong>, el incentivo por recomendación al recomendador (si lo había) deja de aplicar.</p>
                 )}
                 {refundMode === 'partial' && (
                   <p>ℹ Monto manual: la orden sigue como <strong className="text-cream">"Pagada"</strong> y no descuenta pasajeros del sistema. Esta acción es irreversible pero podés hacer otro reintegro después sobre el remanente.</p>

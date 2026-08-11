@@ -116,7 +116,7 @@ export default function SellerDashboard() {
           Hola, {me.name.split(' ')[0]}
         </h1>
         <p className="mt-1 text-xs md:text-sm text-cream/50">
-          Comisión: <span className="text-gold-soft">{commissionRate}</span> · código{' '}
+          Incentivo: <span className="text-gold-soft">{commissionRate}</span> · código{' '}
           <span className="font-mono text-gold-soft">{me.code}</span>
         </p>
       </header>
@@ -125,7 +125,7 @@ export default function SellerDashboard() {
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 md:mb-8">
         <StatCard label="Ventas" value={String(me.orders_paid)} sub="órdenes cobradas" />
         <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="ventas por Mercado Pago" />
-        <StatCard label="Comisión ganada" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
+        <StatCard label="Incentivo ganado" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
         <StatCard label="Pendiente (MP)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
         <StatCard label="Neto a rendir" value={fmt(netToSettle)} sub={netToSettle > 0 ? 'de ventas en efectivo' : 'al día'} />
@@ -133,7 +133,7 @@ export default function SellerDashboard() {
 
       {pending > 0 && (
         <div className="rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm text-cream/80 mb-5 md:mb-8">
-          <p className="font-medium text-gold mb-1">Tenés comisión pendiente de liquidación</p>
+          <p className="font-medium text-gold mb-1">Tenés incentivo por recomendación pendiente de liquidación</p>
           <p className="text-xs md:text-sm">
             {fmt(pending)} (ventas por Mercado Pago) no te fue transferido aún. Cuando el equipo procese el pago lo verás en <strong>Liquidaciones</strong>.
           </p>
@@ -152,7 +152,7 @@ export default function SellerDashboard() {
       {/* Tarjeta de vendedor + QR */}
       <section className="rounded-xl border border-gold/20 bg-ink-soft/40 overflow-hidden">
         <div className="px-4 py-3 border-b border-gold/10">
-          <p className="text-xs uppercase tracking-widest text-gold-soft">Tu perfil de vendedor</p>
+          <p className="text-xs uppercase tracking-widest text-gold-soft">Tu perfil de recomendador</p>
         </div>
 
         <div className="grid md:grid-cols-[1fr_auto] gap-0">
@@ -163,7 +163,7 @@ export default function SellerDashboard() {
               <span className="font-mono text-gold-soft">{me.code}</span>
             </InfoRow>
             {me.kind && <InfoRow label="Perfil">{sellerKindLabel(me.kind)}</InfoRow>}
-            <InfoRow label="Comisión"><span className="text-gold">{commissionRate}</span></InfoRow>
+            <InfoRow label="Incentivo"><span className="text-gold">{commissionRate}</span></InfoRow>
             {me.contact_email && <InfoRow label="Email">{me.contact_email}</InfoRow>}
             {me.contact_phone && <InfoRow label="Teléfono">{me.contact_phone}</InfoRow>}
 

@@ -12,15 +12,15 @@
   },
   "gate": {
     "badge": "Acceso exclusivo",
-    "title": "Ingresá con tu vendedor autorizado",
-    "message": "Esta plataforma es exclusiva para clientes referidos por nuestros vendedores. Pedí a tu vendedor su link o QR de acceso para ver las casas de tango y reservar.",
-    "invalid": "El código con el que ingresaste no es válido o el vendedor ya no está activo. Pedí un nuevo link de acceso.",
-    "have_code": "¿Ya tenés un código de vendedor?",
+    "title": "Ingresá con tu recomendador autorizado",
+    "message": "Esta plataforma es exclusiva para clientes referidos por nuestros recomendadores. Pedí a tu recomendador su link o QR de acceso para ver las casas de tango y reservar.",
+    "invalid": "El código con el que ingresaste no es válido o el recomendador ya no está activo. Pedí un nuevo link de acceso.",
+    "have_code": "¿Ya tenés un código de recomendador?",
     "placeholder": "Ingresá tu código",
     "enter": "Entrar",
     "checking": "Verificando...",
     "code_invalid": "Código inválido. Revisá que esté bien escrito.",
-    "code_inactive": "Ese vendedor ya no está activo. Pedí un nuevo código.",
+    "code_inactive": "Ese recomendador ya no está activo. Pedí un nuevo código.",
     "code_error": "No pudimos verificar el código. Intentá de nuevo.",
     "footer": "Tangos y Milongas Tickets · Buenos Aires"
   },
@@ -148,8 +148,6 @@
     "contact_info_notice": "Tu teléfono y email son esenciales para enviarte la confirmación de tu reserva y contactarte ante cualquier novedad. Asegurate de ingresarlos correctamente.",
     "phone": "Teléfono / WhatsApp",
     "phone_required": "Ingresá tu teléfono.",
-    "dni": "DNI / Pasaporte",
-    "dni_hint": "Opcional — algunas casas piden identificación en la puerta",
     "nationality": "Nacionalidad",
     "nationality_required": "Seleccioná tu nacionalidad.",
     "service_date": "Fecha del servicio",
@@ -166,10 +164,10 @@
     "pay_with_mp": "Pagar con Tarjeta",
     "pay_with_pix": "Pagar con PIX",
     "pix_note": "Pagás en reales (BRL) escaneando un QR o copiando la clave PIX desde tu banco. La reserva se confirma apenas se acredita el pago.",
-    "pay_with_seller": "Pagar al vendedor (efectivo)",
+    "pay_with_seller": "Pagar al recomendador (efectivo)",
     "confirm_booking": "Confirmar reserva",
     "processing": "Procesando...",
-    "cash_note": "El vendedor coordinará el cobro en el momento del servicio. La reserva queda pendiente de confirmación.",
+    "cash_note": "El recomendador coordinará el cobro en el momento del servicio. La reserva queda pendiente de confirmación.",
     "mp_redirect_note": "Te llevamos a la pasarela de pago segura. Aceptamos tarjetas, transferencia y efectivo.",
     "checking_availability": "Verificando disponibilidad...",
     "date_full": "Sin cupos para esta fecha. Elegí otro día.",
@@ -190,8 +188,8 @@
     "success_title": "¡Reserva confirmada!",
     "success_subtitle": "Te enviamos los detalles por email. ¡Nos vemos pronto en Buenos Aires!",
     "cash_title": "¡Reserva tomada!",
-    "cash_subtitle": "Tu reserva fue registrada. El vendedor coordinará el cobro y los detalles del servicio.",
-    "cash_method": "Pago: efectivo al vendedor",
+    "cash_subtitle": "Tu reserva fue registrada. El recomendador coordinará el cobro y los detalles del servicio.",
+    "cash_method": "Pago: efectivo al recomendador",
     "pending_title": "Pago en proceso",
     "pending_subtitle": "Tu pago está siendo procesado. Te avisaremos por email apenas se confirme.",
     "failure_title": "El pago no se completó",
@@ -220,7 +218,7 @@
     "mp_types_short": "Crédito, débito y dinero en cuenta",
     "card_label": "Tarjeta",
     "card_brands": "Visa / Mastercard / Amex",
-    "cash_label": "Al vendedor",
+    "cash_label": "Al recomendador",
     "cash_short": "Efectivo",
     "pix_soon": "Próximamente",
     "pix_short": "En reales (BRL)",
@@ -262,15 +260,15 @@
     "rights": "Todos los derechos reservados."
   },
   "ref": {
-    "inactive": "Este vendedor no está disponible actualmente"
+    "inactive": "Este recomendador no está disponible actualmente"
   },
   "seller_inactive": {
-    "title": "Vendedor no disponible",
-    "message": "Este QR pertenece a un vendedor que ya no se encuentra activo. Por favor, contactá a quien te lo compartió.",
+    "title": "Recomendador no disponible",
+    "message": "Este QR pertenece a un recomendador que ya no se encuentra activo. Por favor, contactá a quien te lo compartió.",
     "cta": "Cerrar"
   },
   "seller_welcome": {
-    "badge": "Vendedor Verificado",
+    "badge": "Recomendador Verificado",
     "steps_title": "¿Qué podés hacer?",
     "cta": "Explorar experiencias →",
     "kind": {
@@ -290,7 +288,7 @@
       "comercios": "Comercio Adherido"
     },
     "message": {
-      "default": "Escaneaste el QR de {{name}}, un vendedor registrado y autorizado por Tangos y Milongas Tickets. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
+      "default": "Escaneaste el QR de {{name}}, un recomendador registrado y autorizado por Tangos y Milongas Tickets. Todas tus operaciones están monitoreadas y protegidas por nuestro equipo.",
       "recepcion": "¡Hola! Esta experiencia fue recomendada por {{name}}. Reservá tu lugar de forma directa con el respaldo y la garantía oficial de Tangos y Milongas Tickets.",
       "choferes": "¡Hola! Esta experiencia fue recomendada por {{name}} durante tu viaje.",
       "guias": "¡Hola! Esta experiencia fue seleccionada y recomendada por tu guía {{name}}.",

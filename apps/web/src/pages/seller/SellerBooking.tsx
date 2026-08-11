@@ -51,7 +51,7 @@ export default function SellerBooking() {
     <div className="p-4 md:p-8 max-w-4xl">
       <header className="mb-4 md:mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Recomendadores</p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Nueva Reserva</h1>
           <p className="mt-0.5 text-xs md:text-sm text-cream/50">Ingresá una reserva en nombre de un pasajero</p>
         </div>
@@ -63,9 +63,9 @@ export default function SellerBooking() {
         <div className="text-sm text-cream/70 leading-relaxed">
           <strong className="text-cream/90">Reservas manuales:</strong> elegí el show y la opción, completá los datos
           del pasajero y seleccioná la forma de pago.
-          Usá <strong className="text-cream/80">Pago al vendedor</strong> si el pasajero paga en el momento (efectivo),
+          Usá <strong className="text-cream/80">Pago al recomendador</strong> si el pasajero paga en el momento (efectivo),
           o <strong className="text-cream/80">Mercado Pago</strong> para enviarle el link de pago online.
-          La reserva quedará marcada como <em>ingresada manualmente por el vendedor</em>.
+          La reserva quedará marcada como <em>ingresada manualmente por el recomendador</em>.
         </div>
       </div>
 

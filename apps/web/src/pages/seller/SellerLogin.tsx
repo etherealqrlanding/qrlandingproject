@@ -153,7 +153,7 @@ export default function SellerLogin() {
           <Logo className="h-20 w-auto" />
         </div>
         <p className="text-center text-xs uppercase tracking-[0.3em] text-gold-soft mb-4 sm:mb-8">
-          Portal de vendedores
+          Portal de recomendadores
         </p>
 
         {/* ── Crear / resetear contraseña ── */}

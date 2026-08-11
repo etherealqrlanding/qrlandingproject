@@ -8,7 +8,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { to: '/admin/products', label: 'Productos', icon: '⌂' },
   { to: '/admin/products/bulk-capacity', label: 'Cupos', icon: '▦' },
   { to: '/admin/orders', label: 'Órdenes', icon: '✦' },
-  { to: '/admin/sellers', label: 'Vendedores', icon: '☉' },
+  { to: '/admin/sellers', label: 'Recomendadores', icon: '☉' },
   { to: '/admin/holds', label: 'Cupos en espera', icon: '⏳' },
   { to: '/admin/content', label: 'Contenido', icon: '✎' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙' },

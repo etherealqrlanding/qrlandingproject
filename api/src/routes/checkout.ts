@@ -65,7 +65,7 @@ const createCheckoutSchema = z.object({
     dni: z.string().max(40).optional().nullable(),
   }),
   // Exclusividad de venta: toda reserva debe venir de un vendedor autorizado.
-  ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/, 'Se requiere el código de un vendedor autorizado'),
+  ref_code: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/, 'Se requiere el código de un recomendador autorizado'),
   utm: z.object({
     source: z.string().max(80).optional().nullable(),
     medium: z.string().max(80).optional().nullable(),
@@ -676,10 +676,10 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       [input.ref_code],
     );
     if (sellerCheck.length === 0) {
-      return res.status(400).json({ error: 'Código de vendedor inválido o inactivo' });
+      return res.status(400).json({ error: 'Código de recomendador inválido o inactivo' });
     }
     if (!sellerCheck[0].is_permanent) {
-      return res.status(403).json({ error: 'Este vendedor no tiene habilitado el cobro en efectivo' });
+      return res.status(403).json({ error: 'Este recomendador no tiene habilitado el cobro en efectivo' });
     }
 
     // Crear la orden con payment_method = 'cash'

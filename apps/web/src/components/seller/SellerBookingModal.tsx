@@ -114,7 +114,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                 Ref. <span className="font-mono text-gold-soft">{result.order_public_id.slice(0, 8).toUpperCase()}</span>
               </p>
               <p className="text-sm text-cream/70 mb-6">
-                La reserva fue registrada como <strong className="text-cream/90">ingresada manualmente por el vendedor</strong>.
+                La reserva fue registrada como <strong className="text-cream/90">ingresada manualmente por el recomendador</strong>.
                 Coordiná el cobro en efectivo con el pasajero.
               </p>
               <div className="flex gap-3">
@@ -203,7 +203,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                 <div className="rounded-lg border border-gold/20 bg-gold/5 p-3 md:p-4 flex gap-3">
                   <span className="text-gold text-base mt-0.5" aria-hidden>✦</span>
                   <div className="text-xs text-cream/70 leading-relaxed">
-                    <strong className="text-cream/90">Estás ingresando esta reserva como vendedor.</strong>{' '}
+                    <strong className="text-cream/90">Estás ingresando esta reserva como recomendador.</strong>{' '}
                     La orden quedará marcada como <em>ingresada manualmente</em>.
                     Elegí <strong>Efectivo</strong> si el pasajero paga en el momento,
                     o <strong>Mercado Pago</strong> para redirigir al pago online.

@@ -77,7 +77,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
     // Mismo gate que el portal del vendedor: efectivo solo si es permanente.
     if (input.payment_method === 'cash' && !seller.is_permanent) {
       return res.status(403).json({
-        error: 'Ese vendedor no tiene habilitado el cobro en efectivo. Usá Mercado Pago para esta reserva.',
+        error: 'Ese recomendador no tiene habilitado el cobro en efectivo. Usá Mercado Pago para esta reserva.',
       });
     }
 

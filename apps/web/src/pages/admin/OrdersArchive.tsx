@@ -42,7 +42,7 @@ function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 }
 
-const CANCELLED_BY_LABEL: Record<string, string> = { admin: 'Admin', seller: 'Vendedor', system: 'Sistema' };
+const CANCELLED_BY_LABEL: Record<string, string> = { admin: 'Admin', seller: 'Recomendador', system: 'Sistema' };
 
 // Detalle inline — para monitorear una orden archivada sin tener que entrar al detalle
 // completo (que sigue disponible vía "Ver →").
@@ -56,10 +56,10 @@ function ArchivedOrderExtraDetails({ o }: Readonly<{ o: ArchivedOrderItem }>) {
       )}
       <DetailRow label="Medio de pago">{o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'pix' ? 'PIX' : 'Mercado Pago'}</DetailRow>
       {o.payment_method !== 'cash' && o.commission_amount_ars != null && (
-        <DetailRow label="Comisión">{fmtArs(o.commission_amount_ars)}</DetailRow>
+        <DetailRow label="Incentivo por recomendación">{fmtArs(o.commission_amount_ars)}</DetailRow>
       )}
       {o.payment_method !== 'cash' && o.seller_name && (
-        <DetailRow label="Liquidado al vendedor">
+        <DetailRow label="Liquidado al recomendador">
           {o.paid_to_seller_at ? fmtDate(o.paid_to_seller_at) : 'Pendiente'}
         </DetailRow>
       )}
@@ -300,7 +300,7 @@ export default function OrdersArchive() {
                   </th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Pasajero</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Servicio</th>
-                  <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Vendedor</th>
+                  <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Recomendador</th>
                   <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-cream/40">Total USD</th>
                   <th className="px-3 py-2 text-right text-[10px] uppercase tracking-wider text-cream/40">Total ARS</th>
                   <th className="px-3 py-2 text-left text-[10px] uppercase tracking-wider text-cream/40">Estado</th>

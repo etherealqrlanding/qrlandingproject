@@ -110,7 +110,7 @@ export default function ActionPage() {
               {errorMsg || ERROR_LABELS[errorCode] || 'Ocurrió un error inesperado.'}
             </p>
             <p className="mt-6 text-xs text-cream/30">
-              Si necesitás ayuda, accedé al portal de vendedores o escribinos por WhatsApp.
+              Si necesitás ayuda, accedé al portal de recomendadores o escribinos por WhatsApp.
             </p>
           </div>
         )}
@@ -217,7 +217,7 @@ export default function ActionPage() {
           </div>
         )}
 
-        <p className="text-center text-xs text-cream/20 mt-8">Tangos y Milongas Tickets · Portal de vendedores</p>
+        <p className="text-center text-xs text-cream/20 mt-8">Tangos y Milongas Tickets · Portal de recomendadores</p>
       </div>
     </div>
   );

@@ -134,7 +134,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             )}
           </div>
         </Field>
-        <Field label="Comisión (%)" required hint="Entre 0 y 100. Se aplica a todas las ventas que genere.">
+        <Field label="Incentivo (%)" required hint="Entre 0 y 100. Se aplica a todas las ventas que genere.">
           <input
             type="number" required min={0} max={100} step={0.1}
             value={form.commission_percent}
@@ -145,7 +145,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Email de contacto" hint="Se usa para notificarle sus comisiones">
+        <Field label="Email de contacto" hint="Se usa para notificarle sus incentivos">
           <input
             type="email" maxLength={160}
             value={form.contact_email ?? ''}
@@ -180,7 +180,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         />
       </Field>
 
-      <Field label="Notas internas" hint="No se le muestra al vendedor. Para tu referencia.">
+      <Field label="Notas internas" hint="No se le muestra al recomendador. Para tu referencia.">
         <textarea
           rows={4} maxLength={1000}
           value={form.notes ?? ''}
@@ -197,7 +197,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         <label className="inline-flex items-center gap-2">
           <Checkbox checked={form.is_permanent ?? false} onChange={(checked) => update('is_permanent', checked)} />
           <span className="text-cream/80">
-            Vendedor permanente
+            Recomendador permanente
             <span className="ml-2 text-xs text-cream/50">(habilita el cobro en efectivo desde el checkout)</span>
           </span>
         </label>
@@ -206,7 +206,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
           <span className="text-cream/80">
             Cuenta propia (agencia)
             <span className="ml-2 text-xs text-cream/50">
-              no es un afiliado externo — se excluye del revenue/comisiones del listado de vendedores
+              no es un afiliado externo — se excluye del revenue/incentivos del listado de recomendadores
             </span>
           </span>
         </label>
@@ -222,17 +222,17 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         <label className="inline-flex items-center gap-2">
           <Checkbox checked={form.team_enabled ?? false} onChange={(checked) => update('team_enabled', checked)} />
           <span className="text-cream/80">
-            Habilitar "Mi equipo" (sub-vendedores)
+            Habilitar "Mi equipo" (sub-recomendadores)
             <span className="ml-2 text-xs text-cream/50">
-              (le muestra "Mi Equipo" en su portal para cargar conserjes/sub-vendedores con PIN. Se puede apagar en cualquier momento sin perder lo ya cargado)
+              (le muestra "Mi Equipo" en su portal para cargar conserjes/sub-recomendadores con PIN. Se puede apagar en cualquier momento sin perder lo ya cargado)
             </span>
           </span>
         </label>
         {form.is_house && (
           <p className="text-xs text-gold-soft bg-gold/5 border border-gold/15 rounded-md px-3 py-2">
-            💡 Para ventas directas de la agencia (Instagram, WhatsApp, mostrador) sin pagarte comisión a vos mismo,
-            usá <strong>Comisión 0%</strong>. Si solo querés cobrar por Mercado Pago (sin efectivo), dejá
-            <strong> "Vendedor permanente"</strong> sin marcar.
+            💡 Para ventas directas de la agencia (Instagram, WhatsApp, mostrador) sin pagarte incentivo a vos mismo,
+            usá <strong>Incentivo 0%</strong>. Si solo querés cobrar por Mercado Pago (sin efectivo), dejá
+            <strong> "Recomendador permanente"</strong> sin marcar.
           </p>
         )}
       </div>
@@ -241,19 +241,19 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         <div className="flex items-center gap-4">
           {onDelete && (
             <button type="button" onClick={onDelete} className="text-sm text-bordeaux-light hover:text-bordeaux-light/80">
-              Desactivar vendedor
+              Desactivar recomendador
             </button>
           )}
           {onPermanentDelete && (
             <button type="button" onClick={onPermanentDelete} className="text-sm text-red-500 hover:text-red-400">
-              Eliminar vendedor
+              Eliminar recomendador
             </button>
           )}
         </div>
         <div className="flex items-center gap-3">
           {dirty && !isNew && <span className="text-xs text-gold-soft">Cambios sin guardar</span>}
           <button type="submit" disabled={saving || emailMismatch} className="btn-primary disabled:opacity-50">
-            {saving ? 'Guardando...' : isNew ? 'Crear vendedor' : 'Guardar cambios'}
+            {saving ? 'Guardando...' : isNew ? 'Crear recomendador' : 'Guardar cambios'}
           </button>
         </div>
       </div>

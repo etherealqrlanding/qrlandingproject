@@ -20,7 +20,7 @@ export default function ProtectedSellerRoute({ children }: { readonly children: 
         <div className="max-w-md text-center">
           <p className="text-2xl font-display text-bordeaux-light">Acceso denegado</p>
           <p className="mt-3 text-sm text-cream/70">
-            Tu sesión es válida pero no tenés acceso al portal de vendedores. Contactá a Tangos y Milongas Tickets para que te habiliten.
+            Tu sesión es válida pero no tenés acceso al portal de recomendadores. Contactá a Tangos y Milongas Tickets para que te habiliten.
           </p>
         </div>
       </div>

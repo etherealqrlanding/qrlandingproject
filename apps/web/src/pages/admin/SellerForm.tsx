@@ -100,7 +100,7 @@ export default function SellerForm() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="font-display text-4xl text-cream">
-              {isNew ? 'Nuevo vendedor' : seller?.name ?? 'Cargando...'}
+              {isNew ? 'Nuevo recomendador' : seller?.name ?? 'Cargando...'}
             </h1>
             {seller?.is_house && (
               <span className="text-xs px-2.5 py-1 rounded-full border border-gold/40 text-gold bg-gold/10">
@@ -124,7 +124,7 @@ export default function SellerForm() {
         </div>
         {seller && (
           <p className="mt-1 text-sm text-cream/50">
-            Código <span className="font-mono text-gold-soft">{seller.code}</span> · {Number(seller.commission_percent).toFixed(1)}% comisión
+            Código <span className="font-mono text-gold-soft">{seller.code}</span> · {Number(seller.commission_percent).toFixed(1)}% incentivo
           </p>
         )}
       </header>
@@ -153,7 +153,7 @@ export default function SellerForm() {
                 >
                   {t === 'data' && 'Datos'}
                   {t === 'qr' && 'Código QR'}
-                  {t === 'orders' && 'Ventas y comisiones'}
+                  {t === 'orders' && 'Ventas e incentivos'}
                 </button>
               ))}
             </div>
@@ -177,8 +177,8 @@ export default function SellerForm() {
       <ConfirmDialog
         open={dialog === 'deactivate'}
         danger={false}
-        title="Desactivar vendedor"
-        message={<p>Se ocultará a <strong className="text-cream">{seller?.name}</strong> del listado activo. Sus ventas históricas y comisiones se conservan, y podés reactivarlo cuando quieras.</p>}
+        title="Desactivar recomendador"
+        message={<p>Se ocultará a <strong className="text-cream">{seller?.name}</strong> del listado activo. Sus ventas históricas e incentivos se conservan, y podés reactivarlo cuando quieras.</p>}
         confirmLabel="Desactivar"
         loading={deleting}
         onConfirm={runDeactivate}
@@ -187,7 +187,7 @@ export default function SellerForm() {
 
       <ConfirmDialog
         open={dialog === 'permanent'}
-        title="Eliminar vendedor definitivamente"
+        title="Eliminar recomendador definitivamente"
         message={<p>Vas a eliminar a <strong className="text-cream">{seller?.name}</strong> de forma permanente. Esta acción no se puede deshacer. Si tiene ventas asociadas, te lo vamos a advertir antes de borrarlas.</p>}
         confirmLabel="Eliminar"
         loading={deleting}
@@ -197,17 +197,17 @@ export default function SellerForm() {
 
       <ConfirmDialog
         open={dialog === 'permanent-force'}
-        title="⚠ Este vendedor tiene ventas"
+        title="⚠ Este recomendador tiene ventas"
         message={
           <>
             <p>
               <strong className="text-cream">{seller?.name}</strong> tiene{' '}
               <strong className="text-bordeaux-light">{forceCount} venta(s)</strong> asociada(s).
             </p>
-            <p>Si continuás, se eliminarán <strong className="text-cream">el vendedor y todas esas ventas</strong> (con sus pagos e items). Esta acción es <strong>irreversible</strong>.</p>
+            <p>Si continuás, se eliminarán <strong className="text-cream">el recomendador y todas esas ventas</strong> (con sus pagos e items). Esta acción es <strong>irreversible</strong>.</p>
           </>
         }
-        confirmLabel={`Eliminar vendedor y ${forceCount} venta(s)`}
+        confirmLabel={`Eliminar recomendador y ${forceCount} venta(s)`}
         requireText="ELIMINAR"
         loading={deleting}
         onConfirm={runPermanentDeleteForce}

@@ -124,8 +124,8 @@ export default function SellerOrdersSection({ seller }: Props) {
     const totalArs = Math.round(selectedTotal.mpArs + selectedTotal.cashArs).toLocaleString('es-AR');
     if (!confirm(
       `Liquidar ${selectedOrderIds.length} venta(s) por un total de ARS ${totalArs}?\n` +
-      `• ${mpIds.length} por Mercado Pago (ARS ${Math.round(selectedTotal.mpArs).toLocaleString('es-AR')}): marcamos la comisión como pagada al vendedor.\n` +
-      `• ${cashIds.length} en efectivo (ARS ${Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}): marcamos el neto como rendido por el vendedor.`,
+      `• ${mpIds.length} por Mercado Pago (ARS ${Math.round(selectedTotal.mpArs).toLocaleString('es-AR')}): marcamos el incentivo como pagado al recomendador.\n` +
+      `• ${cashIds.length} en efectivo (ARS ${Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}): marcamos el neto como rendido por el recomendador.`,
     )) return;
     try {
       setProcessing(true);
@@ -145,10 +145,10 @@ export default function SellerOrdersSection({ seller }: Props) {
     <div className="space-y-6">
       {summary && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card label="Comisión total (MP)" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} sub="todas las ventas pagadas por Mercado Pago" />
-          <Card label="Ya pagada (MP)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} sub="comisión ya liquidada al vendedor" />
-          <Card label="A pagar (MP)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} sub="comisión pendiente de liquidar" highlight />
-          <Card label="A cobrar neto (efectivo)" value={`ARS ${Math.round(summary.netToCollect).toLocaleString('es-AR')}`} sub="lo que el vendedor todavía nos tiene que rendir" />
+          <Card label="Incentivo total (MP)" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} sub="todas las ventas pagadas por Mercado Pago" />
+          <Card label="Ya pagado (MP)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} sub="incentivo ya liquidado al recomendador" />
+          <Card label="A pagar (MP)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} sub="incentivo pendiente de liquidar" highlight />
+          <Card label="A cobrar neto (efectivo)" value={`ARS ${Math.round(summary.netToCollect).toLocaleString('es-AR')}`} sub="lo que el recomendador todavía nos tiene que rendir" />
         </div>
       )}
 
@@ -270,7 +270,7 @@ export default function SellerOrdersSection({ seller }: Props) {
                           <p className="text-gold font-mono text-sm font-semibold">
                             ARS {amount.toLocaleString('es-AR')}
                             <span className="ml-1 text-[10px] font-normal text-cream/40">
-                              {o.payment_method === 'cash' ? 'neto a cobrar' : 'comisión'}
+                              {o.payment_method === 'cash' ? 'neto a cobrar' : 'incentivo'}
                             </span>
                           </p>
                         </div>
@@ -278,7 +278,7 @@ export default function SellerOrdersSection({ seller }: Props) {
                           {settledAt ? (
                             <span className="inline-flex flex-col items-end text-[10px] text-emerald-400">
                               ✓ {new Date(settledAt).toLocaleDateString()}
-                              <span className="text-emerald-400/70">{o.payment_method === 'cash' ? 'neto rendido' : 'comisión pagada'}</span>
+                              <span className="text-emerald-400/70">{o.payment_method === 'cash' ? 'neto rendido' : 'incentivo pagado'}</span>
                             </span>
                           ) : o.status === 'paid' ? (
                             <span className="text-[10px] text-bordeaux-light">{o.payment_method === 'cash' ? 'Neto pendiente' : 'Pago pendiente'}</span>
@@ -318,7 +318,7 @@ export default function SellerOrdersSection({ seller }: Props) {
                 <th className="text-left py-3 px-4">Fecha servicio</th>
                 <th className="text-center py-3 px-4">Estado</th>
                 <th className="text-right py-3 px-4">Venta</th>
-                <th className="text-right py-3 px-4">Comisión / Neto</th>
+                <th className="text-right py-3 px-4">Incentivo / Neto</th>
                 <th className="text-center py-3 px-4">Liquidación</th>
                 <th className="py-3 px-3" />
               </tr>
@@ -377,7 +377,7 @@ export default function SellerOrdersSection({ seller }: Props) {
                       {settledAt ? (
                         <span className="inline-flex flex-col items-center rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400">
                           ✓ {new Date(settledAt).toLocaleDateString()}
-                          <span className="text-[10px] text-emerald-400/70">{o.payment_method === 'cash' ? 'neto rendido' : 'comisión pagada'}</span>
+                          <span className="text-[10px] text-emerald-400/70">{o.payment_method === 'cash' ? 'neto rendido' : 'incentivo pagado'}</span>
                         </span>
                       ) : o.status === 'paid' ? (
                         <span className="text-xs text-bordeaux-light">{o.payment_method === 'cash' ? 'Neto pendiente' : 'Pago pendiente'}</span>

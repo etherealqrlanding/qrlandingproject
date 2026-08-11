@@ -77,8 +77,8 @@ export default function SellerSettings() {
             value={settings.exchange_rate != null ? `${fmtArs(settings.exchange_rate)} / USD` : 'No configurado'}
             hint={
               settings.exchange_rate_mode === 'auto'
-                ? 'Se actualiza automáticamente. Es el que se usa para cobrar y calcular tu comisión.'
-                : 'Fijado manualmente por el equipo. Es el que se usa para cobrar y calcular tu comisión.'
+                ? 'Se actualiza automáticamente. Es el que se usa para cobrar y calcular tu incentivo por recomendación.'
+                : 'Fijado manualmente por el equipo. Es el que se usa para cobrar y calcular tu incentivo por recomendación.'
             }
           />
           <InfoCard

@@ -359,7 +359,7 @@ function OptionFormFields({ option, onChange, productAcceptsChildren }: {
         <div>
           <p className="text-sm font-medium text-gold-soft">Valores netos</p>
           <p className="text-xs text-cream/40 mt-0.5">
-            Monto mínimo que el operador recibe por operación. Comisión = precio de venta − neto (efectivo) o (precio × (1 − fee MP)) − neto (Mercado Pago).
+            Monto mínimo que el operador recibe por operación. Incentivo = precio de venta − neto (efectivo) o (precio × (1 − fee MP)) − neto (Mercado Pago).
           </p>
         </div>
 
@@ -384,7 +384,7 @@ function OptionFormFields({ option, onChange, productAcceptsChildren }: {
 
         {(option.net_price_currency ?? 'USD') === 'USD' ? (
           <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="Neto adulto (USD)" hint="Obligatorio para calcular comisión">
+            <Field label="Neto adulto (USD)" hint="Obligatorio para calcular el incentivo">
               <input
                 type="number" min={0} step={0.01}
                 value={option.net_price_adult_usd ?? ''}
@@ -414,7 +414,7 @@ function OptionFormFields({ option, onChange, productAcceptsChildren }: {
           </div>
         ) : (
           <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="Neto adulto (ARS)" hint="Obligatorio para calcular comisión">
+            <Field label="Neto adulto (ARS)" hint="Obligatorio para calcular el incentivo">
               <input
                 type="number" min={0} step={1}
                 value={option.net_price_adult_ars ?? ''}

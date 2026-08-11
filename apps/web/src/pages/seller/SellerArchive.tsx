@@ -245,7 +245,7 @@ export default function SellerArchive() {
                     <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
                     <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
                     {o.commission_amount_ars != null && o.commission_amount_ars > 0 && (
-                      <DetailRow label="Tu comisión"><span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span></DetailRow>
+                      <DetailRow label="Tu incentivo por recomendación"><span className="text-gold font-mono">{fmtArs(o.commission_amount_ars)}</span></DetailRow>
                     )}
                     <DetailRow label="Te liquidamos">
                       {o.paid_to_seller_at

@@ -206,7 +206,7 @@ export default function SellerLayout() {
           ) : (
             <>
               <Logo className="h-8 w-auto" />
-              <p className="text-[11px] text-cream/50 mt-1">Portal de vendedores</p>
+              <p className="text-[11px] text-cream/50 mt-1">Portal de recomendadores</p>
             </>
           )}
         </div>

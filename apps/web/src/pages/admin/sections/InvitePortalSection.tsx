@@ -54,7 +54,7 @@ export default function InvitePortalSection({ seller, onUpdated }: Readonly<Prop
     <div className="rounded-xl border border-gold/10 bg-ink-soft/30 p-5 mt-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-sm font-medium text-cream/90 mb-1">Portal del vendedor</p>
+          <p className="text-sm font-medium text-cream/90 mb-1">Portal del recomendador</p>
           {hasAccount ? (
             <p className="text-xs text-emerald-400">
               ✓ Cuenta activa — puede iniciar sesión en{' '}
@@ -94,8 +94,8 @@ export default function InvitePortalSection({ seller, onUpdated }: Readonly<Prop
         <div className="mt-4 space-y-2">
           <p className="text-xs text-cream/60">
             {hasAccount
-              ? 'Link de acceso generado. Compartilo con el vendedor (WhatsApp, email, etc.):'
-              : 'Invitación generada. Compartí este link con el vendedor:'}
+              ? 'Link de acceso generado. Compartilo con el recomendador (WhatsApp, email, etc.):'
+              : 'Invitación generada. Compartí este link con el recomendador:'}
           </p>
           <div className="flex items-center gap-2">
             <input

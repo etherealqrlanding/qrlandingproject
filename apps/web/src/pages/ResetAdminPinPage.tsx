@@ -62,7 +62,7 @@ export default function ResetAdminPinPage() {
             <p className="text-lg font-display text-cream mb-2">No pudimos continuar</p>
             <p className="text-sm text-cream/60">{errorMsg}</p>
             <p className="mt-4 text-xs text-cream/40">
-              Si el link venció, pedí uno nuevo desde "Mi equipo" en el portal de vendedores.
+              Si el link venció, pedí uno nuevo desde "Mi equipo" en el portal de recomendadores.
             </p>
           </div>
         )}

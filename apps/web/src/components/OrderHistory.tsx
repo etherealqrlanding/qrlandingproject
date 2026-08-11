@@ -50,7 +50,7 @@ function actorLabel(payload: Record<string, unknown>): string | null {
   const name = strVal(payload.seller_member_name);
   if (name) return name;
   if (payload.actor === 'admin') return 'administrador';
-  if (payload.actor === 'seller') return 'vendedor';
+  if (payload.actor === 'seller') return 'recomendador';
   return null;
 }
 

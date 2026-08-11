@@ -309,7 +309,7 @@ async function seed() {
       `INSERT INTO sellers (code, name, kind, commission_percent, contact_email, notes)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (code) DO NOTHING`,
-      ['DEMO01', 'Vendedor Demo', 'recepcion', 15.0, 'demo@tangosymilongastickets.com', 'Vendedor de prueba para validar flujo de comisiones.'],
+      ['DEMO01', 'Recomendador Demo', 'recepcion', 15.0, 'demo@tangosymilongastickets.com', 'Recomendador de prueba para validar flujo de incentivos por recomendación.'],
     );
 
     await client.query('COMMIT');

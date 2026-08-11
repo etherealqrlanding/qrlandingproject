@@ -85,7 +85,7 @@ export default function SellerQrSection({ seller }: Props) {
           </button>
         </div>
         <p className="mt-2 text-xs text-cream/50">
-          Cualquier cliente que entre por este link se atribuye a <span className="text-cream">{seller.name}</span> y le suma {Number(seller.commission_percent).toFixed(1)}% de comisión.
+          Cualquier cliente que entre por este link se atribuye a <span className="text-cream">{seller.name}</span> y le suma {Number(seller.commission_percent).toFixed(1)}% de incentivo.
         </p>
       </section>
 
@@ -145,10 +145,10 @@ export default function SellerQrSection({ seller }: Props) {
       <section className="rounded-lg border border-gold/10 bg-ink/30 p-5">
         <p className="text-xs uppercase tracking-widest text-gold-soft">💡 Cómo usarlo</p>
         <ul className="mt-3 space-y-1.5 text-sm text-cream/70">
-          <li>1. Imprimí el QR en un sticker, tarjeta o cartel y entregáselo al vendedor.</li>
-          <li>2. El vendedor lo muestra/comparte con sus clientes potenciales.</li>
+          <li>1. Imprimí el QR en un sticker, tarjeta o cartel y entregáselo al recomendador.</li>
+          <li>2. El recomendador lo muestra/comparte con sus clientes potenciales.</li>
           <li>3. El cliente escanea con la cámara del celular → llega a la landing con el código.</li>
-          <li>4. Si compra, la venta queda atribuida automáticamente y el vendedor recibe el email de notificación con su comisión.</li>
+          <li>4. Si compra, la venta queda atribuida automáticamente y el recomendador recibe el email de notificación con su incentivo.</li>
         </ul>
       </section>
     </div>

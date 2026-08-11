@@ -5,11 +5,11 @@ export type EventTone = 'neutral' | 'good' | 'bad' | 'warn';
 
 const LABELS: Record<string, { label: string; tone: EventTone }> = {
   preference_created: { label: 'Link de pago generado', tone: 'neutral' },
-  preference_created_by_seller: { label: 'Link de pago generado (vendedor)', tone: 'neutral' },
+  preference_created_by_seller: { label: 'Link de pago generado (recomendador)', tone: 'neutral' },
   cash_order_created: { label: 'Reserva registrada (efectivo)', tone: 'neutral' },
-  cash_order_created_by_seller: { label: 'Reserva registrada por el vendedor (efectivo)', tone: 'neutral' },
-  cash_order_created_by_admin: { label: 'Reserva creada por el equipo (efectivo, a nombre de vendedor)', tone: 'neutral' },
-  preference_created_by_admin: { label: 'Link de pago generado por el equipo (a nombre de vendedor)', tone: 'neutral' },
+  cash_order_created_by_seller: { label: 'Reserva registrada por el recomendador (efectivo)', tone: 'neutral' },
+  cash_order_created_by_admin: { label: 'Reserva creada por el equipo (efectivo, a nombre de recomendador)', tone: 'neutral' },
+  preference_created_by_admin: { label: 'Link de pago generado por el equipo (a nombre de recomendador)', tone: 'neutral' },
   order_paid: { label: 'Pago confirmado', tone: 'good' },
   order_pending: { label: 'Pago pendiente', tone: 'warn' },
   order_failed: { label: 'Pago rechazado', tone: 'bad' },

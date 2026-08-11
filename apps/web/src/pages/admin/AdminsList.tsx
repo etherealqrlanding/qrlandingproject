@@ -106,7 +106,7 @@ function InviteModal({
                   onChange={(e) => setRole(e.target.value as AdminUserRow['role'])}
                   className="input"
                 >
-                  <option value="admin">Admin — CRUD de productos, ventas y vendedores</option>
+                  <option value="admin">Admin — CRUD de productos, ventas y recomendadores</option>
                   <option value="operator">Operador — solo lectura + estados de órdenes</option>
                   <option value="super_admin">Super admin — acceso total, incluido gestionar admins</option>
                 </select>
@@ -115,7 +115,7 @@ function InviteModal({
               {error && <p className="text-sm text-bordeaux-light">{error}</p>}
 
               <p className="text-xs text-cream/40">
-                Si el email ya existe (por ejemplo, es también vendedor), no se crea una cuenta
+                Si el email ya existe (por ejemplo, es también recomendador), no se crea una cuenta
                 nueva: se le agrega el acceso a la misma cuenta y se le manda un link para
                 confirmar el acceso.
               </p>
@@ -358,7 +358,7 @@ export default function AdminsList() {
               Pierde el acceso al panel para siempre — esta acción no se puede deshacer.
             </p>
             <p className="text-xs text-cream/50">
-              Si esta misma cuenta también es el login de un vendedor, ese acceso se conserva.
+              Si esta misma cuenta también es el login de un recomendador, ese acceso se conserva.
             </p>
           </>
         }

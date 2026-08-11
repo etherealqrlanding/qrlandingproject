@@ -115,7 +115,7 @@ function WhatsAppForm({
       <h2 className="font-display text-2xl text-cream">WhatsApp de contacto</h2>
       <p className="mt-2 text-sm text-cream/60">
         Se usa en todo el contacto con nosotros de la app: el botón "Hablar por WhatsApp" del sitio público,
-        el portal de vendedores y el WhatsApp que se ofrece en los emails de reservas. Cambiarlo acá lo actualiza
+        el portal de recomendadores y el WhatsApp que se ofrece en los emails de reservas. Cambiarlo acá lo actualiza
         en todos esos lugares (los emails pueden tardar hasta 5 minutos en tomar el cambio).
       </p>
       <form onSubmit={handleSave} className="mt-5 space-y-4">
@@ -447,22 +447,22 @@ export default function SettingsPage() {
 
       {/* Cómo se calcula la comisión */}
       <section className="rounded-lg border border-gold/10 bg-ink/30 p-5 max-w-2xl">
-        <p className="text-xs uppercase tracking-widest text-gold-soft">Cómo se calcula la comisión</p>
+        <p className="text-xs uppercase tracking-widest text-gold-soft">Cómo se calcula el incentivo</p>
         <p className="mt-3 text-sm text-cream/70">
-          Ejemplo: venta <span className="text-cream">USD 150</span>, neto operador <span className="text-cream">USD 120</span>, comisión del vendedor <span className="text-cream">15%</span>.
+          Ejemplo: venta <span className="text-cream">USD 150</span>, neto operador <span className="text-cream">USD 120</span>, incentivo del recomendador <span className="text-cream">15%</span>.
         </p>
         <div className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between text-green-400/80">
-            <span>Efectivo → el vendedor nos liquida el neto</span>
+            <span>Efectivo → el recomendador nos liquida el neto</span>
             <span>nos rinde USD 120 · gana USD {(150 - 120).toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-gold">
-            <span>Mercado Pago → le liquidamos su comisión (% × venta)</span>
+            <span>Mercado Pago → le liquidamos su incentivo (% × venta)</span>
             <span>USD {(150 * 0.15).toFixed(2)}</span>
           </div>
         </div>
         <p className="mt-3 text-xs text-cream/40">
-          En efectivo la comisión del vendedor es total − neto (ya se la queda al cobrar). En Mercado Pago nosotros cobramos y le pagamos su comisión.
+          En efectivo el incentivo del recomendador es total − neto (ya se la queda al cobrar). En Mercado Pago nosotros cobramos y le pagamos su incentivo.
         </p>
       </section>
 
@@ -471,13 +471,13 @@ export default function SettingsPage() {
         <h2 className="mt-1 font-display text-2xl text-cream">Ventanas horarias</h2>
         <p className="mt-1 text-sm text-cream/50">
           Si configurás una ventana, las reservas cuya fecha de servicio es hoy solo podrán modificarse o cancelarse dentro del horario indicado (hora Buenos Aires).
-          Fuera de esa franja, los botones quedan bloqueados para el admin y el vendedor.
+          Fuera de esa franja, los botones quedan bloqueados para el admin y el recomendador.
         </p>
       </header>
 
       <CutoffForm
         title="Anticipación mínima para modificar"
-        description="Si configurás 24hs, no se podrá modificar (bajar/subir pasajeros) una reserva cuando falten menos de 24 horas para el servicio. El botón queda deshabilitado para el admin y el vendedor."
+        description="Si configurás 24hs, no se podrá modificar (bajar/subir pasajeros) una reserva cuando falten menos de 24 horas para el servicio. El botón queda deshabilitado para el admin y el recomendador."
         hours={modifyWindow}
         onSave={async (h) => {
           const res = await adminApi.settings.updateModifyWindow(h);
@@ -487,7 +487,7 @@ export default function SettingsPage() {
 
       <CutoffForm
         title="Anticipación mínima para cancelar"
-        description="Si configurás 24hs, no se podrá cancelar ni reintegrar una reserva cuando falten menos de 24 horas para el servicio. Se aplica al admin y al vendedor."
+        description="Si configurás 24hs, no se podrá cancelar ni reintegrar una reserva cuando falten menos de 24 horas para el servicio. Se aplica al admin y al recomendador."
         hours={cancelWindow}
         onSave={async (h) => {
           const res = await adminApi.settings.updateCancelWindow(h);
@@ -509,7 +509,7 @@ export default function SettingsPage() {
         <h2 className="mt-1 font-display text-2xl text-cream">Modo mantenimiento</h2>
         <p className="mt-1 text-sm text-cream/50">
           Bloquea el sitio público para pasajeros. Útil ante imprevistos operativos o fuerza mayor.
-          El panel de administración y el portal de vendedores siguen accesibles.
+          El panel de administración y el portal de recomendadores siguen accesibles.
         </p>
       </header>
 

@@ -137,7 +137,7 @@ export default function BulkCapacityPage() {
         <h2 className="font-display text-2xl text-cream">Horizonte de venta</h2>
         <p className="mt-2 text-sm text-cream/60 max-w-xl">
           Hasta cuántos meses a futuro se puede reservar — aplica al checkout público, a la carga
-          manual de admin/vendedor y a reprogramar una reserva existente. Ej: 12 = un año, 24 = dos
+          manual de admin/recomendador y a reprogramar una reserva existente. Ej: 12 = un año, 24 = dos
           años. Dejá vacío para no aplicar tope.
         </p>
         <div className="mt-5 flex items-center gap-4 flex-wrap">

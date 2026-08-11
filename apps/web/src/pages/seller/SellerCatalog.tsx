@@ -47,7 +47,7 @@ export default function SellerCatalog() {
     <div className="p-4 md:p-8 max-w-5xl">
       <header className="mb-2 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Recomendadores</p>
           <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Catálogo de Shows</h1>
           <p className="mt-0.5 text-xs md:text-sm text-cream/50">
             Info completa de cada servicio para asesorar a tus pasajeros

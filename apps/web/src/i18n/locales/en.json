@@ -148,8 +148,6 @@
     "contact_info_notice": "Your phone number and email are essential for sending your booking confirmation and reaching you if needed. Please make sure they are correct.",
     "phone": "Phone / WhatsApp",
     "phone_required": "Enter your phone number.",
-    "dni": "ID / Passport",
-    "dni_hint": "Optional — some venues ask for ID at the door",
     "nationality": "Nationality",
     "nationality_required": "Select your nationality.",
     "service_date": "Service date",

@@ -10,12 +10,12 @@ export default function ContentPage() {
   return (
     <div className="p-4 md:p-8 max-w-3xl">
       <h1 className="font-display text-3xl text-cream">Contenido</h1>
-      <p className="mt-1 text-sm text-cream/50">Editá las secciones del sitio y del portal de vendedores.</p>
+      <p className="mt-1 text-sm text-cream/50">Editá las secciones del sitio y del portal de recomendadores.</p>
 
       <div className="mt-6 flex gap-2 flex-wrap">
         <TabButton active={tab === 'about'} onClick={() => setTab('about')}>Nosotros</TabButton>
         <TabButton active={tab === 'faq'} onClick={() => setTab('faq')}>FAQ Clientes</TabButton>
-        <TabButton active={tab === 'seller-faq'} onClick={() => setTab('seller-faq')}>FAQ Vendedores</TabButton>
+        <TabButton active={tab === 'seller-faq'} onClick={() => setTab('seller-faq')}>FAQ Recomendadores</TabButton>
       </div>
 
       <div className="mt-6">
@@ -253,7 +253,7 @@ function SellerFaqEditor() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-cream/50">
-        Estas preguntas aparecen en <strong className="text-cream/70">/seller/ayuda</strong> del portal de vendedores. Solo español.
+        Estas preguntas aparecen en <strong className="text-cream/70">/seller/ayuda</strong> del portal de recomendadores. Solo español.
       </p>
 
       {items.length === 0 && (

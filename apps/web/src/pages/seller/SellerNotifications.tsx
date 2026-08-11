@@ -55,7 +55,7 @@ export default function SellerNotifications() {
   return (
     <div className="p-4 md:p-8 max-w-3xl">
       <header className="mb-5 md:mb-8">
-        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Vendedores</p>
+        <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Portal de Recomendadores</p>
         <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Notificaciones</h1>
         {!loading && unread > 0 && (
           <p className="mt-0.5 text-xs md:text-sm text-gold-soft">
@@ -144,7 +144,7 @@ export default function SellerNotifications() {
         <div>
           <p className="text-sm text-cream/80 font-medium mb-1">¿Tenés alguna duda?</p>
           <p className="text-sm text-cream/60 leading-relaxed">
-            Ante cualquier consulta sobre tus ventas, comisiones o liquidaciones, escribinos.
+            Ante cualquier consulta sobre tus ventas, incentivos por recomendación o liquidaciones, escribinos.
             Te respondemos a la brevedad.
           </p>
           <a

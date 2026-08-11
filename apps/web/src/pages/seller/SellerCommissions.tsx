@@ -121,7 +121,7 @@ function DetailTable({ d }: Readonly<{ d: DetailState | undefined }>) {
             <th className="text-left px-3 py-2">Fecha</th>
             <th className="text-left px-3 py-2">Pago</th>
             <th className="text-right px-3 py-2">Venta</th>
-            <th className="text-right px-3 py-2">Comisión</th>
+            <th className="text-right px-3 py-2">Incentivo</th>
           </tr>
         </thead>
         <tbody>
@@ -259,7 +259,7 @@ export default function SellerCommissions() {
               <tr className="border-b border-gold/10 text-cream/50 text-xs uppercase tracking-wider">
                 <th className="text-left px-4 py-3">Fecha de pago</th>
                 <th className="text-center px-4 py-3">Ventas</th>
-                <th className="text-right px-4 py-3">Comisión</th>
+                <th className="text-right px-4 py-3">Incentivo</th>
                 <th className="w-8 px-4 py-3" />
               </tr>
             </thead>
@@ -324,13 +324,13 @@ export default function SellerCommissions() {
       <header className="mb-4 md:mb-6">
         <h1 className="font-display text-3xl md:text-4xl text-cream">Liquidaciones</h1>
         <p className="mt-0.5 text-xs md:text-sm text-cream/50">
-          Historial de pagos de comisiones acreditados a tu cuenta
+          Historial de pagos de incentivos por recomendación acreditados a tu cuenta
         </p>
       </header>
 
       {me && me.commission_pending_usd > 0 && (
         <div className="rounded-xl border border-amber-700/30 bg-amber-900/10 p-3 md:p-4 mb-4 md:mb-6 text-sm">
-          <p className="text-amber-400 font-medium mb-1">Comisión en proceso</p>
+          <p className="text-amber-400 font-medium mb-1">Incentivo en proceso</p>
           <p className="text-cream/70 text-xs md:text-sm">
             Tenés {fmt(me.commission_pending_ars)} pendientes de liquidar. El equipo de Tangos y Milongas Tickets lo procesa periódicamente.
           </p>

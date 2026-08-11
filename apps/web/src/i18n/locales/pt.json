@@ -148,8 +148,6 @@
     "contact_info_notice": "Seu telefone e e-mail são essenciais para enviarmos a confirmação da sua reserva e contatar você em caso de novidades. Certifique-se de informá-los corretamente.",
     "phone": "Telefone / WhatsApp",
     "phone_required": "Informe seu telefone.",
-    "dni": "CPF / Passaporte",
-    "dni_hint": "Opcional — algumas casas pedem identificação na porta",
     "nationality": "Nacionalidade",
     "nationality_required": "Selecione sua nacionalidade.",
     "service_date": "Data do serviço",

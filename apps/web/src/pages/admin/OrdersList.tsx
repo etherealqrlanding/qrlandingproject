@@ -168,7 +168,7 @@ function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpan
                 {' '}<span className="font-mono text-cream/30">{o.seller_code}</span>
               </p>
             ) : (
-              <p className="text-[10px] text-cream/25">Sin vendedor</p>
+              <p className="text-[10px] text-cream/25">Sin recomendador</p>
             )}
           </div>
           <div className="flex items-center gap-3 shrink-0">
@@ -448,10 +448,10 @@ export default function OrdersList() {
                 <th className="text-left py-2 px-2 whitespace-nowrap">Fecha</th>
                 <th className="text-left py-2 px-2">Cliente</th>
                 <th className="text-left py-2 px-2">Servicio</th>
-                <th className="text-left py-2 px-2">Vendedor</th>
+                <th className="text-left py-2 px-2">Recomendador</th>
                 <th className="text-center py-2 px-2">Estado</th>
                 <th className="text-right py-2 px-2">Total / Neto</th>
-                <th className="text-right py-2 px-2">Comisión</th>
+                <th className="text-right py-2 px-2">Incentivo</th>
                 <th className="py-2 px-2" />
               </tr>
             </thead>
@@ -606,7 +606,7 @@ export default function OrdersList() {
               sub="cobrado por Mercado Pago (no incluye efectivo)"
             />
             <SummaryCard
-              label="Comisiones"
+              label="Incentivos"
               value={summary.commission}
               format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
               sub="a liquidar, solo ventas por MP"
@@ -616,7 +616,7 @@ export default function OrdersList() {
               label="Neto por cobrar"
               value={summary.netPending}
               format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-              sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
+              sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los recomendadores`}
               highlight
             />
           </div>
@@ -652,7 +652,7 @@ export default function OrdersList() {
                 showSubOnMobile
               />
               <SummaryCard
-                label="Comisiones"
+                label="Incentivos"
                 value={summary.commission}
                 format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
                 sub="a liquidar, solo ventas por MP"
@@ -663,7 +663,7 @@ export default function OrdersList() {
                 label="Neto por cobrar"
                 value={summary.netPending}
                 format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-                sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los vendedores`}
+                sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los recomendadores`}
                 highlight
                 showSubOnMobile
               />
@@ -740,7 +740,7 @@ export default function OrdersList() {
                   className="input w-full" />
               </label>
               <label className="block">
-                <span className="block text-xs text-cream/50 mb-1">Vendedor</span>
+                <span className="block text-xs text-cream/50 mb-1">Recomendador</span>
                 <SellerFilterSelect value={filters.ref} className="w-full"
                   onChange={(v) => setFilters({ ...filters, ref: v })} />
               </label>

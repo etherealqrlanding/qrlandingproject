@@ -73,7 +73,6 @@ export default function BookingForm({
     email: '',
     phone: '',
     nationality: '',
-    dni: '',
     service_date: initialDate ?? today,
     adults: initialAdults ?? 2,
     // Si la casa no acepta menores, arranca en 0 sin importar lo que venga precargado —
@@ -204,7 +203,6 @@ export default function BookingForm({
         email: form.email.trim().toLowerCase(),
         phone: form.phone.trim() || null,
         nationality: form.nationality || null,
-        dni: form.dni.trim() || null,
       },
       payment_method: paymentMethod,
       transfer_requested: option.has_transfer ? wantsTransfer : false,
@@ -263,14 +261,6 @@ export default function BookingForm({
               type="tel" maxLength={40}
               value={form.phone} onChange={(e) => updateField('phone', e.target.value)}
               className="input" placeholder="5491132368312"
-            />
-          </Field>
-          <Field label="DNI / Pasaporte" hint="Opcional — algunas casas piden identificación en la puerta">
-            <input
-              type="text" maxLength={40}
-              value={form.dni} onChange={(e) => updateField('dni', e.target.value)}
-              className="input" placeholder="12345678 / AB123456"
-              autoComplete="off"
             />
           </Field>
           <Field label="Nacionalidad" required>
@@ -403,7 +393,7 @@ export default function BookingForm({
           <p className="text-xs uppercase tracking-widest text-gold-soft">Forma de pago</p>
           {!allowCash && (
             <div className="rounded-md border border-bordeaux-light/30 bg-bordeaux-deep/20 px-3 py-2 text-xs text-bordeaux-light">
-              Este vendedor solo tiene habilitado el pago online. El cobro en efectivo requiere autorización especial.
+              Este recomendador solo tiene habilitado el pago online. El cobro en efectivo requiere autorización especial.
             </div>
           )}
           <div className={`grid gap-2 ${allowCash ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
@@ -417,7 +407,7 @@ export default function BookingForm({
                     : 'border-gold/20 text-cream/50 hover:border-gold/40'
                 }`}
               >
-                <span className="block font-medium">Pago al vendedor</span>
+                <span className="block font-medium">Pago al recomendador</span>
                 <span className="text-xs opacity-70">Efectivo en el momento</span>
               </button>
             )}
@@ -448,7 +438,7 @@ export default function BookingForm({
           </div>
           {paymentMethod === 'cash' && allowCash && (
             <p className="text-xs text-cream/50 pt-1">
-              La reserva se ingresa como pendiente. El vendedor coordina el cobro con el pasajero.
+              La reserva se ingresa como pendiente. El recomendador coordina el cobro con el pasajero.
             </p>
           )}
           {paymentMethod === 'mercadopago' && (

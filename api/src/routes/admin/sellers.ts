@@ -63,7 +63,7 @@ async function findEmailOwner(
     ),
   ]);
   if (adminRows.rows[0]) return { kind: 'admin', label: `el admin ${adminRows.rows[0].email}` };
-  if (sellerRows.rows[0]) return { kind: 'seller', label: `el vendedor "${sellerRows.rows[0].name}"` };
+  if (sellerRows.rows[0]) return { kind: 'seller', label: `el recomendador "${sellerRows.rows[0].name}"` };
   return null;
 }
 
@@ -74,7 +74,7 @@ adminSellersRouter.post('/', async (req, res, next) => {
     if (parsed.data.contact_email) {
       const owner = await findEmailOwner(parsed.data.contact_email);
       if (owner) {
-        return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este vendedor.` });
+        return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este recomendador.` });
       }
     }
     const id = await createSeller(parsed.data);
@@ -82,7 +82,7 @@ adminSellersRouter.post('/', async (req, res, next) => {
     res.status(201).json({ data: seller });
   } catch (err) {
     if ((err as { code?: string }).code === '23505') {
-      return res.status(409).json({ error: 'Ya existe un vendedor con ese código' });
+      return res.status(409).json({ error: 'Ya existe un recomendador con ese código' });
     }
     next(err);
   }
@@ -101,7 +101,7 @@ adminSellersRouter.patch('/:id', async (req, res, next) => {
       if (current && current.contact_email?.toLowerCase() !== parsed.data.contact_email.toLowerCase()) {
         const owner = await findEmailOwner(parsed.data.contact_email, id);
         if (owner) {
-          return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este vendedor.` });
+          return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este recomendador.` });
         }
       }
     }
@@ -325,8 +325,8 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
 
     const seller = await getSeller(id);
     if (!seller) return res.status(404).json({ error: 'Not found' });
-    if (!seller.contact_email) return res.status(400).json({ error: 'El vendedor no tiene email de contacto registrado' });
-    if (!seller.is_active) return res.status(400).json({ error: 'El vendedor está inactivo' });
+    if (!seller.contact_email) return res.status(400).json({ error: 'El recomendador no tiene email de contacto registrado' });
+    if (!seller.is_active) return res.status(400).json({ error: 'El recomendador está inactivo' });
 
     const portalUrl = `${config.WEB_ORIGIN.replace(/\/$/, '')}/seller/login`;
 
@@ -350,8 +350,8 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
         ? sellerOwner.rows[0] : null;
       if (conflictingAdmin || conflictingSeller) {
         return res.status(409).json({
-          error: `El acceso guardado para este vendedor está vinculado a otra cuenta real (${
-            conflictingAdmin ? `admin ${conflictingAdmin.email}` : `vendedor #${conflictingSeller!.id}`
+          error: `El acceso guardado para este recomendador está vinculado a otra cuenta real (${
+            conflictingAdmin ? `admin ${conflictingAdmin.email}` : `recomendador #${conflictingSeller!.id}`
           }) — reenviar la invitación le pisaría el login a esa persona. Contactá a soporte técnico para corregir el vínculo antes de continuar.`,
         });
       }
@@ -365,7 +365,7 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
       });
       if (syncErr) {
         return res.status(409).json({
-          error: `No se pudo asignar el email "${seller.contact_email}" al portal del vendedor: ${syncErr.message}. Es probable que ya esté en uso por otro usuario (el admin u otro vendedor). Usá un email exclusivo para este vendedor.`,
+          error: `No se pudo asignar el email "${seller.contact_email}" al portal del recomendador: ${syncErr.message}. Es probable que ya esté en uso por otro usuario (el admin u otro recomendador). Usá un email exclusivo para este recomendador.`,
         });
       }
 
@@ -402,7 +402,7 @@ adminSellersRouter.post('/:id/invite', async (req, res, next) => {
     });
     if (linkError) {
       return res.status(409).json({
-        error: `No se pudo generar la invitación para "${seller.contact_email}": ${linkError.message}. Puede que ese email ya esté registrado como otro usuario (el admin u otro vendedor). Usá un email exclusivo para este vendedor.`,
+        error: `No se pudo generar la invitación para "${seller.contact_email}": ${linkError.message}. Puede que ese email ya esté registrado como otro usuario (el admin u otro recomendador). Usá un email exclusivo para este recomendador.`,
       });
     }
 

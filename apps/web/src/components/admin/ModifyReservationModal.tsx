@@ -299,7 +299,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
             {preview.direction === 'reduce' && !reduceBlocked && (
               <p className="text-sm text-cream/80">
-                {isMp ? 'Se reintegrará al cliente ' : 'El vendedor devuelve en efectivo '}
+                {isMp ? 'Se reintegrará al cliente ' : 'El recomendador devuelve en efectivo '}
                 <strong className="text-cream">{fmtArs(preview.deltaArs)}</strong>.
                 Nuevo total: <strong className="text-cream">{fmtArs(preview.newSubtotalArs)}</strong>.
               </p>
