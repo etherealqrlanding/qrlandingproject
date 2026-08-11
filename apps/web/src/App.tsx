@@ -51,8 +51,10 @@ import SellerCatalog from './pages/seller/SellerCatalog';
 import SellerHelp from './pages/seller/SellerHelp';
 import SellerSettings from './pages/seller/SellerSettings';
 import SellerArchive from './pages/seller/SellerArchive';
+import SellerTeam from './pages/seller/SellerTeam';
 import ActionPage from './pages/ActionPage';
 import ResetMemberPinPage from './pages/ResetMemberPinPage';
+import ResetAdminPinPage from './pages/ResetAdminPinPage';
 
 export default function App() {
   const location = useLocation();
@@ -60,6 +62,7 @@ export default function App() {
   const isSellerRoute = location.pathname.startsWith('/seller');
   const isActionRoute = location.pathname.startsWith('/accion/');
   const isResetPinRoute = location.pathname.startsWith('/reset-pin/');
+  const isResetAdminPinRoute = location.pathname.startsWith('/reset-admin-pin/');
 
   useEffect(() => {
     // Si venimos del selector rápido de la home con un servicio elegido (?option=),
@@ -80,6 +83,14 @@ export default function App() {
     return (
       <Routes>
         <Route path="/reset-pin/:token" element={<ResetMemberPinPage />} />
+      </Routes>
+    );
+  }
+
+  if (isResetAdminPinRoute) {
+    return (
+      <Routes>
+        <Route path="/reset-admin-pin/:token" element={<ResetAdminPinPage />} />
       </Routes>
     );
   }
@@ -126,6 +137,7 @@ export default function App() {
             <Route index element={<SellerDashboard />} />
             <Route path="catalogo" element={<SellerCatalog />} />
             <Route path="ventas" element={<SellerOrders />} />
+            <Route path="equipo" element={<SellerTeam />} />
             <Route path="liquidaciones" element={<SellerCommissions />} />
             <Route path="nueva-reserva" element={<SellerBooking />} />
             <Route path="notificaciones" element={<SellerNotifications />} />

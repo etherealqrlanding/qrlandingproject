@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
 import { hashPin, verifyPin } from '../../services/pin.js';
-import { listSellerMembers, listSellerMemberStats, getSellerAdminPinHash, resolveSellerMember, requireAdminPin, createPinResetToken } from '../../repos/sellerMembers.js';
+import { listSellerMembers, listSellerMemberStats, getSellerAdminPinHash, resolveSellerMember, requireAdminPin, createPinResetToken, deleteSellerMember } from '../../repos/sellerMembers.js';
 import { sendSellerMemberPinReset } from '../../services/email.js';
 import { config } from '../../config.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
@@ -138,6 +138,30 @@ sellerMembersRouter.patch('/:id', async (req, res, next) => {
       }
       throw err;
     }
+  } catch (err) { next(err); }
+});
+
+const deleteSchema = z.object({
+  admin_pin: z.string().regex(/^\d{4,6}$/, 'Ingresá el PIN de administrador.'),
+});
+
+// DELETE /:id — borrado real (no desactivar) de un sub-vendedor. Solo con el PIN de
+// administrador, y solo si nunca tuvo ventas atribuidas (ver deleteSellerMember): si
+// ya vendió algo, el borrado queda bloqueado y hay que desactivarlo en su lugar, para
+// no perder de quién fue esa venta.
+sellerMembersRouter.delete('/:id', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
+    const parsed = deleteSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' });
+
+    const adminCheck = await requireAdminPin(req.seller!.sellerId, parsed.data.admin_pin);
+    if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+
+    const result = await deleteSellerMember(req.seller!.sellerId, id);
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
 

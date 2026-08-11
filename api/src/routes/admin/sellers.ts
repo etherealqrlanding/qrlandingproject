@@ -9,7 +9,8 @@ import { config } from '../../config.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
 import { hashPin } from '../../services/pin.js';
-import { listSellerMemberStats } from '../../repos/sellerMembers.js';
+import { listSellerMemberStats, resetSellerMemberPinByAdmin } from '../../repos/sellerMembers.js';
+import { requireRole } from '../../middleware/requireAdmin.js';
 import { sendSellerPortalInvite, sendSellerPasswordReset, sendSellerCommissionPaid, sendNetSettledConfirmation } from '../../services/email.js';
 import { createCommissionPaidNotification, createNetSettledNotification } from '../../repos/notifications.js';
 
@@ -152,12 +153,13 @@ adminSellersRouter.delete('/:id/permanent', async (req, res, next) => {
 // ─── PIN de administrador (equipo/Mi equipo del vendedor) ─
 // Solo nosotros lo cargamos/reseteamos acá. Sin este PIN, el vendedor no puede
 // crear ni editar sub-vendedores en su portal — ver requireMemberIfTeamExists
-// y routes/seller/members.ts.
+// y routes/seller/members.ts. Restringido a super_admin: es la llave maestra de
+// todo "Mi equipo" de esa cuenta, no algo que cualquier operador deba poder tocar.
 const setAdminPinSchema = z.object({
   admin_pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos'),
 });
 
-adminSellersRouter.post('/:id/admin-pin', async (req, res, next) => {
+adminSellersRouter.post('/:id/admin-pin', requireRole('super_admin'), async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
@@ -182,6 +184,23 @@ adminSellersRouter.get('/:id/members', async (req, res, next) => {
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
     const rows = await listSellerMemberStats(id);
     res.json({ data: rows });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/sellers/:id/members/:memberId/reset-pin — blanqueo de emergencia:
+// le genera un PIN nuevo a un sub-vendedor puntual sin pasar por el vendedor (ni su
+// PIN de administrador ni el email de la persona). Para cuando el equipo quedó
+// bloqueado (perdió el PIN, no tiene email cargado). Restringido a super_admin.
+adminSellersRouter.post('/:id/members/:memberId/reset-pin', requireRole('super_admin'), async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const memberId = Number(req.params.memberId);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(memberId) || memberId <= 0) {
+      return res.status(400).json({ error: 'Invalid id' });
+    }
+    const result = await resetSellerMemberPinByAdmin(id, memberId);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: result });
   } catch (err) { next(err); }
 });
 

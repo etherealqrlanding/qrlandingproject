@@ -856,6 +856,33 @@ export async function sendSellerMemberPinReset(
   return send(memberEmail, 'Restablecé tu PIN — Tangos y Milongas Tickets', html, 'VENDEDOR');
 }
 
+export async function sendSellerAdminPinReset(
+  sellerName: string,
+  adminEmail: string,
+  resetLink: string,
+): Promise<SendResult> {
+  const html = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Mi equipo</p>
+  <h1 style="${baseStyles.title}">Restablecer el PIN de administrador</h1>
+  <p>Hola, pidieron restablecer el PIN de administrador de la cuenta de ${escapeHtml(sellerName)} (el que gestiona el equipo de sub-vendedores).</p>
+  <div style="${baseStyles.card}">
+    <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic para elegir un PIN nuevo:</p>
+    <a href="${resetLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
+      Elegir PIN nuevo
+    </a>
+  </div>
+  <p style="color:rgba(245,239,230,0.5);font-size:13px;">O copiá este enlace en tu navegador:<br/>
+    <span style="font-family:monospace;font-size:11px;word-break:break-all;">${resetLink}</span>
+  </p>
+  <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 2 horas y sirve una sola vez. Si no lo pediste vos, podés ignorar este email.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tangos y Milongas Tickets</p>
+</div></body></html>`;
+  return send(adminEmail, 'Restablecé el PIN de administrador — Tangos y Milongas Tickets', html, 'VENDEDOR');
+}
+
 export async function sendAdminPortalInvite(
   adminName: string,
   adminEmail: string,

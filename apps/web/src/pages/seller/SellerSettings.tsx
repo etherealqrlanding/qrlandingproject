@@ -4,7 +4,6 @@ import { fmtArs } from '../../lib/useExchangeRate';
 import { useSellerSettings, windowLabel as windowLabelShort } from '../../lib/useSellerSettings';
 import AvailabilityCalendar from '../../components/AvailabilityCalendar';
 import type { ProductSummary, ProductDetail } from '../../types/api';
-import SellerTeamSection from '../../components/seller/SellerTeamSection';
 import SellerBrandingSection from '../../components/seller/SellerBrandingSection';
 
 function windowLabel(hours: number | null): string {
@@ -115,9 +114,6 @@ export default function SellerSettings() {
 
       {/* ── Personalizar mi página (solo socios habilitados) ── */}
       <SellerBrandingSection />
-
-      {/* ── Mi equipo ── */}
-      <SellerTeamSection />
 
       {/* ── Cupo por fecha ── */}
       <section>

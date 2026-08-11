@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import MoreSheet from '../MoreSheet';
+import { useSellerAuth } from '../../hooks/useSellerAuth';
 
 interface Props {
   unread: number;
@@ -14,21 +15,26 @@ const PINNED = [
   { to: '/seller/notificaciones', label: 'Alertas', icon: '🔔', notif: true },
 ];
 
-const MORE = [
+const MORE_BASE = [
   { to: '/seller/liquidaciones', label: 'Liquidaciones', icon: '⬡' },
   { to: '/seller/archivo', label: 'Archivo', icon: '📁' },
   { to: '/seller/configuracion', label: 'Configuración', icon: '⚙' },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
+// Solo si el vendedor tiene sub-vendedores activos cargados — ver SellerLayout.
+const NAV_TEAM = { to: '/seller/equipo', label: 'Mi Equipo', icon: '👥' };
+
 export default function BottomNavSeller({ unread }: Readonly<Props>) {
   const [moreOpen, setMoreOpen] = useState(false);
   const location = useLocation();
+  const { me } = useSellerAuth();
 
   // Si se navega mientras el sheet de "Más" está abierto (ej. desde uno de sus
   // propios links), lo cerramos — evita que quede colgado sobre la pantalla nueva.
   useEffect(() => { setMoreOpen(false); }, [location.pathname]);
 
+  const MORE = me?.has_active_team ? [NAV_TEAM, ...MORE_BASE] : MORE_BASE;
   const moreActive = MORE.some((item) => location.pathname.startsWith(item.to));
 
   return (

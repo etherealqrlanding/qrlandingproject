@@ -7,14 +7,15 @@ import { requireSeller } from '../../middleware/requireSeller.js';
 import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
 import {
-  resolveSellerMember, requireMemberIfTeamExists, findActiveSellerMember, requireAdminPin,
-  getPinResetPreview, consumePinReset,
+  resolveSellerMember, requireMemberIfTeamExists, resolveMemberOrAdmin, findActiveSellerMember, requireAdminPin,
+  getPinResetPreview, consumePinReset, getSellerAdminPinInfo, updateSellerAdminPin,
+  getAdminPinResetPreview, consumeAdminPinReset, createAdminPinResetToken,
 } from '../../repos/sellerMembers.js';
 import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail } from '../../services/email.js';
+import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail, sendSellerAdminPinReset } from '../../services/email.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -96,6 +97,32 @@ sellerRouter.post('/members/reset-pin/:token', authLimiter, async (req, res, nex
   } catch (err) { next(err); }
 });
 
+// GET /api/seller/admin-pin/reset-pin/:token — igual que arriba, pero para el PIN de
+// administrador de la cuenta (no un seller_member puntual).
+sellerRouter.get('/admin-pin/reset-pin/:token', async (req, res, next) => {
+  try {
+    const token = req.params.token;
+    if (!/^[0-9a-f-]{36}$/i.test(token)) return res.status(400).json({ error: 'Token inválido' });
+    const preview = await getAdminPinResetPreview(token);
+    if (!preview) return res.status(410).json({ error: 'Este link venció o ya se usó. Pedí uno nuevo.' });
+    res.json({ data: { seller_name: preview.sellerName } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/admin-pin/reset-pin/:token — setea el PIN de administrador nuevo
+sellerRouter.post('/admin-pin/reset-pin/:token', authLimiter, async (req, res, next) => {
+  try {
+    const token = req.params.token;
+    if (!/^[0-9a-f-]{36}$/i.test(token)) return res.status(400).json({ error: 'Token inválido' });
+    const parsed = resetPinSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const ok = await consumeAdminPinReset(token, parsed.data.new_pin);
+    if (!ok) return res.status(410).json({ error: 'Este link venció o ya se usó. Pedí uno nuevo.' });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
 // ─── Rutas protegidas ─────────────────────────────────────
 sellerRouter.use(requireSeller);
 
@@ -106,6 +133,64 @@ sellerRouter.use('/me/members', sellerMembersRouter);
 
 // Personalización de la landing pública (logo/lema/teléfono) — solo si el admin lo habilitó.
 sellerRouter.use('/me/branding', sellerBrandingRouter);
+
+// PIN de administrador (visible como "ADMIN" en Mi equipo, ver SellerTeamSection):
+// autogestión de quien YA lo tiene — cambiar el PIN o cargar/editar el email de
+// contacto. Si lo pierde del todo, puede pedir el reset por email más abajo
+// (POST /me/admin-pin/forgot-pin) siempre que ya tenga un email cargado — si no,
+// sigue siendo cosa nuestra (super_admin) desde el panel interno.
+sellerRouter.get('/me/admin-pin', async (req, res, next) => {
+  try {
+    res.json({ data: await getSellerAdminPinInfo(req.seller!.sellerId) });
+  } catch (err) { next(err); }
+});
+
+const updateAdminPinSchema = z.object({
+  pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos').optional(),
+  email: z.string().trim().email().max(160).optional().nullable(),
+  current_pin: z.string().regex(/^\d{4,6}$/).optional(),
+});
+
+sellerRouter.patch('/me/admin-pin', async (req, res, next) => {
+  try {
+    const parsed = updateAdminPinSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+    if (parsed.data.pin === undefined && parsed.data.email === undefined) {
+      return res.status(400).json({ error: 'Nada para actualizar' });
+    }
+    const result = await updateSellerAdminPin(req.seller!.sellerId, parsed.data);
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: result.info });
+  } catch (err) { next(err); }
+});
+
+// POST /me/admin-pin/forgot-pin — pide el reset del PIN de administrador. Interno:
+// exige estar logueado en esta cuenta (requireSeller) Y saber el email exacto que
+// tenemos cargado en admin_pin_email — mismo criterio que POST /me/members/:id/forgot-pin.
+const adminPinForgotSchema = z.object({ email: z.string().trim().email() });
+
+sellerRouter.post('/me/admin-pin/forgot-pin', authLimiter, async (req, res, next) => {
+  try {
+    const parsed = adminPinForgotSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Email inválido' });
+
+    const { rows } = await pool.query<{ name: string; admin_pin_email: string | null }>(
+      `SELECT name, admin_pin_email FROM sellers WHERE id = $1 LIMIT 1`,
+      [req.seller!.sellerId],
+    );
+    const seller = rows[0];
+    if (!seller?.admin_pin_email || seller.admin_pin_email.toLowerCase() !== parsed.data.email.trim().toLowerCase()) {
+      return res.status(400).json({ error: 'Ese no es el email que tenemos registrado para el PIN de administrador.' });
+    }
+
+    const token = await createAdminPinResetToken(req.seller!.sellerId);
+    const link = `${config.WEB_ORIGIN.replace(/\/$/, '')}/reset-admin-pin/${token}`;
+    sendSellerAdminPinReset(seller.name, seller.admin_pin_email, link)
+      .catch((e) => console.warn('[admin-pin forgot-pin] email send failed:', e));
+
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
 
 // GET /api/seller/me — perfil del vendedor + stats agregados
 sellerRouter.get('/me', async (req, res, next) => {
@@ -127,7 +212,10 @@ sellerRouter.get('/me', async (req, res, next) => {
          COALESCE(stats.commission_pending_ars, 0)::float AS commission_pending_ars,
          COALESCE(stats.net_pending_settlement_usd, 0)::float AS net_pending_settlement_usd,
          COALESCE(stats.net_pending_settlement_ars, 0)::float AS net_pending_settlement_ars,
-         COALESCE(notifs.unread_count, 0)::int AS unread_notifications
+         COALESCE(notifs.unread_count, 0)::int AS unread_notifications,
+         EXISTS(
+           SELECT 1 FROM seller_members m WHERE m.seller_id = s.id AND m.is_active = TRUE
+         ) AS has_active_team
        FROM sellers s
        LEFT JOIN LATERAL (
          SELECT
@@ -253,6 +341,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     if (!seller) return res.status(403).json({ error: 'Vendedor no encontrado o inactivo' });
 
     let sellerMemberId: number | null = null;
+    let sellerMemberName: string | null = null;
     if (input.seller_member_id != null) {
       if (!input.seller_member_pin) {
         return res.status(400).json({ error: 'Ingresá el PIN de la persona que cerró la venta.' });
@@ -260,6 +349,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       const resolved = await resolveSellerMember(seller.id, input.seller_member_id, input.seller_member_pin);
       if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
       sellerMemberId = resolved.memberId;
+      sellerMemberName = resolved.memberName;
     }
 
     // Pago en efectivo solo permitido para vendedores permanentes (is_permanent = true)
@@ -403,7 +493,9 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
 
     // ── Pago en efectivo ──────────────────────────────────
     if (input.payment_method === 'cash') {
-      await logPaymentEvent(order.id, 'cash_order_created_by_seller', null, { seller_code: seller.code });
+      await logPaymentEvent(order.id, 'cash_order_created_by_seller', null, {
+        seller_code: seller.code, seller_member_id: sellerMemberId, seller_member_name: sellerMemberName,
+      });
       sendCashOrderNotifications(order.id).catch((err) =>
         console.error('[email] sendCashOrderNotifications failed for seller order', order.id, err),
       );
@@ -606,7 +698,9 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
       );
     }
 
-    await logPaymentEvent(order.id, 'cash_collected_by_seller', null, { seller_id: req.seller!.sellerId, currency });
+    await logPaymentEvent(order.id, 'cash_collected_by_seller', null, {
+      seller_id: req.seller!.sellerId, currency, seller_member_id: memberCheck.memberId, seller_member_name: memberCheck.memberName,
+    });
 
     // Aviso en vivo al panel de órdenes del admin — el vendedor confirmó el cobro,
     // no el admin, así que le sirve enterarse sin recargar.
@@ -623,6 +717,43 @@ sellerRouter.post('/me/orders/:publicId/collect', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+const verifyMemberPinSchema = z.object({
+  seller_member_id: z.number().int().positive(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/),
+});
+
+// POST /api/seller/me/verify-member-pin — valida el PIN de un sub-vendedor sin
+// hacer ninguna acción de negocio. Sirve para que el portal pida el PIN una sola
+// vez por orden y reuse el resultado en las acciones siguientes (cobrar,
+// modificar, cancelar, asignar), en vez de volver a pedirlo en cada una.
+sellerRouter.post('/me/verify-member-pin', async (req, res, next) => {
+  try {
+    const parsed = verifyMemberPinSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+    const resolved = await resolveSellerMember(req.seller!.sellerId, parsed.data.seller_member_id, parsed.data.seller_member_pin);
+    if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
+    res.json({ data: { ok: true, member_id: resolved.memberId } });
+  } catch (err) { next(err); }
+});
+
+const verifyAdminPinSchema = z.object({
+  admin_pin: z.string().regex(/^\d{4,6}$/),
+});
+
+// POST /api/seller/me/verify-admin-pin — mismo propósito que verify-member-pin
+// pero para el PIN de administrador: lo valida sin ejecutar ninguna acción, así el
+// gate de arriba de la orden (OrderMemberGate) puede ofrecer "soy administrador"
+// como alternativa a identificarse como un sub-vendedor.
+sellerRouter.post('/me/verify-admin-pin', async (req, res, next) => {
+  try {
+    const parsed = verifyAdminPinSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+    const check = await requireAdminPin(req.seller!.sellerId, parsed.data.admin_pin);
+    if (!check.ok) return res.status(check.httpStatus).json({ error: check.error });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
 const attributionSchema = z.object({
   seller_member_id: z.number().int().positive().nullable(),
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
@@ -634,11 +765,13 @@ const attributionSchema = z.object({
 // crearse (ej. el pasajero pagó por Mercado Pago solo desde la habitación) y el hotel
 // se entera después de quién la asistió. Mandar seller_member_id: null la limpia.
 //
-// Quién autoriza depende del medio de pago (chequeado contra el pedido real en la
-// base, no contra lo que mande el cliente): en efectivo, la persona que toma la
-// orden se identifica con su PROPIO PIN — igual que al cobrar. En Mercado Pago/PIX
-// (o al limpiar la atribución, sea cual sea el medio) no hay quién se identifique en
-// persona, así que lo autoriza el PIN de ADMINISTRADOR del vendedor.
+// Dos formas de autorizar, según qué PIN mande el cliente: en efectivo, la persona
+// que toma la orden puede identificarse con su PROPIO PIN — igual que al cobrar
+// (manda seller_member_pin). Si no lo manda (Mercado Pago/PIX, limpiar la
+// atribución, o el administrador corrigiendo una venta en efectivo que no cerró él)
+// lo autoriza el PIN de ADMINISTRADOR del vendedor — y esa corrección queda anotada
+// en el historial de la orden como hecha por el administrador, distinto de cuando el
+// propio sub-vendedor se identifica.
 sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
@@ -658,18 +791,22 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
     if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
 
     let sellerMemberId: number | null = null;
-    if (order.payment_method === 'cash' && seller_member_id != null) {
-      if (!seller_member_pin) return res.status(400).json({ error: 'Ingresá tu PIN para tomar esta orden.' });
+    let sellerMemberName: string | null = null;
+    let assignedByAdmin = false;
+    if (order.payment_method === 'cash' && seller_member_id != null && seller_member_pin) {
       const resolved = await resolveSellerMember(req.seller!.sellerId, seller_member_id, seller_member_pin);
       if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
       sellerMemberId = resolved.memberId;
+      sellerMemberName = resolved.memberName;
     } else {
       const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
       if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+      assignedByAdmin = true;
       if (seller_member_id != null) {
         const member = await findActiveSellerMember(req.seller!.sellerId, seller_member_id);
         if (!member) return res.status(404).json({ error: 'No encontramos a esa persona en tu equipo.' });
         sellerMemberId = member.id;
+        sellerMemberName = member.name;
       }
     }
 
@@ -677,6 +814,20 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
       `UPDATE order_attributions SET seller_member_id = $2 WHERE order_id = $1`,
       [order.id, sellerMemberId],
     );
+    if (assignedByAdmin) {
+      await logPaymentEvent(order.id, 'attribution_set_by_admin', null, {
+        seller_member_id: sellerMemberId,
+        seller_member_name: sellerMemberName,
+      });
+    } else if (sellerMemberId != null) {
+      // Auto-tag: la propia persona se identificó con su PIN — a diferencia del
+      // camino de admin, esto no necesitaba corrección, pero igual queda anotado
+      // para la trazabilidad completa del historial.
+      await logPaymentEvent(order.id, 'attribution_set_by_member', null, {
+        seller_member_id: sellerMemberId,
+        seller_member_name: sellerMemberName,
+      });
+    }
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
@@ -689,6 +840,7 @@ const sellerIncreaseSchema = z.object({
   children: z.number().int().min(0).max(20),
   seller_member_id: z.number().int().positive().optional(),
   seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) => {
@@ -698,12 +850,14 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
     const parsed = sellerIncreaseSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
 
-    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+    const memberCheck = await resolveMemberOrAdmin(req.seller!.sellerId, parsed.data);
     if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
     const result = await createCashAddonForOrder({
       orderPublicId: publicId, adults: parsed.data.adults, children: parsed.data.children,
       restrictSellerId: req.seller!.sellerId,
+      actor: memberCheck.byAdmin ? 'admin' : 'seller',
+      actorMemberId: memberCheck.memberId, actorMemberName: memberCheck.memberName,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
     res.json({ data: result.data });
@@ -742,7 +896,10 @@ sellerRouter.post('/me/addons/:addonPublicId/collect', async (req, res, next) =>
     if (addon.payment_method !== 'cash') return res.status(400).json({ error: 'Esta ampliación no es en efectivo.' });
     if (addon.status !== 'pending') return res.status(409).json({ error: 'La ampliación ya fue procesada.' });
 
-    const r = await applyAddonPayment(addonPublicId, null);
+    const r = await applyAddonPayment(
+      addonPublicId, null,
+      memberCheck.memberId != null ? { id: memberCheck.memberId, name: memberCheck.memberName ?? '' } : null,
+    );
     if (!r.applied) return res.status(409).json({ error: 'No se pudo aplicar la ampliación.' });
     if (r.closedOrder) {
       return res.status(409).json({ error: 'La reserva ya se había cerrado (reintegrada/cancelada) antes de este cobro — no se sumó el pasajero extra. Queda registrado para revisión manual.' });
@@ -769,7 +926,9 @@ sellerRouter.post('/me/addons/:addonPublicId/cancel', async (req, res, next) => 
     if (!addon || addon.seller_id !== req.seller!.sellerId) return res.status(404).json({ error: 'Ampliación no encontrada' });
     const orderId = await cancelAddon(addonPublicId);
     if (orderId == null) return res.status(409).json({ error: 'La ampliación no está pendiente.' });
-    await logPaymentEvent(orderId, 'addon_cancelled', null, { addon_public_id: addonPublicId, seller_member_id: memberCheck.memberId });
+    await logPaymentEvent(orderId, 'addon_cancelled', null, {
+      addon_public_id: addonPublicId, seller_member_id: memberCheck.memberId, seller_member_name: memberCheck.memberName,
+    });
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }
 });
@@ -788,6 +947,7 @@ const sellerReduceSchema = z.object({
   reschedule_to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   seller_member_id: z.number().int().positive().optional(),
   seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => {
@@ -798,7 +958,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     const parsed = sellerReduceSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
 
-    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+    const memberCheck = await resolveMemberOrAdmin(req.seller!.sellerId, parsed.data);
     if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
     const { rows } = await pool.query<{
@@ -880,7 +1040,9 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       newCommissionArs,
       newNetTotalUsd: cash.newNetTotalUsd,
       noteLine,
-      actor: 'seller',
+      actor: memberCheck.byAdmin ? 'admin' : 'seller',
+      actorMemberId: memberCheck.memberId,
+      actorMemberName: memberCheck.memberName,
     });
 
     if (parsed.data.notify_customer !== false) {
@@ -933,6 +1095,7 @@ const sellerCancelSchema = z.object({
   reason: z.string().max(500).nullish(),
   seller_member_id: z.number().int().positive().optional(),
   seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
@@ -944,7 +1107,7 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     const reason = parsed.data.reason ?? null;
 
-    const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+    const memberCheck = await resolveMemberOrAdmin(req.seller!.sellerId, parsed.data);
     if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
     const { rows } = await pool.query<{
@@ -990,7 +1153,8 @@ sellerRouter.post('/me/orders/:publicId/cancel', async (req, res, next) => {
       return res.status(409).json({ error: 'La reserva ya fue procesada anteriormente' });
     }
     await logPaymentEvent(row.order_id, 'order_cancelled', null, {
-      actor: 'seller', seller_id: req.seller!.sellerId, seller_member_id: memberCheck.memberId, reason,
+      actor: memberCheck.byAdmin ? 'admin' : 'seller', seller_id: req.seller!.sellerId,
+      seller_member_id: memberCheck.memberId, seller_member_name: memberCheck.memberName, reason,
     });
 
     // Notificar al cliente y al admin — el cliente debe coordinar devolución con el vendedor
@@ -1013,6 +1177,7 @@ const sellerRescheduleSchema = z.object({
   notify_customer: z.boolean().optional(),
   seller_member_id: z.number().int().positive().optional(),
   seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
@@ -1021,7 +1186,7 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
   const parsed = sellerRescheduleSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
 
-  const memberCheck = await requireMemberIfTeamExists(req.seller!.sellerId, parsed.data);
+  const memberCheck = await resolveMemberOrAdmin(req.seller!.sellerId, parsed.data);
   if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
 
   const { new_date, reason, notify_customer } = parsed.data;
@@ -1120,7 +1285,8 @@ sellerRouter.post('/me/orders/:publicId/reschedule', async (req, res, next) => {
     await client.query('COMMIT');
 
     await logPaymentEvent(row.order_id, 'order_rescheduled', null, {
-      prev_date: row.service_date, new_date, actor: 'seller',
+      prev_date: row.service_date, new_date, actor: memberCheck.byAdmin ? 'admin' : 'seller',
+      seller_member_id: memberCheck.memberId, seller_member_name: memberCheck.memberName,
       reason: reason ?? null, notify: notify_customer ?? true,
     });
 

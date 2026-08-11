@@ -753,6 +753,13 @@ export const adminApi = {
       }),
     // Sub-vendedores (ej. conserjes) que el vendedor cargó en su equipo — solo lectura.
     members: (id: number) => request<AdminSellerMember[]>(`/api/admin/sellers/${id}/members`),
+    // Blanqueo de emergencia (solo super_admin): genera un PIN nuevo para un
+    // sub-vendedor puntual sin depender del vendedor ni de su email cargado.
+    resetMemberPin: (sellerId: number, memberId: number) =>
+      request<{ id: number; name: string; pin: string }>(
+        `/api/admin/sellers/${sellerId}/members/${memberId}/reset-pin`,
+        { method: 'POST' },
+      ),
   },
   orders: {
     create: (input: AdminBookingInput) =>

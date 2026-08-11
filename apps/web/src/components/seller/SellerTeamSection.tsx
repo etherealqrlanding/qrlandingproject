@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { sellerApi, SellerApiError, type SellerMemberStats } from '../../lib/sellerApi';
+import { sellerApi, SellerApiError, type SellerMemberStats, type SellerAdminPinInfo } from '../../lib/sellerApi';
 
 function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 }
 
-type RowAction = { id: number; kind: 'pin' | 'toggle' | 'forgot' } | null;
+type RowAction = { id: number; kind: 'pin' | 'toggle' | 'forgot' | 'delete' } | null;
 
 // Autogestión de "mi equipo": sub-vendedores (ej. conserjes de un hotel) que venden
 // bajo mi mismo código/QR. No tienen login propio — solo un PIN corto para firmar,
@@ -41,6 +41,28 @@ export default function SellerTeamSection() {
   const [toggleAdminPin, setToggleAdminPin] = useState('');
   // Olvidé mi PIN: confirmar el email para pedir el link de reset por su cuenta.
   const [forgotEmail, setForgotEmail] = useState('');
+  // Eliminar (borrado real, no desactivar): solo vale el PIN de administrador, y
+  // solo si la persona nunca tuvo ventas atribuidas (el backend es quien lo garantiza).
+  const [deletePin, setDeletePin] = useState('');
+
+  // ── ADMIN de la cuenta: el PIN que gatea alta/edición/borrado de todo el equipo.
+  // Autogestión con el PIN actual; si lo perdió del todo y ya tiene email cargado,
+  // puede pedir el reset por link (igual que un sub-vendedor con su propio PIN).
+  const [adminInfo, setAdminInfo] = useState<SellerAdminPinInfo | null>(null);
+  const [adminInfoError, setAdminInfoError] = useState<string | null>(null);
+  const [adminEditing, setAdminEditing] = useState(false);
+  const [adminNewPin, setAdminNewPin] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminCurrentPin, setAdminCurrentPin] = useState('');
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminSaveError, setAdminSaveError] = useState<string | null>(null);
+  const [adminSaveSuccess, setAdminSaveSuccess] = useState(false);
+  // Olvidé el PIN de administrador: confirmar el email para pedir el link de reset.
+  const [adminForgotOpen, setAdminForgotOpen] = useState(false);
+  const [adminForgotEmail, setAdminForgotEmail] = useState('');
+  const [adminForgotBusy, setAdminForgotBusy] = useState(false);
+  const [adminForgotError, setAdminForgotError] = useState<string | null>(null);
+  const [adminForgotSuccess, setAdminForgotSuccess] = useState<string | null>(null);
 
   const load = () => {
     sellerApi.members.stats()
@@ -48,7 +70,14 @@ export default function SellerTeamSection() {
       .catch((err) => setError((err as SellerApiError).message));
   };
 
+  const loadAdminInfo = () => {
+    sellerApi.adminPin.get()
+      .then(setAdminInfo)
+      .catch((err) => setAdminInfoError((err as SellerApiError).message));
+  };
+
   useEffect(load, []);
+  useEffect(loadAdminInfo, []);
 
   const closeRowAction = () => {
     setRowAction(null);
@@ -59,6 +88,81 @@ export default function SellerTeamSection() {
     setEditEmail('');
     setToggleAdminPin('');
     setForgotEmail('');
+    setDeletePin('');
+  };
+
+  const openAdminEdit = () => {
+    setAdminEditing(true);
+    setAdminSaveError(null);
+    setAdminNewPin('');
+    setAdminEmail(adminInfo?.email ?? '');
+    setAdminCurrentPin('');
+  };
+
+  const closeAdminEdit = () => {
+    setAdminEditing(false);
+    setAdminSaveError(null);
+    setAdminNewPin('');
+    setAdminEmail('');
+    setAdminCurrentPin('');
+  };
+
+  const handleSaveAdminPin = async () => {
+    if (!adminInfo) return;
+    const trimmedEmail = adminEmail.trim();
+    const emailChanged = trimmedEmail !== (adminInfo.email ?? '');
+    if (!adminNewPin && !emailChanged) return setAdminSaveError('Cambiá el PIN y/o el email antes de guardar.');
+    if (adminNewPin && !/^\d{4,6}$/.test(adminNewPin)) return setAdminSaveError('El nuevo PIN debe tener entre 4 y 6 dígitos.');
+
+    const settingEmailFirstTime = !adminInfo.email && emailChanged && trimmedEmail !== '' && !adminNewPin;
+    if (!settingEmailFirstTime && !/^\d{4,6}$/.test(adminCurrentPin)) {
+      return setAdminSaveError('Ingresá el PIN de administrador actual.');
+    }
+
+    setAdminSaving(true);
+    setAdminSaveError(null);
+    try {
+      const updated = await sellerApi.adminPin.update({
+        ...(adminNewPin ? { pin: adminNewPin } : {}),
+        ...(emailChanged ? { email: trimmedEmail || null } : {}),
+        ...(settingEmailFirstTime ? {} : { current_pin: adminCurrentPin }),
+      });
+      setAdminInfo(updated);
+      closeAdminEdit();
+      setAdminSaveSuccess(true);
+      setTimeout(() => setAdminSaveSuccess(false), 2500);
+    } catch (err) {
+      setAdminSaveError((err as SellerApiError).message);
+    } finally {
+      setAdminSaving(false);
+    }
+  };
+
+  const openAdminForgot = () => {
+    setAdminForgotOpen(true);
+    setAdminForgotError(null);
+    setAdminForgotSuccess(null);
+    setAdminForgotEmail('');
+  };
+
+  const closeAdminForgot = () => {
+    setAdminForgotOpen(false);
+    setAdminForgotError(null);
+    setAdminForgotEmail('');
+  };
+
+  const handleAdminForgotPin = async () => {
+    setAdminForgotError(null);
+    if (!adminForgotEmail.trim()) return setAdminForgotError('Ingresá el email.');
+    setAdminForgotBusy(true);
+    try {
+      await sellerApi.adminPin.forgotPin(adminForgotEmail.trim());
+      setAdminForgotSuccess('Listo — si el email coincide, te va a llegar un link para elegir un PIN nuevo.');
+    } catch (err) {
+      setAdminForgotError((err as SellerApiError).message);
+    } finally {
+      setAdminForgotBusy(false);
+    }
   };
 
   const handleAdd = async () => {
@@ -143,6 +247,20 @@ export default function SellerTeamSection() {
     }
   };
 
+  const handleDeleteMember = async (m: SellerMemberStats) => {
+    if (!/^\d{4,6}$/.test(deletePin)) return setRowError('Ingresá el PIN de administrador.');
+    setBusyId(m.id);
+    try {
+      await sellerApi.members.delete(m.id, deletePin);
+      closeRowAction();
+      load();
+    } catch (err) {
+      setRowError((err as SellerApiError).message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <section>
       <div className="flex items-center justify-between mb-1">
@@ -158,9 +276,134 @@ export default function SellerTeamSection() {
       <p className="text-cream/50 text-xs mb-4">
         Si trabajás con más gente bajo tu mismo código (ej. conserjes), cargalos acá para que cada uno pueda
         firmar con su PIN qué venta cerró. No es un login — solo queda registrado en la venta para tu propio control.
-        Cada quien puede cambiar su propio PIN ingresándolo; agregar gente nueva o activar/desactivar requiere el
-        PIN de administrador (te lo damos nosotros).
+        Cada quien puede cambiar su propio PIN ingresándolo; agregar gente nueva, activar/desactivar o eliminar
+        requiere el PIN de administrador (te lo damos nosotros).
       </p>
+
+      {/* ── ADMIN de la cuenta: el PIN que gatea el resto de estas operaciones ── */}
+      <div className="mb-4 rounded-xl border border-gold/25 bg-ink-soft/40 p-3.5">
+        <div className="sm:flex sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold tracking-wider border border-gold/40 bg-gold/10 text-gold-soft">ADMIN</span>
+              <p className="text-cream text-sm font-medium">Administrador de la cuenta</p>
+            </div>
+            {adminInfoError && <p className="text-xs text-bordeaux-light mt-1">{adminInfoError}</p>}
+            {adminInfo && (
+              <p className="text-xs text-cream/45 mt-0.5">
+                {adminInfo.has_admin_pin ? 'PIN configurado' : 'Sin PIN configurado — contactanos para activarlo'}
+                {adminInfo.email && <> · {adminInfo.email}</>}
+              </p>
+            )}
+          </div>
+          {adminInfo?.has_admin_pin && !adminEditing && (
+            <div className="flex items-center gap-3 mt-2 sm:mt-0 shrink-0">
+              <button
+                type="button"
+                onClick={openAdminEdit}
+                className="text-xs text-gold-soft hover:text-gold transition underline underline-offset-2"
+              >
+                Editar
+              </button>
+              {adminInfo.email && !adminForgotOpen && (
+                <button
+                  type="button"
+                  onClick={openAdminForgot}
+                  className="text-xs text-cream/40 hover:text-cream/70 transition underline underline-offset-2"
+                >
+                  ¿Olvidaste el PIN?
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {adminForgotOpen && (
+          <div className="mt-3 pt-3 border-t border-gold/10">
+            {!adminForgotSuccess ? (
+              <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                <input
+                  value={adminForgotEmail}
+                  onChange={(e) => setAdminForgotEmail(e.target.value)}
+                  type="email"
+                  placeholder="Confirmá el email"
+                  autoFocus
+                  className="w-full sm:w-64 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                />
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleAdminForgotPin}
+                    disabled={adminForgotBusy}
+                    className="rounded-lg bg-gold px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-gold/90 transition disabled:opacity-50"
+                  >
+                    Enviar
+                  </button>
+                  <button type="button" onClick={closeAdminForgot} className="text-xs text-cream/40 hover:text-cream/70 transition">✕</button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-emerald-400">✓ {adminForgotSuccess}</p>
+            )}
+            {adminForgotError && <p className="text-[10px] text-bordeaux-light mt-2">⚠ {adminForgotError}</p>}
+          </div>
+        )}
+
+        {adminEditing && (() => {
+          const settingEmailFirstTime = !adminInfo?.email && adminEmail.trim() !== '' && !adminNewPin;
+          return (
+            <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  value={adminNewPin}
+                  onChange={(e) => setAdminNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Nuevo PIN (opcional)"
+                  inputMode="numeric"
+                  autoFocus
+                  className="w-full sm:w-40 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                />
+                <input
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  type="email"
+                  placeholder="Email (opcional)"
+                  className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                />
+              </div>
+              {!adminInfo?.email && (
+                <p className="text-[10px] text-cream/35">
+                  {settingEmailFirstTime
+                    ? 'Como todavía no tiene email cargado, esto se guarda sin pedir PIN.'
+                    : 'Cargarle un email por primera vez no pide PIN.'}
+                </p>
+              )}
+              {!settingEmailFirstTime && (
+                <input
+                  value={adminCurrentPin}
+                  onChange={(e) => setAdminCurrentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="PIN de administrador actual"
+                  inputMode="numeric"
+                  className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                />
+              )}
+              {adminSaveError && <p className="text-[10px] text-bordeaux-light">⚠ {adminSaveError}</p>}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSaveAdminPin}
+                  disabled={adminSaving}
+                  className="rounded-lg bg-gold px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-gold/90 transition disabled:opacity-50"
+                >
+                  {adminSaving ? 'Guardando...' : 'Guardar'}
+                </button>
+                <button type="button" onClick={closeAdminEdit} className="text-xs text-cream/40 hover:text-cream/70 transition">Cancelar</button>
+              </div>
+            </div>
+          );
+        })()}
+
+        {adminSaveSuccess && <p className="text-xs text-emerald-400 mt-2">✓ Actualizado.</p>}
+      </div>
 
       {showAdd && (
         <div className="mb-4 rounded-xl border border-gold/20 bg-ink-soft/40 p-4 space-y-3">
@@ -283,6 +526,18 @@ export default function SellerTeamSection() {
                         ¿Olvidó su PIN?
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isOpen && rowAction?.kind === 'delete') { closeRowAction(); return; }
+                        setRowAction({ id: m.id, kind: 'delete' });
+                        setRowError(null);
+                        setDeletePin('');
+                      }}
+                      className="text-xs text-bordeaux-light/70 hover:text-bordeaux-light transition underline underline-offset-2"
+                    >
+                      Eliminar
+                    </button>
                   </div>
                 </div>
 
@@ -391,6 +646,35 @@ export default function SellerTeamSection() {
                     ) : (
                       <p className="text-xs text-emerald-400">✓ {rowSuccess}</p>
                     )}
+                  </div>
+                )}
+
+                {isOpen && rowAction?.kind === 'delete' && (
+                  <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+                    <p className="text-[11px] text-bordeaux-light/90">
+                      Borra a {m.name} de tu equipo. Si ya tiene ventas registradas, no se va a poder — desactivala en su lugar.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                      <input
+                        value={deletePin}
+                        onChange={(e) => setDeletePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="PIN de administrador"
+                        inputMode="numeric"
+                        autoFocus
+                        className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMember(m)}
+                          disabled={busyId === m.id}
+                          className="rounded-lg bg-bordeaux-light/90 px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-bordeaux-light transition disabled:opacity-50"
+                        >
+                          {busyId === m.id ? 'Eliminando...' : 'Confirmar borrado'}
+                        </button>
+                        <button type="button" onClick={closeRowAction} className="text-xs text-cream/40 hover:text-cream/70 transition">✕</button>
+                      </div>
+                    </div>
                   </div>
                 )}
 

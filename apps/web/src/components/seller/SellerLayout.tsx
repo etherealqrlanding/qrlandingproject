@@ -7,7 +7,9 @@ import { buildShareUrl } from '../../lib/shareLinks';
 import BottomNavSeller from './BottomNavSeller';
 import Logo from '../Logo';
 
-const NAV = [
+interface NavItem { to: string; label: string; icon: string; end?: boolean }
+
+const NAV: NavItem[] = [
   { to: '/seller', label: 'Resumen', icon: '◆', end: true },
   { to: '/seller/catalogo', label: 'Catálogo', icon: '◈' },
   { to: '/seller/nueva-reserva', label: 'Nueva Reserva', icon: '＋' },
@@ -18,6 +20,10 @@ const NAV = [
   { to: '/seller/archivo', label: 'Archivo', icon: '📁' },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
+
+// Solo aparece si el vendedor tiene sub-vendedores activos cargados — antes de eso
+// "Mi equipo" se autogestiona desde Configuración, ver SellerSettings.
+const NAV_TEAM: NavItem = { to: '/seller/equipo', label: 'Mi Equipo', icon: '👥' };
 
 const FALLBACK_POLL_MS = 10_000;
 const SSE_RECONNECT_MS = 5_000;
@@ -35,7 +41,11 @@ export default function SellerLayout() {
     localStorage.setItem('seller_sidebar_collapsed', collapsed ? '1' : '0');
   }, [collapsed]);
   const navRef = useRef<HTMLElement>(null);
-  const navIndicator = useNavIndicator(navRef, [location.pathname, collapsed]);
+  const hasTeam = me?.has_active_team ?? false;
+  const navItems = hasTeam
+    ? [...NAV.slice(0, 4), NAV_TEAM, ...NAV.slice(4)]
+    : NAV;
+  const navIndicator = useNavIndicator(navRef, [location.pathname, collapsed, hasTeam]);
   const esRef = useRef<EventSource | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,18 +200,18 @@ export default function SellerLayout() {
           <span className={`inline-block text-xs transition-transform ${collapsed ? 'rotate-180' : ''}`}>‹</span>
         </button>
 
-        <div className={`border-b border-gold/10 ${collapsed ? 'px-3 py-5 flex justify-center' : 'px-6 py-5'}`}>
+        <div className={`border-b border-gold/10 ${collapsed ? 'px-3 py-3 flex justify-center' : 'px-5 py-3.5'}`}>
           {collapsed ? (
-            <img src="/icon-512.png" alt="" className="h-8 w-8 object-contain" />
+            <img src="/icon-512.png" alt="" className="h-7 w-7 object-contain" />
           ) : (
             <>
-              <Logo className="h-9 w-auto" />
-              <p className="text-xs text-cream/50 mt-2">Portal de vendedores</p>
+              <Logo className="h-8 w-auto" />
+              <p className="text-[11px] text-cream/50 mt-1">Portal de vendedores</p>
             </>
           )}
         </div>
 
-        <nav ref={navRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 relative">
+        <nav ref={navRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-2.5 space-y-0.5 relative">
           {navIndicator && (
             <div
               aria-hidden
@@ -209,7 +219,7 @@ export default function SellerLayout() {
               style={{ top: navIndicator.top, height: navIndicator.height }}
             />
           )}
-          {NAV.map((item) => {
+          {navItems.map((item) => {
             const isNotifItem = item.to === '/seller/notificaciones';
             return (
               <NavLink
@@ -218,7 +228,7 @@ export default function SellerLayout() {
                 end={item.end}
                 title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  `relative z-10 flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${collapsed ? 'justify-center' : ''} ${
+                  `relative z-10 flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition ${collapsed ? 'justify-center' : ''} ${
                     isActive
                       ? 'text-gold'
                       : 'text-cream/70 hover:bg-gold/5 hover:text-cream'
@@ -242,27 +252,26 @@ export default function SellerLayout() {
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-gold/10">
+        <div className="px-3 py-2.5 border-t border-gold/10">
           <button
             type="button"
             onClick={handlePreviewSite}
             title={collapsed ? 'Ver sitio' : undefined}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-3 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition"
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-2 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition"
           >
             {collapsed ? '↗' : <>Ver sitio ↗</>}
           </button>
           {me && !collapsed && (
-            <div className="px-3 mb-3">
-              <p className="text-xs text-cream/50">Conectado como</p>
+            <div className="px-3 mb-2 flex items-baseline justify-between gap-2">
               <p className="text-sm text-cream truncate">{me.name}</p>
-              <p className="text-[10px] font-mono uppercase tracking-wider text-gold-soft">{me.code}</p>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-gold-soft shrink-0">{me.code}</p>
             </div>
           )}
           <button
             type="button"
             onClick={handleSignOut}
             title={collapsed ? 'Cerrar sesión' : undefined}
-            className={`w-full px-3 py-2 rounded-md text-sm text-cream/60 hover:bg-bordeaux-deep/30 hover:text-cream transition ${collapsed ? 'text-center' : 'text-left'}`}
+            className={`w-full px-3 py-1.5 rounded-md text-sm text-cream/60 hover:bg-bordeaux-deep/30 hover:text-cream transition ${collapsed ? 'text-center' : 'text-left'}`}
           >
             {collapsed ? '⏻' : 'Cerrar sesión'}
           </button>

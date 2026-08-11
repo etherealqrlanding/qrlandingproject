@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 
 // PIN corto (4-6 dígitos) para que un sub-vendedor (ej. conserje de un hotel) se
 // identifique al cargar o cobrar una venta — es una firma de honestidad interna
@@ -17,4 +17,12 @@ export function verifyPin(pin: string, stored: string): boolean {
   const expected = Buffer.from(hash, 'hex');
   if (candidate.length !== expected.length) return false;
   return timingSafeEqual(candidate, expected);
+}
+
+// PIN aleatorio de 4 dígitos para el blanqueo de emergencia que hace un super_admin
+// desde el panel interno (ver resetSellerMemberPinByAdmin) — usa el generador
+// criptográfico, no Math.random(), porque termina siendo la credencial real hasta
+// que la persona lo cambie.
+export function generatePin(): string {
+  return String(randomInt(1000, 10000));
 }

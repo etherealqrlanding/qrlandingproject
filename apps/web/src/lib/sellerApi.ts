@@ -144,6 +144,7 @@ export interface SellerMe {
   net_pending_settlement_usd: number;
   net_pending_settlement_ars: number;
   unread_notifications: number;
+  has_active_team: boolean;
 }
 
 export interface SellerOrder {
@@ -195,6 +196,11 @@ export interface SellerMember {
 export interface SellerMemberStats extends SellerMember {
   orders_paid: number;
   revenue_paid_ars: number;
+}
+
+export interface SellerAdminPinInfo {
+  has_admin_pin: boolean;
+  email: string | null;
 }
 
 export interface SellerBookingInput {
@@ -344,6 +350,16 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify({ currency, ...member }),
     }),
+  verifyMemberPin: (sellerMemberId: number, pin: string) =>
+    request<{ ok: true; member_id: number }>('/api/seller/me/verify-member-pin', {
+      method: 'POST',
+      body: JSON.stringify({ seller_member_id: sellerMemberId, seller_member_pin: pin }),
+    }),
+  verifyAdminPin: (pin: string) =>
+    request<{ ok: true }>('/api/seller/me/verify-admin-pin', {
+      method: 'POST',
+      body: JSON.stringify({ admin_pin: pin }),
+    }),
   setOrderAttribution: (publicId: string, sellerMemberId: number | null, pin: string, pinType: 'admin' | 'member') =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution`, {
       method: 'PATCH',
@@ -359,6 +375,9 @@ export const sellerApi = {
       request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, pin, email: email || undefined, admin_pin: adminPin }) }),
     update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; email?: string | null; admin_pin?: string; current_pin?: string }) =>
       request<SellerMember>(`/api/seller/me/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    // Borrado real (no desactivar) — solo si nunca tuvo ventas atribuidas, ver backend.
+    delete: (id: number, adminPin: string) =>
+      request<{ ok: true }>(`/api/seller/me/members/${id}`, { method: 'DELETE', body: JSON.stringify({ admin_pin: adminPin }) }),
     // Interno: hay que estar logueado en esta cuenta de vendedor y saber el email
     // exacto que tenemos cargado para esa persona (ver POST /me/members/:id/forgot-pin).
     forgotPin: (id: number, email: string) =>
@@ -371,12 +390,30 @@ export const sellerApi = {
         method: 'POST', body: JSON.stringify({ new_pin: newPin }),
       }),
   },
-  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string; seller_member_id?: number; seller_member_pin?: string }) =>
+  // PIN de administrador — visible como "ADMIN" en Mi equipo. Autogestión con el PIN
+  // actual (cambiarlo, cargar/editar el email de contacto); si se pierde del todo y
+  // ya tiene email cargado, puede pedir el reset por link (forgotPin/resetPin*) — si
+  // no tiene email, eso lo resuelve el equipo desde el panel interno.
+  adminPin: {
+    get: () => request<SellerAdminPinInfo>('/api/seller/me/admin-pin'),
+    update: (body: { pin?: string; email?: string | null; current_pin?: string }) =>
+      request<SellerAdminPinInfo>('/api/seller/me/admin-pin', { method: 'PATCH', body: JSON.stringify(body) }),
+    forgotPin: (email: string) =>
+      request<{ ok: true }>('/api/seller/me/admin-pin/forgot-pin', { method: 'POST', body: JSON.stringify({ email }) }),
+    // Públicos — completar el reset con el link del email no requiere sesión.
+    resetPinPreview: (token: string) =>
+      publicRequest<{ seller_name: string }>(`/api/seller/admin-pin/reset-pin/${encodeURIComponent(token)}`),
+    resetPin: (token: string, newPin: string) =>
+      publicRequest<{ ok: true }>(`/api/seller/admin-pin/reset-pin/${encodeURIComponent(token)}`, {
+        method: 'POST', body: JSON.stringify({ new_pin: newPin }),
+      }),
+  },
+  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_requested: boolean; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reduce-cash`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string }) =>
+  increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/increase-cash`,
       { method: 'POST', body: JSON.stringify(body) },
@@ -392,12 +429,12 @@ export const sellerApi = {
       `/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/collect`, { method: 'POST', body: JSON.stringify(member ?? {}) }),
   cancelAddon: (addonPublicId: string, member?: { seller_member_id: number; seller_member_pin: string }) =>
     request<{ ok: true }>(`/api/seller/me/addons/${encodeURIComponent(addonPublicId)}/cancel`, { method: 'POST', body: JSON.stringify(member ?? {}) }),
-  reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string }) =>
+  reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true; prev_date: string; new_date: string }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reschedule`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  cancelOrder: (publicId: string, reason?: string, member?: { seller_member_id: number; seller_member_pin: string }) =>
+  cancelOrder: (publicId: string, reason?: string, member?: { seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/cancel`, {
       method: 'POST',
       body: JSON.stringify({ reason: reason ?? null, ...member }),
