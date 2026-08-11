@@ -22,7 +22,7 @@ const MORE_BASE = [
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
-// Solo si el vendedor tiene sub-vendedores activos cargados — ver SellerLayout.
+// Solo si el admin habilitó "Mi equipo" para esta cuenta — ver SellerLayout.
 const NAV_TEAM = { to: '/seller/equipo', label: 'Mi Equipo', icon: '👥' };
 
 export default function BottomNavSeller({ unread }: Readonly<Props>) {
@@ -34,7 +34,7 @@ export default function BottomNavSeller({ unread }: Readonly<Props>) {
   // propios links), lo cerramos — evita que quede colgado sobre la pantalla nueva.
   useEffect(() => { setMoreOpen(false); }, [location.pathname]);
 
-  const MORE = me?.has_active_team ? [NAV_TEAM, ...MORE_BASE] : MORE_BASE;
+  const MORE = me?.team_enabled ? [NAV_TEAM, ...MORE_BASE] : MORE_BASE;
   const moreActive = MORE.some((item) => location.pathname.startsWith(item.to));
 
   return (

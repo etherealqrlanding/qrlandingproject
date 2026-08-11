@@ -28,6 +28,7 @@ const sellerSchema = z.object({
   is_permanent: z.boolean().optional(),
   is_house: z.boolean().optional(),
   landing_customization_enabled: z.boolean().optional(),
+  team_enabled: z.boolean().optional(),
 });
 
 adminSellersRouter.get('/', async (_req, res, next) => {

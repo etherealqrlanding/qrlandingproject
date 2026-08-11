@@ -144,7 +144,10 @@ export interface SellerMe {
   net_pending_settlement_usd: number;
   net_pending_settlement_ars: number;
   unread_notifications: number;
-  has_active_team: boolean;
+  // "Mi equipo" (sub-vendedores) habilitado por el admin para esta cuenta — ver
+  // sellers.team_enabled. Apagado, el vendedor no ve "Mi Equipo" en el nav ni puede
+  // usar sus rutas, pero nada de lo que ya cargó se borra.
+  team_enabled: boolean;
 }
 
 export interface SellerOrder {

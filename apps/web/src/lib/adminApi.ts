@@ -313,6 +313,7 @@ export interface AdminSeller {
   is_house: boolean;
   has_admin_pin?: boolean;
   landing_customization_enabled?: boolean;
+  team_enabled?: boolean;
   created_at: string;
   supabase_user_id?: string | null;
   orders_total?: number;

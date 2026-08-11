@@ -77,9 +77,14 @@ export default function TeamAdminPinSection({ seller, onUpdated }: Readonly<Prop
         <div>
           <p className="text-sm font-medium text-cream/90 mb-1">PIN de administrador — Mi equipo</p>
           <p className="text-xs text-cream/50 max-w-md">
-            Habilita al vendedor a crear y editar sub-vendedores (ej. conserjes) en su portal, en "Configuración → Mi equipo".
+            Habilita al vendedor a crear y editar sub-vendedores (ej. conserjes) en su portal, en "Mi Equipo".
             Sin este PIN, solo puede ver a su equipo, no darlo de alta ni activar/desactivar a nadie.
           </p>
+          {!seller.team_enabled && (
+            <p className="mt-2 text-xs text-amber-400">
+              "Mi equipo" está deshabilitado para esta cuenta — activá "Habilitar 'Mi equipo' (sub-vendedores)" arriba para que el vendedor pueda usarlo.
+            </p>
+          )}
           {seller.has_admin_pin ? (
             <p className="mt-2 text-xs text-emerald-400">✓ Ya tiene un PIN configurado.</p>
           ) : (

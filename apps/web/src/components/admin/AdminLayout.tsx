@@ -159,18 +159,18 @@ export default function AdminLayout() {
           <span className={`inline-block text-xs transition-transform ${collapsed ? 'rotate-180' : ''}`}>‹</span>
         </button>
 
-        <div className={`border-b border-gold/10 ${collapsed ? 'px-3 py-5 flex justify-center' : 'px-6 py-5'}`}>
+        <div className={`border-b border-gold/10 ${collapsed ? 'px-3 py-3 flex justify-center' : 'px-5 py-3.5'}`}>
           {collapsed ? (
-            <img src="/icon-512.png" alt="" className="h-8 w-8 object-contain" />
+            <img src="/icon-512.png" alt="" className="h-7 w-7 object-contain" />
           ) : (
             <>
-              <Logo className="h-9 w-auto" />
-              <p className="text-xs text-cream/50 mt-2">Panel administrativo</p>
+              <Logo className="h-8 w-auto" />
+              <p className="text-[11px] text-cream/50 mt-1">Panel administrativo</p>
             </>
           )}
         </div>
 
-        <nav ref={navRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 relative">
+        <nav ref={navRef} className="flex-1 min-h-0 overflow-y-auto px-3 py-2.5 space-y-0.5 relative">
           {navIndicator && (
             <div
               aria-hidden
@@ -185,7 +185,7 @@ export default function AdminLayout() {
               end={item.end}
               title={collapsed ? item.label : undefined}
               className={({ isActive }) =>
-                `relative z-10 flex items-center gap-3 px-3 py-2 rounded-md text-sm transition ${collapsed ? 'justify-center' : ''} ${
+                `relative z-10 flex items-center gap-3 px-3 py-1.5 rounded-md text-sm transition ${collapsed ? 'justify-center' : ''} ${
                   isActive
                     ? 'text-gold'
                     : 'text-cream/70 hover:bg-gold/5 hover:text-cream'
@@ -214,20 +214,19 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        <div className="px-3 py-4 border-t border-gold/10">
+        <div className="px-3 py-2.5 border-t border-gold/10">
           <button
             type="button"
             onClick={handlePreviewSite}
             disabled={previewLoading}
             title={collapsed ? 'Ver sitio' : undefined}
-            className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-3 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 mb-2 rounded-md border border-gold/25 bg-gold/5 text-sm text-gold-soft hover:bg-gold/15 transition disabled:opacity-50"
           >
             {collapsed ? '↗' : (previewLoading ? 'Abriendo...' : <>Ver sitio ↗</>)}
           </button>
           {me && !collapsed && (
-            <div className="px-3 mb-3">
-              <p className="text-xs text-cream/50">Conectado como</p>
-              <p className="text-sm text-cream truncate">{me.admin.email}</p>
+            <div className="px-3 mb-2">
+              <p className="text-sm text-cream break-all">{me.admin.email}</p>
               <p className="text-[10px] uppercase tracking-wider text-gold-soft">{me.admin.role}</p>
             </div>
           )}
@@ -235,7 +234,7 @@ export default function AdminLayout() {
             type="button"
             onClick={handleSignOut}
             title={collapsed ? 'Cerrar sesión' : undefined}
-            className={`w-full px-3 py-2 rounded-md text-sm text-cream/60 hover:bg-bordeaux-deep/30 hover:text-cream transition ${collapsed ? 'text-center' : 'text-left'}`}
+            className={`w-full px-3 py-1.5 rounded-md text-sm text-cream/60 hover:bg-bordeaux-deep/30 hover:text-cream transition ${collapsed ? 'text-center' : 'text-left'}`}
           >
             {collapsed ? '⏻' : 'Cerrar sesión'}
           </button>

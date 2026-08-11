@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import type { PoolClient } from 'pg';
 import { RouteValidationError } from '../../errors.js';
 import { requireSeller } from '../../middleware/requireSeller.js';
+import { requireTeamEnabled } from '../../middleware/requireTeamEnabled.js';
 import { pool } from '../../db.js';
 import { listSellerOrders } from '../../repos/sellers.js';
 import {
@@ -129,7 +130,8 @@ sellerRouter.use(requireSeller);
 // Mi equipo: sub-vendedores (ej. conserjes) que comparten mi código/QR. Alta/baja y
 // stats de "quién vendió qué" dentro de mi cuenta — solo trazabilidad interna, no
 // afecta comisión ni liquidación (esas siguen siendo 100% a nivel de este vendedor).
-sellerRouter.use('/me/members', sellerMembersRouter);
+// Requiere que el admin haya habilitado la función para esta cuenta (team_enabled).
+sellerRouter.use('/me/members', requireTeamEnabled, sellerMembersRouter);
 
 // Personalización de la landing pública (logo/lema/teléfono) — solo si el admin lo habilitó.
 sellerRouter.use('/me/branding', sellerBrandingRouter);
@@ -139,7 +141,7 @@ sellerRouter.use('/me/branding', sellerBrandingRouter);
 // contacto. Si lo pierde del todo, puede pedir el reset por email más abajo
 // (POST /me/admin-pin/forgot-pin) siempre que ya tenga un email cargado — si no,
 // sigue siendo cosa nuestra (super_admin) desde el panel interno.
-sellerRouter.get('/me/admin-pin', async (req, res, next) => {
+sellerRouter.get('/me/admin-pin', requireTeamEnabled, async (req, res, next) => {
   try {
     res.json({ data: await getSellerAdminPinInfo(req.seller!.sellerId) });
   } catch (err) { next(err); }
@@ -151,7 +153,7 @@ const updateAdminPinSchema = z.object({
   current_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
-sellerRouter.patch('/me/admin-pin', async (req, res, next) => {
+sellerRouter.patch('/me/admin-pin', requireTeamEnabled, async (req, res, next) => {
   try {
     const parsed = updateAdminPinSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
@@ -169,7 +171,7 @@ sellerRouter.patch('/me/admin-pin', async (req, res, next) => {
 // tenemos cargado en admin_pin_email — mismo criterio que POST /me/members/:id/forgot-pin.
 const adminPinForgotSchema = z.object({ email: z.string().trim().email() });
 
-sellerRouter.post('/me/admin-pin/forgot-pin', authLimiter, async (req, res, next) => {
+sellerRouter.post('/me/admin-pin/forgot-pin', authLimiter, requireTeamEnabled, async (req, res, next) => {
   try {
     const parsed = adminPinForgotSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Email inválido' });
@@ -213,9 +215,7 @@ sellerRouter.get('/me', async (req, res, next) => {
          COALESCE(stats.net_pending_settlement_usd, 0)::float AS net_pending_settlement_usd,
          COALESCE(stats.net_pending_settlement_ars, 0)::float AS net_pending_settlement_ars,
          COALESCE(notifs.unread_count, 0)::int AS unread_notifications,
-         EXISTS(
-           SELECT 1 FROM seller_members m WHERE m.seller_id = s.id AND m.is_active = TRUE
-         ) AS has_active_team
+         s.team_enabled
        FROM sellers s
        LEFT JOIN LATERAL (
          SELECT

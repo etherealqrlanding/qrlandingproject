@@ -21,8 +21,8 @@ const NAV: NavItem[] = [
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 
-// Solo aparece si el vendedor tiene sub-vendedores activos cargados — antes de eso
-// "Mi equipo" se autogestiona desde Configuración, ver SellerSettings.
+// Solo aparece si el admin habilitó "Mi equipo" (sub-vendedores) para esta cuenta
+// desde el panel interno — sellers.team_enabled, ver GET /api/seller/me.
 const NAV_TEAM: NavItem = { to: '/seller/equipo', label: 'Mi Equipo', icon: '👥' };
 
 const FALLBACK_POLL_MS = 10_000;
@@ -41,7 +41,7 @@ export default function SellerLayout() {
     localStorage.setItem('seller_sidebar_collapsed', collapsed ? '1' : '0');
   }, [collapsed]);
   const navRef = useRef<HTMLElement>(null);
-  const hasTeam = me?.has_active_team ?? false;
+  const hasTeam = me?.team_enabled ?? false;
   const navItems = hasTeam
     ? [...NAV.slice(0, 4), NAV_TEAM, ...NAV.slice(4)]
     : NAV;

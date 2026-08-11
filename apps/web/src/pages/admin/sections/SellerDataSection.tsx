@@ -20,6 +20,7 @@ const empty = {
   kind: '', commission_percent: 10,
   notes: '', is_active: true, is_permanent: false, is_house: false,
   landing_customization_enabled: false,
+  team_enabled: false,
 };
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
@@ -215,6 +216,15 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             Puede personalizar su página
             <span className="ml-2 text-xs text-cream/50">
               (socios comerciales: puede cargar logo, lema y teléfono público que se muestran en la home a sus referidos)
+            </span>
+          </span>
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <Checkbox checked={form.team_enabled ?? false} onChange={(checked) => update('team_enabled', checked)} />
+          <span className="text-cream/80">
+            Habilitar "Mi equipo" (sub-vendedores)
+            <span className="ml-2 text-xs text-cream/50">
+              (le muestra "Mi Equipo" en su portal para cargar conserjes/sub-vendedores con PIN. Se puede apagar en cualquier momento sin perder lo ya cargado)
             </span>
           </span>
         </label>

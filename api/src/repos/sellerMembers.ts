@@ -307,9 +307,17 @@ export async function deleteSellerMember(sellerId: number, memberId: number): Pr
   return { ok: true };
 }
 
+// Además de tener gente activa cargada, la cuenta tiene que tener la función
+// habilitada (sellers.team_enabled) — si el admin la apaga, esto pasa a dar false
+// aunque el equipo siga ahí sin tocar, y las acciones sobre órdenes dejan de pedir
+// PIN de sub-vendedor (vuelven a comportarse como vendedor individual).
 export async function sellerHasActiveMembers(sellerId: number): Promise<boolean> {
   const { rows } = await pool.query<{ exists: boolean }>(
-    `SELECT EXISTS(SELECT 1 FROM seller_members WHERE seller_id = $1 AND is_active = TRUE) AS exists`,
+    `SELECT EXISTS(
+       SELECT 1 FROM seller_members m
+       JOIN sellers s ON s.id = m.seller_id
+       WHERE m.seller_id = $1 AND m.is_active = TRUE AND s.team_enabled = TRUE
+     ) AS exists`,
     [sellerId],
   );
   return rows[0]?.exists ?? false;
