@@ -10,10 +10,13 @@ interface Props {
   onRoomChange: (v: string) => void;
   pickupWindow?: string | null;
   lang?: 'es' | 'en';
+  // El traslado ya está incluido en el precio del servicio (sin costo extra): no se
+  // pregunta sí/no, va siempre — solo se pide el hotel/habitación para coordinar el pickup.
+  included?: boolean;
 }
 
 export default function TransferSection({
-  wantsTransfer, hotel, room, onToggle, onHotelChange, onRoomChange, pickupWindow, lang = 'es',
+  wantsTransfer, hotel, room, onToggle, onHotelChange, onRoomChange, pickupWindow, lang = 'es', included = false,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -58,44 +61,52 @@ export default function TransferSection({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-cream/90">
-            {isEs ? '¿Querés traslado?' : 'Do you want a transfer?'}
+            {included
+              ? (isEs ? '✓ Tu traslado está incluido' : '✓ Your transfer is included')
+              : (isEs ? '¿Querés traslado?' : 'Do you want a transfer?')}
           </p>
           <p className="text-xs text-cream/50 mt-0.5">
-            {isEs
-              ? 'Ida y vuelta desde tu hotel en el centro, Recoleta, Puerto Madero, San Telmo, Palermo o Retiro.'
-              : 'Round trip from your hotel in downtown, Recoleta, Puerto Madero, San Telmo, Palermo or Retiro.'}
+            {included
+              ? (isEs
+                  ? 'Ya está incluido en el precio, sin costo adicional. Ida y vuelta desde tu hotel en el centro, Recoleta, Puerto Madero, San Telmo, Palermo o Retiro.'
+                  : 'Already included in the price, at no extra cost. Round trip from your hotel in downtown, Recoleta, Puerto Madero, San Telmo, Palermo or Retiro.')
+              : (isEs
+                  ? 'Ida y vuelta desde tu hotel en el centro, Recoleta, Puerto Madero, San Telmo, Palermo o Retiro.'
+                  : 'Round trip from your hotel in downtown, Recoleta, Puerto Madero, San Telmo, Palermo or Retiro.')}
           </p>
           {pickupWindow && (
             <p className="text-xs text-gold-soft mt-1">🚌 {pickupWindow}</p>
           )}
         </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => onToggle(true)}
-            className={`px-3 py-1.5 rounded-md text-sm border transition ${
-              wantsTransfer
-                ? 'border-gold bg-gold/10 text-cream'
-                : 'border-gold/20 text-cream/50 hover:border-gold/40'
-            }`}
-          >
-            {isEs ? 'Sí' : 'Yes'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { onToggle(false); onHotelChange(''); setQuery(''); }}
-            className={`px-3 py-1.5 rounded-md text-sm border transition ${
-              !wantsTransfer
-                ? 'border-gold bg-gold/10 text-cream'
-                : 'border-gold/20 text-cream/50 hover:border-gold/40'
-            }`}
-          >
-            {isEs ? 'No' : 'No'}
-          </button>
-        </div>
+        {!included && (
+          <div className="flex gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onToggle(true)}
+              className={`px-3 py-1.5 rounded-md text-sm border transition ${
+                wantsTransfer
+                  ? 'border-gold bg-gold/10 text-cream'
+                  : 'border-gold/20 text-cream/50 hover:border-gold/40'
+              }`}
+            >
+              {isEs ? 'Sí' : 'Yes'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { onToggle(false); onHotelChange(''); setQuery(''); }}
+              className={`px-3 py-1.5 rounded-md text-sm border transition ${
+                !wantsTransfer
+                  ? 'border-gold bg-gold/10 text-cream'
+                  : 'border-gold/20 text-cream/50 hover:border-gold/40'
+              }`}
+            >
+              {isEs ? 'No' : 'No'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {wantsTransfer && (
+      {(included || wantsTransfer) && (
         <div className="space-y-2">
           <p className="text-xs text-cream/60">
             {isEs

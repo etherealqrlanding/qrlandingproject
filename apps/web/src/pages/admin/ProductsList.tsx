@@ -86,12 +86,15 @@ function TierRow({ o, rate }: Readonly<{ o: AdminProductOptionPreview; rate: num
         </div>
         <div className="text-cream/55">
           Cupo {o.default_capacity_per_day}/día
-          {o.has_transfer && (
-            <span> · Traslado {usd(o.transfer_price_usd) ?? '—'}
+          {o.transfer_mode === 'optional' && (
+            <span> · Traslado opcional {usd(o.transfer_price_usd) ?? '—'}
               {o.net_transfer_price_usd != null && (
                 <span className="text-cream/35"> (neto {usd(o.net_transfer_price_usd)})</span>
               )}
             </span>
+          )}
+          {o.transfer_mode === 'included' && (
+            <span> · Traslado incluido</span>
           )}
         </div>
       </div>

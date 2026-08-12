@@ -48,7 +48,7 @@ export default function BookingForm({
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(allowCash ? 'cash' : 'mercadopago');
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
+  const [wantsTransfer, setWantsTransfer] = useState(option.transfer_mode !== 'none');
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   // Monto que se le cobra al pasajero en efectivo. Es SOLO referencia visual para el
@@ -134,8 +134,11 @@ export default function BookingForm({
     return Math.round((adult + child) * 100) / 100;
   }, [option, form.adults, form.children, supportsChildren]);
 
+  // El traslado incluido no suma costo (ya está en el precio del tier) — solo el
+  // opcional, y solo si se lo pidió.
+  const transferApplies = option.transfer_mode === 'included' || (option.transfer_mode === 'optional' && wantsTransfer);
   const transferUsd = useMemo(() => {
-    if (!option.has_transfer || !wantsTransfer || !option.transfer_price_usd) return 0;
+    if (option.transfer_mode !== 'optional' || !wantsTransfer || !option.transfer_price_usd) return 0;
     return Math.round(option.transfer_price_usd * (form.adults + form.children) * 100) / 100;
   }, [option, wantsTransfer, form.adults, form.children]);
 
@@ -205,9 +208,9 @@ export default function BookingForm({
         nationality: form.nationality || null,
       },
       payment_method: paymentMethod,
-      transfer_requested: option.has_transfer ? wantsTransfer : false,
-      transfer_hotel: (option.has_transfer && wantsTransfer) ? (transferHotel || null) : null,
-      transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
+      transfer_requested: transferApplies,
+      transfer_hotel: transferApplies ? (transferHotel || null) : null,
+      transfer_room: transferApplies ? (transferRoom.trim() || null) : null,
     }, { ticketsUsd, transferUsd, totalUsd });
   };
 
@@ -375,7 +378,7 @@ export default function BookingForm({
         </div>
 
         {/* Traslado */}
-        {option.has_transfer && (
+        {option.transfer_mode !== 'none' && (
           <TransferSection
             wantsTransfer={wantsTransfer}
             hotel={transferHotel}
@@ -385,6 +388,7 @@ export default function BookingForm({
             onRoomChange={setTransferRoom}
             pickupWindow={option.pickup_window_es}
             lang="es"
+            included={option.transfer_mode === 'included'}
           />
         )}
 

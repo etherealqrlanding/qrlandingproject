@@ -27,7 +27,7 @@ const blankOption: Partial<AdminOption> = {
   net_price_currency: 'USD',
   net_price_adult_usd: null, net_price_child_usd: null, net_transfer_price_usd: null,
   net_price_adult_ars: null, net_price_child_ars: null, net_transfer_price_ars: null,
-  has_dinner: false, has_transfer: false, transfer_price_usd: 0,
+  has_dinner: false, transfer_mode: 'none', transfer_price_usd: 0,
   available_days: [1, 2, 3, 4, 5, 6, 7],
   pickup_window_es: '', pickup_window_en: '',
   dinner_time_es: '', dinner_time_en: '',
@@ -499,15 +499,29 @@ function OptionFormFields({ option, onChange, productAcceptsChildren }: {
           />
           <span className="text-sm text-cream/80">Incluye cena</span>
         </label>
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-2">
-            <Checkbox
-              checked={option.has_transfer ?? false}
-              onChange={(checked) => update('has_transfer', checked)}
-            />
-            <span className="text-sm text-cream/80">Incluye traslado</span>
-          </label>
-          {option.has_transfer && (
+        <div className="sm:col-span-2 space-y-1.5">
+          <span className="block text-sm text-cream/80">Traslado</span>
+          <div className="flex gap-2 flex-wrap">
+            {([
+              { value: 'none', label: 'No incluye' },
+              { value: 'optional', label: 'Opcional (con costo)' },
+              { value: 'included', label: 'Incluido (sin costo)' },
+            ] as const).map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                onClick={() => update('transfer_mode', m.value)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+                  (option.transfer_mode ?? 'none') === m.value
+                    ? 'bg-gold text-ink'
+                    : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {option.transfer_mode === 'optional' && (
             <label className="block">
               <span className="block text-xs text-cream/60 mb-1">Precio traslado (USD/pax)</span>
               <input

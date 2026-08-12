@@ -133,7 +133,6 @@ export default function ProductPage() {
   }
 
   const longDescription = localized(product, 'long_description', lang);
-  const schedule = localized(product, 'schedule_summary', lang);
   const address = localized(product, 'address', lang);
   const videoEmbedUrl = product.video_url ? youtubeEmbedUrl(product.video_url) : null;
   const selectedOption = product.options.find((o) => o.id === selectedOptionId) ?? null;
@@ -163,7 +162,11 @@ export default function ProductPage() {
       <div className="mt-8 grid lg:grid-cols-[1fr_360px] gap-10">
         <div>
           <div className="mb-10">
-            <Carousel images={product.images} />
+            <Carousel
+              images={product.images}
+              videoEmbedUrl={videoEmbedUrl}
+              videoTitle={`Video de ${product.venue_name}`}
+            />
           </div>
 
           {longDescription && (
@@ -175,52 +178,11 @@ export default function ProductPage() {
             </section>
           )}
 
-          {videoEmbedUrl && (
-            <section className={longDescription ? 'mt-10' : ''}>
-              <h2 className="font-display text-2xl text-cream">{t('product.video')}</h2>
-              <div className="mt-4 rounded-lg overflow-hidden border border-gold/15 aspect-video">
-                <iframe
-                  title={`Video de ${product.venue_name}`}
-                  src={videoEmbedUrl}
-                  width="100%"
-                  height="100%"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            </section>
-          )}
-
-          {schedule && (
-            <section className="mt-10">
-              <h2 className="font-display text-2xl text-cream">{t('product.schedule')}</h2>
-              <p className="mt-3 text-cream/70">{schedule}</p>
-            </section>
-          )}
-
-          {address && (
-            <section className="mt-10">
-              <h2 className="font-display text-2xl text-cream">{t('product.location')}</h2>
-              <p className="mt-3 text-sm text-cream/70">📍 {address}</p>
-              <div className="mt-4 rounded-lg overflow-hidden border border-gold/15">
-                <iframe
-                  title={`Mapa de ${product.venue_name}`}
-                  src={`https://www.google.com/maps?q=${encodeURIComponent(`${product.venue_name}, ${address}, Buenos Aires, Argentina`)}&output=embed`}
-                  width="100%"
-                  height="280"
-                  style={{ border: 0 }}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
-            </section>
-          )}
-
           <section id="product-options" className="mt-12 scroll-mt-24">
             <h2 className="font-display text-3xl text-cream">{t('product.options_title')}</h2>
             <p className="mt-2 text-cream/60 text-sm">{t('product.options_subtitle')}</p>
+
+            <HowToBookCard />
 
             <div className="mt-6 grid gap-4">
               {product.options.map((opt, i) => (
@@ -252,6 +214,24 @@ export default function ProductPage() {
               ))}
             </div>
           </section>
+
+          {address && (
+            <section className="mt-12">
+              <h2 className="font-display text-2xl text-cream">{t('product.location')}</h2>
+              <p className="mt-3 text-sm text-cream/70">📍 {address}</p>
+              <div className="mt-4 rounded-lg overflow-hidden border border-gold/15">
+                <iframe
+                  title={`Mapa de ${product.venue_name}`}
+                  src={`https://www.google.com/maps?q=${encodeURIComponent(`${product.venue_name}, ${address}, Buenos Aires, Argentina`)}&output=embed`}
+                  width="100%"
+                  height="280"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </section>
+          )}
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:self-start space-y-4">
@@ -397,16 +377,21 @@ function OptionCard({
         <div className="min-w-0 flex-1">
           <h3 className="font-display text-xl text-cream">{name}</h3>
           {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
-          {(option.has_dinner || option.has_transfer) && (
+          {(option.has_dinner || option.transfer_mode !== 'none') && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {option.has_dinner && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
                   🍽 {t('product.dinner_included')}
                 </span>
               )}
-              {option.has_transfer && (
+              {option.transfer_mode === 'included' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
                   🚐 {t('product.transfer_included')}
+                </span>
+              )}
+              {option.transfer_mode === 'optional' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/10 text-sky-300/80">
+                  🚐 {t('product.transfer_optional')}
                 </span>
               )}
             </div>
@@ -509,6 +494,27 @@ function OptionCard({
   );
 }
 
+// Card de incentivo al lado del título de opciones — 3 pasos simples para bajar
+// la fricción de reservar justo donde el cliente está por elegir una opción.
+function HowToBookCard() {
+  const { t } = useTranslation();
+  return (
+    <div className="mt-5 rounded-lg border border-gold/20 bg-gold/5 p-4 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-0 sm:divide-x sm:divide-gold/15">
+        {[1, 2, 3].map((step) => (
+          <div key={step} className="flex items-start gap-2.5 sm:flex-1 sm:px-4 sm:first:pl-0 sm:last:pr-0">
+            <span className="shrink-0 mt-0.5 h-5 w-5 rounded-full bg-gold/20 text-gold text-[11px] font-medium flex items-center justify-center">
+              {step}
+            </span>
+            <span className="text-sm text-cream/75 leading-snug">{t(`product.how_to_book_step${step}`)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-center text-[11px] text-cream/40">⚡ {t('product.how_to_book_note')}</p>
+    </div>
+  );
+}
+
 // Card compacta de info de la casa, debajo del resumen de reserva — para que el
 // cliente vea de un vistazo días/horarios, ubicación y servicios incluidos sin
 // tener que bajar hasta las secciones completas (que siguen existiendo más abajo).
@@ -517,62 +523,66 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
   const schedule = localized(product, 'schedule_summary', lang);
   const neighborhood = localized(product, 'neighborhood', lang);
   const anyDinner = product.options.some((o) => o.has_dinner);
-  const anyTransfer = product.options.some((o) => o.has_transfer);
+  // Esta sección es "Servicios incluidos" — un traslado opcional (con costo) no
+  // cuenta acá, solo el que ya viene incluido en el precio sin cargo extra.
+  const anyTransfer = product.options.some((o) => o.transfer_mode === 'included');
   const hasDays = product.available_days.length > 0;
 
   if (!hasDays && !schedule && !neighborhood && !anyDinner && !anyTransfer) return null;
 
   return (
-    <div className="hidden lg:block rounded-lg border border-gold/10 bg-ink-soft/40 p-5 space-y-4">
-      <p className="text-xs uppercase tracking-widest text-gold-soft">{t('product.house_info_title')}</p>
+    <div className="rounded-lg border border-gold/10 bg-ink-soft/40 p-5">
+      <p className="text-xs uppercase tracking-widest text-gold-soft mb-4">{t('product.house_info_title')}</p>
 
-      {(hasDays || schedule) && (
-        <div>
-          <p className="text-xs text-cream/40 mb-1.5">🗓 {t('product.schedule')}</p>
-          {hasDays && (
-            <div className="flex flex-wrap gap-1.5 mb-1.5">
-              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-                <span
-                  key={d}
-                  className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
-                    product.available_days.includes(d)
-                      ? 'bg-gold/20 text-gold border border-gold/30'
-                      : 'bg-ink/40 text-cream/15 border border-cream/10'
-                  }`}
-                >
-                  {t(`product.day_${d}`)}
-                </span>
-              ))}
-            </div>
-          )}
-          {schedule && <p className="text-sm text-cream/70">{schedule}</p>}
-        </div>
-      )}
-
-      {neighborhood && (
-        <div>
-          <p className="text-xs text-cream/40 mb-1">📍 {t('product.location')}</p>
-          <p className="text-sm text-cream/70">{neighborhood}</p>
-        </div>
-      )}
-
-      {(anyDinner || anyTransfer) && (
-        <div>
-          <p className="text-xs text-cream/40 mb-1.5">{t('product.services_included')}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {anyDinner && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
-                🍽 {t('product.dinner_included')}
-              </span>
+      <div className="flex flex-col divide-y divide-gold/10">
+        {(hasDays || schedule) && (
+          <div className="pb-4">
+            <p className="text-xs text-cream/40 mb-1.5">🗓 {t('product.schedule')}</p>
+            {hasDays && (
+              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <span
+                    key={d}
+                    className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                      product.available_days.includes(d)
+                        ? 'bg-gold/20 text-gold border border-gold/30'
+                        : 'bg-ink/40 text-cream/15 border border-cream/10'
+                    }`}
+                  >
+                    {t(`product.day_${d}`)}
+                  </span>
+                ))}
+              </div>
             )}
-            {anyTransfer && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
-                🚐 {t('product.transfer_included')}
-              </span>
-            )}
+            {schedule && <p className="text-sm text-cream/70">{schedule}</p>}
           </div>
-        </div>
-      )}
+        )}
+
+        {neighborhood && (
+          <div className="py-4">
+            <p className="text-xs text-cream/40 mb-1.5">📍 {t('product.location')}</p>
+            <p className="text-sm text-cream/70">{neighborhood}</p>
+          </div>
+        )}
+
+        {(anyDinner || anyTransfer) && (
+          <div className="pt-4">
+            <p className="text-xs text-cream/40 mb-1.5">{t('product.services_included')}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {anyDinner && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-amber-700/40 bg-amber-900/20 text-amber-300">
+                  🍽 {t('product.dinner_included')}
+                </span>
+              )}
+              {anyTransfer && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border border-sky-700/40 bg-sky-900/20 text-sky-300">
+                  🚐 {t('product.transfer_included')}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -625,17 +635,17 @@ function BookingSummary({
     : null;
 
   return (
-    <div className="rounded-lg border border-gold/20 bg-ink-soft/80 p-6">
+    <div className="rounded-lg border border-gold/20 bg-ink-soft/80 p-4">
       <p className="text-xs uppercase tracking-widest text-gold-soft">{t('product.your_selection')}</p>
-      <h3 className="mt-2 font-display text-2xl text-cream">
+      <h3 className="mt-1.5 font-display text-xl text-cream">
         {localized(option, 'name', lang)}
       </h3>
       <p className="text-sm text-cream/60">{product.venue_name}</p>
 
-      <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-2xl font-display text-gold">USD {option.price_adult_usd}</span>
+      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-xl font-display text-gold">USD {option.price_adult_usd}</span>
         {priceArs != null && (
-          <span className="text-2xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</span>
+          <span className="text-xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</span>
         )}
         <span className="text-sm text-cream/50">/ {t('product.per_adult_short')}</span>
       </div>
@@ -660,17 +670,17 @@ function BookingSummary({
         </p>
       )}
 
-      <div className="mt-4 rounded-lg bg-gold/5 border border-gold/15 px-3 py-2.5 flex gap-2 items-start">
+      <div className="mt-3 rounded-lg bg-gold/5 border border-gold/15 px-2.5 py-2 flex gap-2 items-start">
         <span className="text-gold-soft text-sm shrink-0 leading-none mt-0.5">💱</span>
-        <p className="text-xs text-cream/60 leading-relaxed">{t('product.currency_notice')}</p>
+        <p className="text-[11px] text-cream/60 leading-snug">{t('product.currency_notice')}</p>
       </div>
 
       {showCash ? (
-        <div className="mt-4 space-y-2">
+        <div className="mt-3 space-y-1.5">
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full gap-2"
+            className="btn-primary w-full gap-2 py-2.5"
           >
             {CreditCardIcon}
             {t('checkout.pay_with_mp')}
@@ -678,7 +688,7 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('pix')}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-3 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-2.5 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
           >
             {PixIcon}
             {t('checkout.pay_with_pix')}
@@ -686,7 +696,7 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('cash')}
-            className="btn-ghost w-full"
+            className="btn-ghost w-full py-2.5"
           >
             {t('checkout.pay_with_seller')}
           </button>
@@ -697,7 +707,7 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full mt-4 gap-2"
+            className="btn-primary w-full mt-3 gap-2 py-2.5"
           >
             {CreditCardIcon}
             {t('product.book_cta')}
@@ -705,7 +715,7 @@ function BookingSummary({
           <button
             type="button"
             onClick={() => onBook('pix')}
-            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-3 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
+            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-2.5 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
           >
             {PixIcon}
             {t('checkout.pay_with_pix')}

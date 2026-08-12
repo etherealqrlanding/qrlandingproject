@@ -154,7 +154,7 @@ export interface AdminProductOptionPreview {
   net_price_adult_ars: number | null;
   net_price_child_ars: number | null;
   net_transfer_price_ars: number | null;
-  has_transfer: boolean;
+  transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number | null;
   net_transfer_price_usd: number | null;
   default_capacity_per_day: number;
@@ -203,7 +203,8 @@ export interface AdminOption {
   price_adult_usd: number | string; price_child_usd: number | string | null;
   net_price_adult_usd: number | string | null;
   net_price_child_usd: number | string | null;
-  has_dinner: boolean; has_transfer: boolean;
+  has_dinner: boolean;
+  transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
   net_transfer_price_usd: number | string | null;
   net_price_currency: 'USD' | 'ARS' | null;

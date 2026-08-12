@@ -107,6 +107,7 @@ async function prepareCheckoutHold(
     name_es: string; name_en: string;
     price_adult_usd: string; price_child_usd: string | null;
     net_price_adult_usd: string | null; net_price_child_usd: string | null;
+    transfer_mode: 'none' | 'optional' | 'included';
     transfer_price_usd: string; net_transfer_price_usd: string | null;
     net_price_currency: string;
     net_price_adult_ars: string | null; net_price_child_ars: string | null;
@@ -122,6 +123,7 @@ async function prepareCheckoutHold(
             o.price_child_usd::text          AS price_child_usd,
             o.net_price_adult_usd::text      AS net_price_adult_usd,
             o.net_price_child_usd::text      AS net_price_child_usd,
+            o.transfer_mode,
             o.transfer_price_usd::text       AS transfer_price_usd,
             o.net_transfer_price_usd::text   AS net_transfer_price_usd,
             o.net_price_currency,
@@ -174,10 +176,16 @@ async function prepareCheckoutHold(
   if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
     return { ok: false, status: 400, body: { error: 'This option does not allow children pricing' } };
   }
-  const transferPriceUsd = Number.parseFloat(option.transfer_price_usd ?? '0');
-  const transferRequested = input.transfer_requested === true && transferPriceUsd > 0;
+  // 'optional' = con costo, el cliente elige sumarlo. 'included' = ya está en el
+  // precio del servicio, siempre aplica y no se cobra aparte.
+  const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+  const transferRequested = option.transfer_mode === 'included'
+    ? true
+    : (option.transfer_mode === 'optional' && input.transfer_requested === true && transferPriceUsd > 0);
   const pax = input.adults + input.children;
-  const transferSubtotal = transferRequested ? Math.round(transferPriceUsd * pax * 100) / 100 : 0;
+  const transferSubtotal = (option.transfer_mode === 'optional' && transferRequested)
+    ? Math.round(transferPriceUsd * pax * 100) / 100
+    : 0;
   const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
 
   // 4) Tipo de cambio (para totales en ARS y netos en ARS)
@@ -194,7 +202,7 @@ async function prepareCheckoutHold(
     if (netAdult != null) {
       netTotalUsd = Math.round((
         input.adults * netAdult + input.children * (netChild ?? netAdult)
-        + (transferRequested && netTransfer != null ? netTransfer * pax : 0)
+        + (option.transfer_mode === 'optional' && transferRequested && netTransfer != null ? netTransfer * pax : 0)
       ) * 100) / 100;
     }
   } else {
@@ -204,7 +212,7 @@ async function prepareCheckoutHold(
     if (netAdultArs != null && rate > 0) {
       const netTotalArs = Math.round((
         input.adults * netAdultArs + input.children * (netChildArs ?? netAdultArs)
-        + (transferRequested && netTransferArs != null ? netTransferArs * pax : 0)
+        + (option.transfer_mode === 'optional' && transferRequested && netTransferArs != null ? netTransferArs * pax : 0)
       ) * 100) / 100;
       netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
     }
@@ -561,6 +569,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       id: number; product_id: number;
       name_es: string; price_adult_usd: string; price_child_usd: string | null;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
+      transfer_mode: 'none' | 'optional' | 'included';
       transfer_price_usd: string; net_transfer_price_usd: string | null;
       net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
@@ -576,6 +585,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
               o.price_child_usd::text        AS price_child_usd,
               o.net_price_adult_usd::text    AS net_price_adult_usd,
               o.net_price_child_usd::text    AS net_price_child_usd,
+              o.transfer_mode,
               o.transfer_price_usd::text     AS transfer_price_usd,
               o.net_transfer_price_usd::text AS net_transfer_price_usd,
               o.net_price_currency,
@@ -633,10 +643,14 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
     if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
       return res.status(400).json({ error: 'This option does not allow children pricing' });
     }
-    const transferPriceUsdCash = Number.parseFloat(option.transfer_price_usd ?? '0');
-    const transferRequestedCash = input.transfer_requested === true && transferPriceUsdCash > 0;
+    const transferPriceUsdCash = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+    const transferRequestedCash = option.transfer_mode === 'included'
+      ? true
+      : (option.transfer_mode === 'optional' && input.transfer_requested === true && transferPriceUsdCash > 0);
     const paxCash = input.adults + input.children;
-    const transferSubtotalCash = transferRequestedCash ? Math.round(transferPriceUsdCash * paxCash * 100) / 100 : 0;
+    const transferSubtotalCash = (option.transfer_mode === 'optional' && transferRequestedCash)
+      ? Math.round(transferPriceUsdCash * paxCash * 100) / 100
+      : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash;
 
     const rate = await getExchangeRate();
@@ -653,7 +667,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         netTotalUsdCash = Math.round((
           input.adults * netAdultCash
           + input.children * (netChildCash ?? netAdultCash)
-          + (transferRequestedCash && netTransferCash != null ? netTransferCash * paxCash : 0)
+          + (option.transfer_mode === 'optional' && transferRequestedCash && netTransferCash != null ? netTransferCash * paxCash : 0)
         ) * 100) / 100;
       }
     } else {
@@ -664,7 +678,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         const netTotalArs = Math.round((
           input.adults * netAdultArsCash
           + input.children * (netChildArsCash ?? netAdultArsCash)
-          + (transferRequestedCash && netTransferArsCash != null ? netTransferArsCash * paxCash : 0)
+          + (option.transfer_mode === 'optional' && transferRequestedCash && netTransferArsCash != null ? netTransferArsCash * paxCash : 0)
         ) * 100) / 100;
         netTotalUsdCash = Math.round((netTotalArs / rate) * 100) / 100;
       }

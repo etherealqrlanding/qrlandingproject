@@ -175,7 +175,8 @@ export default function Home() {
                   const description = localized(opt, 'description', lang);
                   const tags: { icon: typeof DinnerIcon; label: string }[] = [];
                   if (opt.has_dinner) tags.push({ icon: DinnerIcon, label: t('hero.quick_select.tag_dinner') });
-                  if (opt.has_transfer) tags.push({ icon: TransferIcon, label: t('hero.quick_select.tag_transfer') });
+                  if (opt.transfer_mode === 'included') tags.push({ icon: TransferIcon, label: t('hero.quick_select.tag_transfer_included') });
+                  else if (opt.transfer_mode === 'optional') tags.push({ icon: TransferIcon, label: t('hero.quick_select.tag_transfer') });
                   const usdPrice = t('hero.quick_select.price_badge', { price: opt.price_adult_usd });
                   const price = exchangeRate != null
                     ? `${usdPrice} · ${fmtArs(opt.price_adult_usd * exchangeRate)}`

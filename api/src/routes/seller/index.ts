@@ -364,6 +364,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       id: number; product_id: number;
       name_es: string; name_en: string;
       price_adult_usd: string; price_child_usd: string | null;
+      transfer_mode: 'none' | 'optional' | 'included';
       transfer_price_usd: string;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       net_transfer_price_usd: string | null; net_price_currency: string;
@@ -379,6 +380,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
          o.id, o.product_id, o.name_es, o.name_en,
          o.price_adult_usd::text AS price_adult_usd,
          o.price_child_usd::text  AS price_child_usd,
+         o.transfer_mode,
          o.transfer_price_usd::text AS transfer_price_usd,
          o.net_price_adult_usd::text    AS net_price_adult_usd,
          o.net_price_child_usd::text    AS net_price_child_usd,
@@ -423,8 +425,8 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
       return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
     }
-    const transferPriceUsd = Number.parseFloat(option.transfer_price_usd ?? '0');
-    const transferSubtotal = (input.transfer_requested && transferPriceUsd > 0)
+    const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+    const transferSubtotal = (option.transfer_mode === 'optional' && input.transfer_requested && transferPriceUsd > 0)
       ? Math.round(transferPriceUsd * (input.adults + input.children) * 100) / 100
       : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
@@ -434,7 +436,11 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
 
     // Neto: monto mínimo que el operador debe recibir (para la comisión en efectivo).
     const pax = input.adults + input.children;
-    const transferReq = (input.transfer_requested && transferPriceUsd > 0);
+    // 'included' siempre aplica (ya está en el precio, no se pregunta); 'optional'
+    // depende de lo que haya elegido el recomendador.
+    const transferReq = option.transfer_mode === 'included'
+      ? true
+      : Boolean(option.transfer_mode === 'optional' && input.transfer_requested && transferPriceUsd > 0);
     const netCurrency = option.net_price_currency ?? 'USD';
     let netTotalUsd: number | null = null;
     if (netCurrency === 'USD') {
@@ -445,7 +451,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         netTotalUsd = Math.round((
           input.adults * netAdult
           + input.children * (netChild ?? netAdult)
-          + (transferReq && netTransfer != null ? netTransfer * pax : 0)
+          + (option.transfer_mode === 'optional' && transferReq && netTransfer != null ? netTransfer * pax : 0)
         ) * 100) / 100;
       }
     } else {
@@ -456,7 +462,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         const netTotalArs = Math.round((
           input.adults * netAdultArs
           + input.children * (netChildArs ?? netAdultArs)
-          + (transferReq && netTransferArs != null ? netTransferArs * pax : 0)
+          + (option.transfer_mode === 'optional' && transferReq && netTransferArs != null ? netTransferArs * pax : 0)
         ) * 100) / 100;
         netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
       }
@@ -476,9 +482,9 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         unit_price_adult_usd: priceAdult,
         unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
         subtotal_usd: subtotalUsd,
-        transfer_requested: input.transfer_requested ?? false,
+        transfer_requested: transferReq,
         transfer_hotel: input.transfer_hotel ?? null,
-        transfer_room: (input.transfer_requested && input.transfer_room) ? input.transfer_room : null,
+        transfer_room: (transferReq && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,

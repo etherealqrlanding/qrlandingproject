@@ -53,7 +53,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(initialPaymentMethod ?? 'mercadopago');
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [wantsTransfer, setWantsTransfer] = useState(option.has_transfer);
+  const [wantsTransfer, setWantsTransfer] = useState(option.transfer_mode !== 'none');
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   // Validación en tiempo real: se marca "touched" recién al salir del campo (blur),
@@ -155,8 +155,11 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     return Math.round((adult + child) * 100) / 100;
   }, [option, form.adults, form.children, supportsChildren]);
 
+  // El traslado incluido no suma costo (ya está en el precio del tier) — solo el
+  // opcional, y solo si el pasajero lo pidió.
+  const transferApplies = option.transfer_mode === 'included' || (option.transfer_mode === 'optional' && wantsTransfer);
   const transferUsd = useMemo(() => {
-    if (!option.has_transfer || !wantsTransfer || !option.transfer_price_usd) return 0;
+    if (option.transfer_mode !== 'optional' || !wantsTransfer || !option.transfer_price_usd) return 0;
     return Math.round(option.transfer_price_usd * (form.adults + form.children) * 100) / 100;
   }, [option, wantsTransfer, form.adults, form.children]);
 
@@ -186,9 +189,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
       nationality: form.nationality || null,
     },
     ref_code: storedRef,
-    transfer_requested: option.has_transfer ? wantsTransfer : false,
-    transfer_hotel: (option.has_transfer && wantsTransfer) ? (transferHotel || null) : null,
-    transfer_room: (option.has_transfer && wantsTransfer) ? (transferRoom.trim() || null) : null,
+    transfer_requested: transferApplies,
+    transfer_hotel: transferApplies ? (transferHotel || null) : null,
+    transfer_room: transferApplies ? (transferRoom.trim() || null) : null,
   };
 
   // Errores por campo — se usan para el feedback en vivo (debajo de cada input,
@@ -434,8 +437,8 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </div>
           </div>
 
-          {/* Traslado — solo si la option lo incluye */}
-          {option.has_transfer && (
+          {/* Traslado — solo si la option lo tiene (opcional u incluido) */}
+          {option.transfer_mode !== 'none' && (
             <TransferSection
               wantsTransfer={wantsTransfer}
               hotel={transferHotel}
@@ -445,6 +448,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               onRoomChange={setTransferRoom}
               pickupWindow={lang === 'en' ? option.pickup_window_en : option.pickup_window_es}
               lang={lang === 'en' ? 'en' : 'es'}
+              included={option.transfer_mode === 'included'}
             />
           )}
 

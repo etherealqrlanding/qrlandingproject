@@ -40,16 +40,21 @@ export function OptionInfoCard({ option, productAvailableDays, productAcceptsChi
       </div>
 
       {/* Badges */}
-      {(option.has_dinner || option.has_transfer) && (
+      {(option.has_dinner || option.transfer_mode !== 'none') && (
         <div className="flex flex-wrap gap-1.5">
           {option.has_dinner && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-amber-700/40 bg-amber-900/20 text-amber-300">
               🍽 Cena incluida
             </span>
           )}
-          {option.has_transfer && (
+          {option.transfer_mode === 'included' && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-sky-700/40 bg-sky-900/20 text-sky-300">
-              🚌 Transfer incluido
+              🚌 Traslado incluido
+            </span>
+          )}
+          {option.transfer_mode === 'optional' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border border-sky-700/40 bg-sky-900/10 text-sky-300/80">
+              🚌 Traslado opcional
             </span>
           )}
         </div>

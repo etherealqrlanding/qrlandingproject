@@ -972,7 +972,7 @@ async function importHouses() {
           `INSERT INTO product_options (
              product_id, code, name_es, name_en, description_es, description_en,
              includes_es, includes_en, price_adult_usd, price_child_usd,
-             has_dinner, has_transfer, available_days,
+             has_dinner, transfer_mode, available_days,
              pickup_window_es, pickup_window_en,
              dinner_time_es, dinner_time_en,
              show_time_es, show_time_en,
@@ -988,7 +988,7 @@ async function importHouses() {
              price_adult_usd = EXCLUDED.price_adult_usd,
              price_child_usd = EXCLUDED.price_child_usd,
              has_dinner = EXCLUDED.has_dinner,
-             has_transfer = EXCLUDED.has_transfer,
+             transfer_mode = EXCLUDED.transfer_mode,
              available_days = EXCLUDED.available_days,
              pickup_window_es = EXCLUDED.pickup_window_es,
              pickup_window_en = EXCLUDED.pickup_window_en,
@@ -1000,7 +1000,9 @@ async function importHouses() {
           [
             productId, opt.code, opt.name_es, opt.name_en, opt.description_es, opt.description_en,
             opt.includes_es, opt.includes_en, opt.price_adult_usd, opt.price_child_usd,
-            opt.has_dinner, opt.has_transfer, opt.available_days,
+            // has_transfer del import (paquetes preexistentes) siempre fue "con costo" —
+            // 'included' se marca a mano después desde el admin donde corresponda.
+            opt.has_dinner, opt.has_transfer ? 'optional' : 'none', opt.available_days,
             opt.pickup_window_es, opt.pickup_window_en,
             opt.dinner_time_es, opt.dinner_time_en,
             opt.show_time_es, opt.show_time_en,

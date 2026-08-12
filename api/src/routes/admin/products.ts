@@ -173,7 +173,7 @@ const optionSchema = z.object({
   net_price_adult_ars: z.number().nonnegative().optional().nullable(),
   net_price_child_ars: z.number().nonnegative().optional().nullable(),
   has_dinner: z.boolean().optional(),
-  has_transfer: z.boolean().optional(),
+  transfer_mode: z.enum(['none', 'optional', 'included']).optional(),
   transfer_price_usd: z.number().nonnegative().optional(),
   net_transfer_price_usd: z.number().nonnegative().optional().nullable(),
   net_transfer_price_ars: z.number().nonnegative().optional().nullable(),

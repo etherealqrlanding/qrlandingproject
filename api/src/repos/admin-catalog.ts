@@ -67,7 +67,7 @@ export async function adminListProducts() {
                    o.net_price_adult_ars::float    AS net_price_adult_ars,
                    o.net_price_child_ars::float    AS net_price_child_ars,
                    o.net_transfer_price_ars::float AS net_transfer_price_ars,
-                   o.has_transfer,
+                   o.transfer_mode,
                    o.transfer_price_usd::float     AS transfer_price_usd,
                    o.net_transfer_price_usd::float AS net_transfer_price_usd,
                    o.default_capacity_per_day,
@@ -211,7 +211,7 @@ export interface AdminOptionInput {
   net_price_adult_usd?: number | null;
   net_price_child_usd?: number | null;
   has_dinner?: boolean;
-  has_transfer?: boolean;
+  transfer_mode?: 'none' | 'optional' | 'included';
   transfer_price_usd?: number;
   net_transfer_price_usd?: number | null;
   net_price_currency?: 'USD' | 'ARS' | null;
@@ -236,7 +236,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
        product_id, code, name_es, name_en, description_es, description_en,
        includes_es, includes_en, price_adult_usd, price_child_usd,
        net_price_adult_usd, net_price_child_usd,
-       has_dinner, has_transfer, transfer_price_usd, net_transfer_price_usd,
+       has_dinner, transfer_mode, transfer_price_usd, net_transfer_price_usd,
        net_price_currency, net_price_adult_ars, net_price_child_ars, net_transfer_price_ars,
        available_days,
        pickup_window_es, pickup_window_en,
@@ -251,7 +251,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
       sanitizeIncludes(input.includes_es) ?? [], sanitizeIncludes(input.includes_en) ?? [],
       input.price_adult_usd, input.price_child_usd ?? null,
       input.net_price_adult_usd ?? null, input.net_price_child_usd ?? null,
-      input.has_dinner ?? false, input.has_transfer ?? false,
+      input.has_dinner ?? false, input.transfer_mode ?? 'none',
       input.transfer_price_usd ?? 0, input.net_transfer_price_usd ?? null,
       input.net_price_currency ?? 'USD',
       input.net_price_adult_ars ?? null, input.net_price_child_ars ?? null, input.net_transfer_price_ars ?? null,

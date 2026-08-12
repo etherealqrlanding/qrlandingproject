@@ -37,7 +37,9 @@ export interface ProductOption {
   price_adult_usd: number;
   price_child_usd: number | null;
   has_dinner: boolean;
-  has_transfer: boolean;
+  // 'none' = no hay traslado. 'optional' = con costo, el cliente elige sumarlo
+  // (transfer_price_usd). 'included' = ya incluido en el precio, sin costo extra.
+  transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
   available_days: number[];
   pickup_window_es: string | null;
