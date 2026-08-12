@@ -44,6 +44,9 @@ interface PaymentMethodsProps {
   /** Este vendedor tiene habilitado el cobro en efectivo (sellers.is_permanent) —
    * suma el badge de Efectivo. Default false: la mayoría de los perfiles no lo ofrece. */
   showCash?: boolean;
+  /** Tarjeta (Mercado Pago + Pix) habilitada para esta cuenta (sellers.card_enabled).
+   * Default true: es el medio por defecto, casi ninguna cuenta lo tiene apagado. */
+  showCard?: boolean;
 }
 
 /**
@@ -52,7 +55,7 @@ interface PaymentMethodsProps {
  * muestra "Tarjeta" en vez de la marca Mercado Pago para que un turista de
  * cualquier país entienda de inmediato que puede pagar con su tarjeta.
  */
-export default function PaymentMethods({ variant = 'compact', className = '', showCash = false }: PaymentMethodsProps) {
+export default function PaymentMethods({ variant = 'compact', className = '', showCash = false, showCard = true }: PaymentMethodsProps) {
   const { t } = useTranslation();
 
   if (variant === 'detailed') {
@@ -69,14 +72,18 @@ export default function PaymentMethods({ variant = 'compact', className = '', sh
               <span>{t('payment_methods.cash_short')}</span>
             </span>
           )}
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-[11px] font-medium text-gold-soft">
-            <CreditCardIcon className="h-3.5 w-3.5 shrink-0" />
-            <span>{t('payment_methods.card_brands')}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#32BCAD]/30 bg-[#32BCAD]/10 px-2.5 py-1 text-[11px] font-medium text-[#5fd9cb]">
-            <PixIcon className="h-3 w-3" />
-            PIX
-          </span>
+          {showCard && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-2.5 py-1 text-[11px] font-medium text-gold-soft">
+              <CreditCardIcon className="h-3.5 w-3.5 shrink-0" />
+              <span>{t('payment_methods.card_brands')}</span>
+            </span>
+          )}
+          {showCard && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#32BCAD]/30 bg-[#32BCAD]/10 px-2.5 py-1 text-[11px] font-medium text-[#5fd9cb]">
+              <PixIcon className="h-3 w-3" />
+              PIX
+            </span>
+          )}
         </div>
       </div>
     );
@@ -98,20 +105,24 @@ export default function PaymentMethods({ variant = 'compact', className = '', sh
             </span>
           </>
         )}
-        <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
-        <span className="inline-flex items-center gap-2">
-          <CreditCardIcon className="h-6 w-6 text-gold shrink-0" />
-          <b className="font-medium text-cream/80">{t('payment_methods.card_label')}</b>
-          <span className="hidden sm:inline text-cream/40">· {t('payment_methods.mp_types_short')}</span>
-        </span>
-        <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
-        <span className="inline-flex items-center gap-2">
-          <PixIcon className="h-5 w-5 text-[#5fd9cb]" />
-          <b className="font-medium text-cream/80">PIX</b>
-          <span className="hidden sm:inline text-cream/40">· {t('payment_methods.pix_reais')}</span>
-        </span>
+        {showCard && (
+          <>
+            <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
+            <span className="inline-flex items-center gap-2">
+              <CreditCardIcon className="h-6 w-6 text-gold shrink-0" />
+              <b className="font-medium text-cream/80">{t('payment_methods.card_label')}</b>
+              <span className="hidden sm:inline text-cream/40">· {t('payment_methods.mp_types_short')}</span>
+            </span>
+            <span aria-hidden className="hidden sm:block h-5 w-px bg-cream/15" />
+            <span className="inline-flex items-center gap-2">
+              <PixIcon className="h-5 w-5 text-[#5fd9cb]" />
+              <b className="font-medium text-cream/80">PIX</b>
+              <span className="hidden sm:inline text-cream/40">· {t('payment_methods.pix_reais')}</span>
+            </span>
+          </>
+        )}
       </div>
-      <p className="mt-2 text-center text-xs text-cream/40">{t('payment_methods.currency_note')}</p>
+      <p className="mt-2 text-center text-xs text-cream/40">{t(showCard ? 'payment_methods.currency_note_card' : 'payment_methods.currency_note_cash_only')}</p>
     </div>
   );
 }

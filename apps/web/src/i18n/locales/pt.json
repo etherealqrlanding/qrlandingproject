@@ -87,6 +87,8 @@
       { "title": "Confirmação automática", "desc": "Sem esperar resposta de ninguém: sua reserva fica pronta em segundos, 24 horas por dia." },
       { "title": "O melhor do tango portenho", "desc": "As casas de tango mais emblemáticas de Buenos Aires, selecionadas em um só lugar." }
     ],
+    "benefit_cash_only_title": "Reservas 100% seguras",
+    "benefit_cash_only_desc": "Confirmação criptografada em cada reserva. O pagamento em dinheiro é combinado diretamente com seu anfitrião.",
     "cta": "Reserve sua noite de tango"
   },
   "shows": {
@@ -113,7 +115,9 @@
     "how_to_book_title": "Como reservar",
     "how_to_book_step1": "Escolha a opção que mais gostar",
     "how_to_book_step2": "Verifique a disponibilidade e escolha o dia",
-    "how_to_book_step3": "Pague com cartão, PIX ou dinheiro",
+    "how_to_book_step3_card_cash": "Pague com cartão, PIX ou dinheiro",
+    "how_to_book_step3_card_only": "Pague com cartão ou PIX",
+    "how_to_book_step3_cash_only": "Pague em dinheiro ao anfitrião",
     "how_to_book_note": "Confirmação imediata por e-mail",
     "per_adult": "por adulto",
     "per_adult_short": "adulto",
@@ -137,10 +141,12 @@
     "book_cta": "Reservar agora",
     "book_option": "Reservar esta opção",
     "check_availability": "Verificar disponibilidade",
-    "secure_payment": "Pagamento 100% seguro: cartão (crédito, débito ou saldo em conta) em pesos, ou PIX em reais.",
+    "secure_payment_card": "Pagamento 100% seguro: cartão (crédito, débito ou saldo em conta) em pesos, ou PIX em reais.",
+    "secure_payment_cash_only": "Confirmação instantânea da reserva. O pagamento em dinheiro é combinado com seu anfitrião.",
     "back_to_list": "Voltar à lista",
     "error": "Não foi possível carregar este serviço",
-    "currency_notice": "Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). Os preços em USD são de referência e convertidos pela taxa de câmbio vigente.",
+    "currency_notice_card": "Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). Os preços em USD são de referência e convertidos pela taxa de câmbio vigente.",
+    "currency_notice_cash_only": "Os preços em USD são de referência. O valor final em dinheiro é combinado diretamente com seu anfitrião.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
@@ -187,7 +193,8 @@
     "cutoff_notice": "Reservas para hoje são aceitas até as {{time}} h (horário de Buenos Aires)",
     "horizon_notice": "No momento vendemos ingressos até {{date}}",
     "capacity_max_reached": "Capacidade máxima atingida para esta data",
-    "currency_notice": "Os preços são exibidos em dólares (USD) como referência. Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
+    "currency_notice_card": "Os preços são exibidos em dólares (USD) como referência. Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
+    "currency_notice_cash_only": "Os preços são exibidos em dólares (USD) como referência. O valor final em dinheiro é combinado diretamente com seu anfitrião.",
     "ars_estimate": "≈ ARS {{amount}} (estimado pela taxa atual)"
   },
   "return": {
@@ -217,7 +224,8 @@
   },
   "payment_methods": {
     "secure_note": "Pagamentos 100% seguros",
-    "currency_note": "Os preços são exibidos em USD como referência. A cobrança é processada em pesos argentinos (ARS) com cartão/Mercado Pago, ou em reais (BRL) com PIX.",
+    "currency_note_card": "Os preços são exibidos em USD como referência. A cobrança é processada em pesos argentinos (ARS) com cartão/Mercado Pago, ou em reais (BRL) com PIX.",
+    "currency_note_cash_only": "Os preços são exibidos em USD como referência. O pagamento em dinheiro é combinado diretamente com seu anfitrião.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",
     "mp_wallet": "Saldo em conta",

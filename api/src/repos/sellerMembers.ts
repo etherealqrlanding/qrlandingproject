@@ -1,5 +1,6 @@
 import { pool } from '../db.js';
 import { generatePin, hashPin, verifyPin } from '../services/pin.js';
+import { logPaymentEvent } from './orders.js';
 
 export interface SellerMember {
   id: number;
@@ -432,6 +433,160 @@ export async function consumePinReset(token: string, newPin: string): Promise<bo
     await client.query(`UPDATE seller_members SET pin_hash = $1 WHERE id = $2`, [hashPin(newPin), memberId]);
     await client.query('COMMIT');
     return true;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ─── Reclamo de atribución (sin PIN de administrador) ─────────────────────
+// Para ventas sin touchpoint humano (MP/Pix pagadas solo desde la habitación) un
+// sub-vendedor puede pedir que se le sume la venta con SU PROPIO PIN, pero eso no la
+// asigna todavía: queda "pendiente" hasta que el administrador del vendedor la
+// aprueba o la rechaza con su propio PIN. Ver migración 053.
+
+export type RequestAttributionResult =
+  | { ok: true; requestId: number; memberName: string }
+  | { ok: false; httpStatus: number; error: string };
+
+export async function requestOrderAttribution(
+  sellerId: number,
+  orderPublicId: string,
+  sellerMemberId: number,
+  pin: string,
+): Promise<RequestAttributionResult> {
+  const resolved = await resolveSellerMember(sellerId, sellerMemberId, pin);
+  if (!resolved.ok) return resolved;
+
+  const { rows } = await pool.query<{ id: number; current_member_id: number | null }>(
+    `SELECT o.id, a.seller_member_id AS current_member_id
+       FROM orders o
+       JOIN order_attributions a ON a.order_id = o.id
+      WHERE o.public_id = $1 AND a.seller_id = $2
+      LIMIT 1`,
+    [orderPublicId, sellerId],
+  );
+  const order = rows[0];
+  if (!order) return { ok: false, httpStatus: 404, error: 'Orden no encontrada' };
+  if (order.current_member_id != null) {
+    return { ok: false, httpStatus: 409, error: 'Esta venta ya tiene a alguien asignado.' };
+  }
+
+  try {
+    const { rows: inserted } = await pool.query<{ id: number }>(
+      `INSERT INTO order_attribution_requests (order_id, seller_member_id) VALUES ($1, $2) RETURNING id`,
+      [order.id, resolved.memberId],
+    );
+    await logPaymentEvent(order.id, 'attribution_requested', null, {
+      seller_member_id: resolved.memberId,
+      seller_member_name: resolved.memberName,
+    });
+    return { ok: true, requestId: inserted[0].id, memberName: resolved.memberName };
+  } catch (err) {
+    if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === '23505') {
+      return { ok: false, httpStatus: 409, error: 'Ya hay un reclamo pendiente para esta venta.' };
+    }
+    throw err;
+  }
+}
+
+/**
+ * Si la orden se asignó por el camino directo (admin, o auto-tag en efectivo) mientras
+ * había un reclamo sin resolver para esa misma orden, ese reclamo queda obsoleto — lo
+ * marcamos rechazado en vez de dejarlo colgado para siempre en el panel de pendientes.
+ */
+export async function clearPendingAttributionRequests(orderId: number): Promise<void> {
+  await pool.query(
+    `UPDATE order_attribution_requests SET status = 'rejected', resolved_at = NOW()
+      WHERE order_id = $1 AND status = 'pending'`,
+    [orderId],
+  );
+}
+
+export interface PendingAttributionRequest {
+  request_id: number;
+  order_id: number;
+  order_public_id: string;
+  customer_name: string;
+  total_ars: number;
+  service_date: string;
+  seller_member_id: number;
+  seller_member_name: string;
+  created_at: string;
+}
+
+export async function listPendingAttributionRequests(sellerId: number): Promise<PendingAttributionRequest[]> {
+  const { rows } = await pool.query<PendingAttributionRequest>(
+    `SELECT
+       r.id AS request_id, o.id AS order_id, o.public_id AS order_public_id,
+       o.customer_name, o.total_ars::float AS total_ars,
+       to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+       r.seller_member_id, m.name AS seller_member_name, r.created_at
+       FROM order_attribution_requests r
+       JOIN order_attributions a ON a.order_id = r.order_id
+       JOIN orders o ON o.id = r.order_id
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+       JOIN seller_members m ON m.id = r.seller_member_id
+      WHERE a.seller_id = $1 AND r.status = 'pending'
+      ORDER BY r.created_at ASC`,
+    [sellerId],
+  );
+  return rows;
+}
+
+export type ResolveAttributionRequestResult =
+  | { ok: true; approved: boolean; memberName: string }
+  | { ok: false; httpStatus: number; error: string };
+
+export async function resolveAttributionRequest(
+  sellerId: number,
+  requestId: number,
+  decision: 'approve' | 'reject',
+  adminPin: string | undefined,
+): Promise<ResolveAttributionRequestResult> {
+  const adminCheck = await requireAdminPin(sellerId, adminPin);
+  if (!adminCheck.ok) return adminCheck;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query<{ id: number; order_id: number; seller_member_id: number; member_name: string }>(
+      `SELECT r.id, r.order_id, r.seller_member_id, m.name AS member_name
+         FROM order_attribution_requests r
+         JOIN seller_members m ON m.id = r.seller_member_id
+         JOIN order_attributions a ON a.order_id = r.order_id
+        WHERE r.id = $1 AND a.seller_id = $2 AND r.status = 'pending'
+        FOR UPDATE OF r
+        LIMIT 1`,
+      [requestId, sellerId],
+    );
+    const request = rows[0];
+    if (!request) {
+      await client.query('ROLLBACK');
+      return { ok: false, httpStatus: 404, error: 'Reclamo no encontrado o ya resuelto.' };
+    }
+
+    await client.query(
+      `UPDATE order_attribution_requests SET status = $2, resolved_at = NOW() WHERE id = $1`,
+      [requestId, decision === 'approve' ? 'approved' : 'rejected'],
+    );
+    if (decision === 'approve') {
+      await client.query(
+        `UPDATE order_attributions SET seller_member_id = $2 WHERE order_id = $1 AND seller_member_id IS NULL`,
+        [request.order_id, request.seller_member_id],
+      );
+    }
+    await client.query('COMMIT');
+
+    await logPaymentEvent(
+      request.order_id,
+      decision === 'approve' ? 'attribution_request_approved' : 'attribution_request_rejected',
+      null,
+      { seller_member_id: request.seller_member_id, seller_member_name: request.member_name },
+    );
+    return { ok: true, approved: decision === 'approve', memberName: request.member_name };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

@@ -9,12 +9,13 @@ interface Props {
   option: ProductOption;
   onClose: () => void;
   isPermanent: boolean;
+  cardEnabled: boolean;
   initialDate?: string;
   initialAdults?: number;
   initialChildren?: number;
 }
 
-export default function SellerBookingModal({ product, option, onClose, isPermanent, initialDate, initialAdults, initialChildren }: Props) {
+export default function SellerBookingModal({ product, option, onClose, isPermanent, cardEnabled, initialDate, initialAdults, initialChildren }: Props) {
   const navigate = useNavigate();
 
   const [submitting, setSubmitting] = useState(false);
@@ -192,6 +193,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
               productAcceptsChildren={product.accepts_children}
               childrenAgeLabel={product.children_age_label}
               allowCash={isPermanent}
+              allowCard={cardEnabled}
               submitting={submitting}
               externalError={error}
               initialDate={initialDate}

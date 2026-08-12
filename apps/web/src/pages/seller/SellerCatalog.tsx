@@ -12,6 +12,7 @@ import { buildShareUrl } from '../../lib/shareLinks';
 export default function SellerCatalog() {
   const { me } = useSellerAuth();
   const isPermanent = me?.is_permanent ?? false;
+  const cardEnabled = me?.card_enabled ?? true;
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -234,6 +235,7 @@ export default function SellerCatalog() {
           initialAdults={booking.initialAdults}
           initialChildren={booking.initialChildren}
           isPermanent={isPermanent}
+          cardEnabled={cardEnabled}
           onClose={() => setBooking(null)}
         />
       )}

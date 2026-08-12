@@ -87,6 +87,8 @@
       { "title": "Confirmación automática", "desc": "Sin esperar respuesta de nadie: tu reserva queda lista al segundo, las 24 horas." },
       { "title": "Lo mejor del tango porteño", "desc": "Las casas de tango más emblemáticas de Buenos Aires, curadas en un solo lugar." }
     ],
+    "benefit_cash_only_title": "Reservas 100% seguras",
+    "benefit_cash_only_desc": "Confirmación cifrada en cada reserva. El pago en efectivo lo coordinás directo con tu recomendador.",
     "cta": "Reservá tu noche de tango"
   },
   "shows": {
@@ -113,7 +115,9 @@
     "how_to_book_title": "Cómo reservar",
     "how_to_book_step1": "Elegí la opción que más te guste",
     "how_to_book_step2": "Verificá disponibilidad y elegí día",
-    "how_to_book_step3": "Pagá con tarjeta, PIX o efectivo",
+    "how_to_book_step3_card_cash": "Pagá con tarjeta, PIX o efectivo",
+    "how_to_book_step3_card_only": "Pagá con tarjeta o PIX",
+    "how_to_book_step3_cash_only": "Pagá en efectivo al recomendador",
     "how_to_book_note": "Confirmación inmediata por email",
     "per_adult": "por adulto",
     "per_adult_short": "adulto",
@@ -137,10 +141,12 @@
     "book_cta": "Reservar ahora",
     "book_option": "Reservar esta opción",
     "check_availability": "Verificar disponibilidad",
-    "secure_payment": "Pago 100% seguro: tarjeta (crédito, débito o dinero en cuenta) en pesos, o PIX en reales.",
+    "secure_payment_card": "Pago 100% seguro: tarjeta (crédito, débito o dinero en cuenta) en pesos, o PIX en reales.",
+    "secure_payment_cash_only": "Reserva confirmada al instante. El pago en efectivo lo coordinás con tu recomendador.",
     "back_to_list": "Volver al listado",
     "error": "No pudimos cargar este servicio",
-    "currency_notice": "Con tarjeta (Mercado Pago) el cobro se procesa en pesos argentinos (ARS); con PIX, en reales (BRL). Los precios en USD son de referencia y se convierten al tipo de cambio vigente.",
+    "currency_notice_card": "Con tarjeta (Mercado Pago) el cobro se procesa en pesos argentinos (ARS); con PIX, en reales (BRL). Los precios en USD son de referencia y se convierten al tipo de cambio vigente.",
+    "currency_notice_cash_only": "Los precios en USD son de referencia. El monto final en efectivo lo coordinás directamente con tu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
@@ -187,7 +193,8 @@
     "cutoff_notice": "Reservas para hoy se toman hasta las {{time}} hs (hora Buenos Aires)",
     "horizon_notice": "Por ahora vendemos entradas hasta el {{date}}",
     "capacity_max_reached": "Cupo máximo alcanzado para esta fecha",
-    "currency_notice": "Los precios se muestran en dólares (USD) como referencia. Con tarjeta (Mercado Pago) el cobro se procesa en pesos (ARS); con PIX, en reales (BRL). El monto en la moneda local es estimativo hasta confirmar el pago.",
+    "currency_notice_card": "Los precios se muestran en dólares (USD) como referencia. Con tarjeta (Mercado Pago) el cobro se procesa en pesos (ARS); con PIX, en reales (BRL). El monto en la moneda local es estimativo hasta confirmar el pago.",
+    "currency_notice_cash_only": "Los precios se muestran en dólares (USD) como referencia. El monto final en efectivo lo coordinás directamente con tu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (estimado a tasa actual)"
   },
   "return": {
@@ -217,7 +224,8 @@
   },
   "payment_methods": {
     "secure_note": "Pagos 100% seguros",
-    "currency_note": "Los precios se muestran en USD como referencia. El cobro se procesa en pesos (ARS) con tarjeta/Mercado Pago, o en reales (BRL) con PIX.",
+    "currency_note_card": "Los precios se muestran en USD como referencia. El cobro se procesa en pesos (ARS) con tarjeta/Mercado Pago, o en reales (BRL) con PIX.",
+    "currency_note_cash_only": "Los precios se muestran en USD como referencia. El pago en efectivo se coordina directamente con tu recomendador.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",
     "mp_wallet": "Dinero en cuenta",

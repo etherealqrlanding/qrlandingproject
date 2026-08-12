@@ -10,7 +10,7 @@ import PaymentMethods from '../components/PaymentMethods';
 import PlatformShowcase from '../components/PlatformShowcase';
 import ShareButton from '../components/ShareButton';
 import Reveal from '../components/Reveal';
-import { api } from '../lib/api';
+import { api, type SellerPublicInfo } from '../lib/api';
 import { localized, localizedArray } from '../lib/i18nFields';
 import { useExchangeRate, fmtArs } from '../lib/useExchangeRate';
 import { getStoredRef } from '../lib/referral';
@@ -68,7 +68,18 @@ export default function Home() {
   const [houses, setHouses] = useState<ProductSummary[]>([]);
   const [selectedHouseSlug, setSelectedHouseSlug] = useState('');
   const [selectedHouseDetail, setSelectedHouseDetail] = useState<ProductDetail | null>(null);
+  const [sellerInfo, setSellerInfo] = useState<SellerPublicInfo | null>(null);
   const steps = t('hero.steps', { returnObjects: true }) as HeroStep[];
+  // Mismo criterio que ProductPage: tarjeta es el medio por defecto (arranca mostrado
+  // mientras carga sellerInfo), efectivo es la excepción (arranca oculto).
+  const showCardMethods = sellerInfo?.card_enabled !== false;
+  const showCashMethod = sellerInfo?.is_permanent === true;
+
+  useEffect(() => {
+    const code = getStoredRef();
+    if (!code) return;
+    api.checkout.sellerInfo(code).then(setSellerInfo).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +217,7 @@ export default function Home() {
             />
           </div>
 
-          <PaymentMethods variant="compact" className="mt-6" />
+          <PaymentMethods variant="compact" className="mt-6" showCash={showCashMethod} showCard={showCardMethods} />
 
           {/* Cómo funciona: guía para el cliente que recién llega por el QR del vendedor */}
           <Reveal className="mt-16 w-full text-left rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 md:p-8">
@@ -278,7 +289,7 @@ export default function Home() {
       </Reveal>
 
       <Reveal>
-        <PlatformShowcase />
+        <PlatformShowcase showCard={showCardMethods} />
       </Reveal>
     </>
   );

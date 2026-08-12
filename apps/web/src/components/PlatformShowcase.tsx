@@ -35,9 +35,22 @@ const StarIcon = (
 
 const ICONS = [ShieldIcon, ClockIcon, BoltIcon, StarIcon];
 
-export default function PlatformShowcase() {
+interface Props {
+  // Tarjeta (Mercado Pago + Pix) habilitada para la cuenta detrás del ref actual
+  // (sellers.card_enabled). Default true: es el medio por defecto mientras se
+  // resuelve el sellerInfo o si no hay ref cargado todavía.
+  showCard?: boolean;
+}
+
+export default function PlatformShowcase({ showCard = true }: Props) {
   const { t } = useTranslation();
   const benefits = t('platform.benefits', { returnObjects: true }) as Benefit[];
+  // El primer beneficio menciona "pagos con tarjeta" -- si esta cuenta no la tiene
+  // habilitada, no podemos prometer un medio de pago que después no va a estar.
+  const displayBenefits = showCard ? benefits : [
+    { title: t('platform.benefit_cash_only_title'), desc: t('platform.benefit_cash_only_desc') },
+    ...benefits.slice(1),
+  ];
 
   return (
     <section className="relative overflow-hidden border-t border-gold/10">
@@ -61,7 +74,7 @@ export default function PlatformShowcase() {
         </p>
 
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4 text-left">
-          {benefits.map((benefit, i) => (
+          {displayBenefits.map((benefit, i) => (
             <div
               key={benefit.title}
               className="rounded-2xl border border-gold/15 bg-ink-soft/40 p-6 transition duration-300 hover:border-gold/30 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/20"

@@ -219,6 +219,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-cream/50">
                         <span>{s.commission_percent}% incentivo</span>
                         {s.is_permanent && <span className="text-emerald-400/80">Efectivo habilitado</span>}
+                        {!s.card_enabled && <span className="text-bordeaux-light">Tarjeta deshabilitada</span>}
                       </div>
                     </button>
                   </li>
@@ -376,6 +377,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
               productAcceptsChildren={booking.product.accepts_children}
               childrenAgeLabel={booking.product.children_age_label}
               allowCash={selectedSeller.is_permanent}
+              allowCard={selectedSeller.card_enabled}
               submitting={false}
               submitLabels={{ cash: 'Revisar y confirmar', mercadopago: 'Revisar y confirmar', pix: 'Revisar y confirmar' }}
               onValidSubmit={handleValidSubmit}

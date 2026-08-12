@@ -95,11 +95,16 @@ async function prepareCheckoutHold(
   ttlMinutes: number,
 ): Promise<PreparedHold> {
   // 0) Exclusividad de venta: el ref_code debe pertenecer a un vendedor activo.
-  const { rows: sellerCheck } = await pool.query<{ id: number }>(
-    `SELECT id FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+  const { rows: sellerCheck } = await pool.query<{ id: number; card_enabled: boolean }>(
+    `SELECT id, card_enabled FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
     [input.ref_code],
   );
   if (sellerCheck.length === 0) return { ok: false, status: 403, body: { error: 'SELLER_REQUIRED' } };
+  // Tarjeta (Mercado Pago + Pix) deshabilitada para esta cuenta -- lo apaga solo el
+  // admin de la plataforma, nunca el propio vendedor (ver sellers.card_enabled).
+  if (!sellerCheck[0].card_enabled) {
+    return { ok: false, status: 403, body: { error: 'CARD_DISABLED' } };
+  }
 
   // 1) Cargar option + product (precios autoritativos del backend)
   const { rows: optionRows } = await pool.query<{
@@ -524,10 +529,10 @@ checkoutRouter.get('/seller-info', async (req, res, next) => {
     }
     res.set('Cache-Control', 'no-store');
     const { rows } = await pool.query<{
-      name: string; kind: string | null; is_permanent: boolean; is_active: boolean;
+      name: string; kind: string | null; is_permanent: boolean; card_enabled: boolean; is_active: boolean;
       landing_customization_enabled: boolean; logo_url: string | null; tagline: string | null; public_phone: string | null;
     }>(
-      `SELECT name, kind, is_permanent, is_active,
+      `SELECT name, kind, is_permanent, card_enabled, is_active,
               landing_customization_enabled, logo_url, tagline, public_phone
          FROM sellers WHERE code = $1 LIMIT 1`,
       [code],
@@ -540,6 +545,7 @@ checkoutRouter.get('/seller-info', async (req, res, next) => {
         name: s.name,
         kind: s.kind,
         is_permanent: s.is_permanent,
+        card_enabled: s.card_enabled,
         // Solo viaja al público si el admin habilitó la personalización para este vendedor.
         branding: s.landing_customization_enabled
           ? { logo_url: s.logo_url, tagline: s.tagline, public_phone: s.public_phone }

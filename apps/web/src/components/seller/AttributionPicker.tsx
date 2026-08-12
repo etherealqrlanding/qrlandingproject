@@ -18,6 +18,11 @@ interface Props {
   unlockedAdminPin?: string | null;
   onAdminValidated?: (pin: string) => void;
   onSaved: () => void;
+  // Nombre de quien ya pidió (con su propio PIN) que se le sume esta venta, si hay un
+  // reclamo sin resolver — ver requestOrderAttribution. Mientras esté pendiente no se
+  // ofrece reclamarla de nuevo (el admin la aprueba/rechaza desde el panel de arriba).
+  pendingRequestMemberName?: string | null;
+  onClaimed?: () => void;
 }
 
 // Fila editable "¿quién de mi equipo cerró esta venta?" dentro del detalle de una
@@ -28,8 +33,14 @@ interface Props {
 // administrador del vendedor.
 export default function AttributionPicker({
   publicId, currentName, members, paymentMethod, unlockedMember, onMemberValidated, unlockedAdminPin, onAdminValidated, onSaved,
+  pendingRequestMemberName, onClaimed,
 }: Props) {
   const [editing, setEditing] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [claimMemberId, setClaimMemberId] = useState<number | ''>('');
+  const [claimPin, setClaimPin] = useState('');
+  const [claimSaving, setClaimSaving] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
   const [memberId, setMemberId] = useState<number | ''>('');
   const [pin, setPin] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,6 +57,29 @@ export default function AttributionPicker({
   const alreadyIdentified = unlockedAdminPin != null || (isCash && unlockedMember != null);
 
   if (members.length === 0 && !currentName) return null;
+
+  const resetClaimForm = () => {
+    setClaiming(false);
+    setClaimPin('');
+    setClaimMemberId('');
+    setClaimError(null);
+  };
+
+  const handleClaim = async () => {
+    setClaimError(null);
+    if (claimMemberId === '') return setClaimError('Elegí quién sos.');
+    if (!/^\d{4,6}$/.test(claimPin)) return setClaimError('Ingresá tu PIN (4-6 dígitos).');
+    setClaimSaving(true);
+    try {
+      await sellerApi.requestOrderAttribution(publicId, claimMemberId, claimPin);
+      resetClaimForm();
+      onClaimed?.();
+    } catch (err) {
+      setClaimError((err as SellerApiError).message);
+    } finally {
+      setClaimSaving(false);
+    }
+  };
 
   const needsAdminPin = paymentMethod !== 'cash' || memberId === '' || useAdminOverride;
   const canSkipMemberPin = !needsAdminPin && unlockedMember != null && memberId === unlockedMember.memberId;
@@ -81,10 +115,61 @@ export default function AttributionPicker({
     }
   };
 
+  if (claiming) {
+    return (
+      <div className="flex flex-col gap-1.5 py-1" onClick={(e) => e.stopPropagation()}>
+        <span className="text-xs text-cream/50">¿Quién la vendió?</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <SimpleSelect
+            size="sm"
+            className="w-40"
+            value={claimMemberId === '' ? '' : String(claimMemberId)}
+            onChange={(v) => setClaimMemberId(v === '' ? '' : Number(v))}
+            options={[
+              { value: '', label: '— Elegí —' },
+              ...members.map((m) => ({ value: String(m.id), label: m.name })),
+            ]}
+          />
+          <input
+            value={claimPin}
+            onChange={(e) => setClaimPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="Tu PIN"
+            inputMode="numeric"
+            className="w-24 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+          />
+          <button
+            type="button"
+            onClick={handleClaim}
+            disabled={claimSaving}
+            className="rounded-md bg-gold px-2.5 py-1.5 text-xs font-semibold text-ink hover:bg-gold/90 transition disabled:opacity-50"
+          >
+            ✓
+          </button>
+          <button type="button" onClick={resetClaimForm} className="text-xs text-cream/40 hover:text-cream/70 transition">✕</button>
+        </div>
+        {claimError && <p className="text-[10px] text-bordeaux-light">⚠ {claimError}</p>}
+      </div>
+    );
+  }
+
   if (!editing) {
     return (
       <DetailRow label="Atendido por">
-        <span className="text-cream/80">{currentName ?? 'Sin especificar'}</span>
+        <span className="text-cream/80">
+          {currentName ?? (pendingRequestMemberName ? `Reclamo pendiente de aprobar (${pendingRequestMemberName})` : 'Sin especificar')}
+        </span>
+        {/* Autoreclamo: cualquiera del equipo puede pedir con SU PROPIO PIN que se le
+            sume una venta sin asignar — no la asigna, queda pendiente hasta que el
+            administrador la aprueba desde el panel de "Reclamos pendientes". */}
+        {members.length > 0 && !currentName && !pendingRequestMemberName && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setClaiming(true); }}
+            className="ml-2 text-[10px] text-gold-soft hover:text-gold transition underline underline-offset-2"
+          >
+            ¿es tuya?
+          </button>
+        )}
         {/* Si la orden ya está identificada de una forma que alcanza para esta
             acción, no tiene sentido pedir de nuevo un select+PIN acá — para
             reasignar hay que "cambiar" primero arriba (relock) y volver a

@@ -11,6 +11,8 @@ import {
   resolveSellerMember, requireMemberIfTeamExists, resolveMemberOrAdmin, findActiveSellerMember, requireAdminPin,
   getPinResetPreview, consumePinReset, getSellerAdminPinInfo, updateSellerAdminPin,
   getAdminPinResetPreview, consumeAdminPinReset, createAdminPinResetToken,
+  requestOrderAttribution, listPendingAttributionRequests, resolveAttributionRequest,
+  clearPendingAttributionRequests,
 } from '../../repos/sellerMembers.js';
 import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
@@ -200,7 +202,7 @@ sellerRouter.get('/me', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT
          s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
-         s.is_permanent,
+         s.is_permanent, s.card_enabled,
          s.landing_customization_enabled, s.logo_url, s.tagline, s.public_phone,
          s.commission_percent::text AS commission_percent,
          COALESCE(stats.orders_paid, 0)::int       AS orders_paid,
@@ -333,8 +335,8 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     const input = parsed.data;
 
     // Obtener datos del vendedor autenticado
-    const { rows: sellerRows } = await pool.query<{ id: number; code: string; name: string; is_permanent: boolean }>(
-      `SELECT id, code, name, is_permanent FROM sellers WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+    const { rows: sellerRows } = await pool.query<{ id: number; code: string; name: string; is_permanent: boolean; card_enabled: boolean }>(
+      `SELECT id, code, name, is_permanent, card_enabled FROM sellers WHERE id = $1 AND is_active = TRUE LIMIT 1`,
       [req.seller!.sellerId],
     );
     const seller = sellerRows[0];
@@ -356,6 +358,13 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     if (input.payment_method === 'cash' && !seller.is_permanent) {
       return res.status(403).json({
         error: 'Tu perfil no tiene habilitado el cobro en efectivo. Usá Mercado Pago para procesar el pago.',
+      });
+    }
+    // Tarjeta (Mercado Pago/Pix) deshabilitada para esta cuenta -- lo apaga solo el
+    // admin de la plataforma.
+    if ((input.payment_method === 'mercadopago' || input.payment_method === 'pix') && !seller.card_enabled) {
+      return res.status(403).json({
+        error: 'Tu perfil no tiene habilitado el cobro con tarjeta. Usá pago manual para procesar la reserva.',
       });
     }
 
@@ -820,6 +829,7 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
       `UPDATE order_attributions SET seller_member_id = $2 WHERE order_id = $1`,
       [order.id, sellerMemberId],
     );
+    await clearPendingAttributionRequests(order.id);
     if (assignedByAdmin) {
       await logPaymentEvent(order.id, 'attribution_set_by_admin', null, {
         seller_member_id: sellerMemberId,
@@ -835,6 +845,63 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
       });
     }
     res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+const attributionRequestSchema = z.object({
+  seller_member_id: z.number().int().positive(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/),
+});
+
+// POST /api/seller/me/orders/:publicId/attribution-request — un sub-vendedor pide que
+// se le sume una venta sin touchpoint (MP/Pix desde la habitación) con SU PROPIO PIN.
+// No la asigna: queda pendiente hasta que el administrador la apruebe o la rechace en
+// /me/attribution-requests/:id. Así el conserje puede reclamarla al toque, sin
+// depender de que el administrador esté disponible en el momento, pero nadie puede
+// autoatribuirse una venta ajena sin que alguien más lo valide.
+sellerRouter.post('/me/orders/:publicId/attribution-request', async (req, res, next) => {
+  try {
+    const parsed = attributionRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+    const result = await requestOrderAttribution(
+      req.seller!.sellerId,
+      req.params.publicId,
+      parsed.data.seller_member_id,
+      parsed.data.seller_member_pin,
+    );
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: { ok: true, request_id: result.requestId } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/seller/me/attribution-requests — reclamos pendientes de aprobar, para que
+// el administrador del vendedor vea de un vistazo lo que tiene para revisar.
+sellerRouter.get('/me/attribution-requests', async (req, res, next) => {
+  try {
+    const requests = await listPendingAttributionRequests(req.seller!.sellerId);
+    res.json({ data: requests });
+  } catch (err) { next(err); }
+});
+
+const resolveAttributionRequestSchema = z.object({
+  decision: z.enum(['approve', 'reject']),
+  admin_pin: z.string().regex(/^\d{4,6}$/),
+});
+
+// PATCH /api/seller/me/attribution-requests/:id — el administrador del vendedor
+// aprueba o rechaza un reclamo, con su propio PIN. Aprobar es lo único que efectivamente
+// escribe en order_attributions.
+sellerRouter.patch('/me/attribution-requests/:id', async (req, res, next) => {
+  try {
+    const requestId = Number(req.params.id);
+    if (!Number.isInteger(requestId)) return res.status(400).json({ error: 'ID inválido' });
+    const parsed = resolveAttributionRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+    const result = await resolveAttributionRequest(
+      req.seller!.sellerId, requestId, parsed.data.decision, parsed.data.admin_pin,
+    );
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: { ok: true, approved: result.approved } });
   } catch (err) { next(err); }
 });
 

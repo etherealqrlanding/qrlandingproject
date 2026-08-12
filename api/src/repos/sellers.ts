@@ -24,6 +24,7 @@ export interface SellerWithStats {
   notes: string | null;
   is_active: boolean;
   is_permanent: boolean;                 // puede cobrar en efectivo (vendedor permanente)
+  card_enabled: boolean;                 // puede cobrar con Mercado Pago/Pix -- lo prende/apaga SOLO el admin de la plataforma
   is_house: boolean;                     // cuenta propia de la agencia (no es afiliado externo)
   has_admin_pin: boolean;                // tiene PIN de administrador cargado (gestión de sub-vendedores)
   landing_customization_enabled: boolean; // puede personalizar su landing (logo/lema/teléfono)
@@ -49,7 +50,7 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
     `SELECT
        s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
        s.commission_percent::text AS commission_percent,
-       s.notes, s.is_active, s.is_permanent, s.is_house, (s.admin_pin_hash IS NOT NULL) AS has_admin_pin,
+       s.notes, s.is_active, s.is_permanent, s.card_enabled, s.is_house, (s.admin_pin_hash IS NOT NULL) AS has_admin_pin,
        s.landing_customization_enabled, s.team_enabled, s.created_at,
        COALESCE(stats.orders_total, 0)::int AS orders_total,
        COALESCE(stats.orders_paid, 0)::int AS orders_paid,
@@ -242,6 +243,10 @@ export interface SellerOrder {
   // Sub-vendedor (ej. conserje) atribuido dentro de mi equipo, si se marcó alguno
   seller_member_id: number | null;
   seller_member_name: string | null;
+  // Reclamo de atribución pendiente de aprobar (ver order_attribution_requests) —
+  // solo tiene sentido cuando seller_member_id todavía es null.
+  pending_attribution_request_id: number | null;
+  pending_attribution_member_name: string | null;
 }
 
 export async function listSellerOrders(
@@ -313,11 +318,14 @@ export async function listSellerOrders(
        EXISTS (
          SELECT 1 FROM order_addons ad WHERE ad.order_id = o.id AND ad.status = 'paid'
        ) AS has_paid_addon,
-       a.seller_member_id, m.name AS seller_member_name
+       a.seller_member_id, m.name AS seller_member_name,
+       r.id AS pending_attribution_request_id, rm.name AS pending_attribution_member_name
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN seller_members m ON m.id = a.seller_member_id
+       LEFT JOIN order_attribution_requests r ON r.order_id = o.id AND r.status = 'pending'
+       LEFT JOIN seller_members rm ON rm.id = r.seller_member_id
       WHERE a.seller_id = $1
         AND o.archived_at IS NULL
         ${terminalStatusFilter}

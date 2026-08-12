@@ -18,7 +18,7 @@ const empty = {
   code: '', name: '',
   contact_email: '', contact_phone: '',
   kind: '', commission_percent: 10,
-  notes: '', is_active: true, is_permanent: false, is_house: false,
+  notes: '', is_active: true, is_permanent: false, card_enabled: true, is_house: false,
   landing_customization_enabled: false,
   team_enabled: false,
 };
@@ -195,10 +195,35 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
           <span className="text-cream/80">Activo (los QR son válidos y las nuevas ventas se atribuyen)</span>
         </label>
         <label className="inline-flex items-center gap-2">
-          <Checkbox checked={form.is_permanent ?? false} onChange={(checked) => update('is_permanent', checked)} />
+          <Checkbox
+            checked={form.is_permanent ?? false}
+            onChange={(checked) => {
+              if (!checked && !form.card_enabled) {
+                setError('Tiene que quedar al menos un medio de pago habilitado (Tarjeta o Pago manual).');
+                return;
+              }
+              update('is_permanent', checked);
+            }}
+          />
           <span className="text-cream/80">
-            Recomendador permanente
-            <span className="ml-2 text-xs text-cream/50">(habilita el cobro en efectivo desde el checkout)</span>
+            Pago manual habilitado
+            <span className="ml-2 text-xs text-cream/50">(recomendador permanente — habilita el cobro en efectivo desde el checkout)</span>
+          </span>
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <Checkbox
+            checked={form.card_enabled ?? true}
+            onChange={(checked) => {
+              if (!checked && !form.is_permanent) {
+                setError('Tiene que quedar al menos un medio de pago habilitado (Tarjeta o Pago manual).');
+                return;
+              }
+              update('card_enabled', checked);
+            }}
+          />
+          <span className="text-cream/80">
+            Tarjeta habilitada
+            <span className="ml-2 text-xs text-cream/50">(Mercado Pago + Pix — lo controla solo el admin de la plataforma)</span>
           </span>
         </label>
         <label className="inline-flex items-center gap-2">

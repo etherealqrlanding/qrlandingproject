@@ -98,6 +98,7 @@ export interface SellerPublicInfo {
   name: string;
   kind: string | null;
   is_permanent: boolean;
+  card_enabled: boolean;
   // Solo viene poblado si el admin habilitó la personalización de landing para este
   // vendedor (socios comerciales) — ver components/RefBadge.tsx.
   branding: { logo_url: string | null; tagline: string | null; public_phone: string | null } | null;

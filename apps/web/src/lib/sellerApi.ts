@@ -125,6 +125,7 @@ export interface SellerMe {
   contact_phone: string | null;
   kind: string | null;
   is_permanent: boolean;
+  card_enabled: boolean;
   landing_customization_enabled: boolean;
   logo_url: string | null;
   tagline: string | null;
@@ -186,6 +187,20 @@ export interface SellerOrder {
   restored_at: string | null;
   seller_member_id: number | null;
   seller_member_name: string | null;
+  pending_attribution_request_id: number | null;
+  pending_attribution_member_name: string | null;
+}
+
+export interface PendingAttributionRequest {
+  request_id: number;
+  order_id: number;
+  order_public_id: string;
+  customer_name: string;
+  total_ars: number;
+  service_date: string;
+  seller_member_id: number;
+  seller_member_name: string;
+  created_at: string;
 }
 
 export interface SellerMember {
@@ -370,6 +385,17 @@ export const sellerApi = {
         seller_member_id: sellerMemberId,
         ...(pinType === 'admin' ? { admin_pin: pin } : { seller_member_pin: pin }),
       }),
+    }),
+  requestOrderAttribution: (publicId: string, sellerMemberId: number, pin: string) =>
+    request<{ ok: true; request_id: number }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution-request`, {
+      method: 'POST',
+      body: JSON.stringify({ seller_member_id: sellerMemberId, seller_member_pin: pin }),
+    }),
+  listAttributionRequests: () => request<PendingAttributionRequest[]>('/api/seller/me/attribution-requests'),
+  resolveAttributionRequest: (requestId: number, decision: 'approve' | 'reject', adminPin: string) =>
+    request<{ ok: true; approved: boolean }>(`/api/seller/me/attribution-requests/${requestId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ decision, admin_pin: adminPin }),
     }),
   members: {
     list: () => request<SellerMember[]>('/api/seller/me/members'),

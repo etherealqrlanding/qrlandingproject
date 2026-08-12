@@ -64,6 +64,12 @@ export default function ProductPage() {
   const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number }>({});
   const [checkingAvailabilityOptionId, setCheckingAvailabilityOptionId] = useState<number | null>(null);
   const [sellerInfo, setSellerInfo] = useState<SellerPublicInfo | null>(null);
+  // Si la cuenta no tiene tarjeta habilitada (sellers.card_enabled = false), el único
+  // medio que le queda es pago manual -- evita abrir el checkout con Mercado Pago
+  // preseleccionado cuando esa opción ni se va a mostrar.
+  const defaultPaymentMethod: 'mercadopago' | 'cash' = sellerInfo?.card_enabled === false ? 'cash' : 'mercadopago';
+  const showCardMethods = sellerInfo?.card_enabled !== false;
+  const showCashMethod = sellerInfo?.is_permanent === true;
 
   useEffect(() => {
     const ref = getStoredRef();
@@ -182,7 +188,7 @@ export default function ProductPage() {
             <h2 className="font-display text-3xl text-cream">{t('product.options_title')}</h2>
             <p className="mt-2 text-cream/60 text-sm">{t('product.options_subtitle')}</p>
 
-            <HowToBookCard />
+            <HowToBookCard showCard={showCardMethods} showCash={showCashMethod} />
 
             <div className="mt-6 grid gap-4">
               {product.options.map((opt, i) => (
@@ -204,7 +210,7 @@ export default function ProductPage() {
                   onSelect={() => setSelectedOptionId(opt.id)}
                   onBook={() => {
                     setSelectedOptionId(opt.id);
-                    setCheckoutPaymentMethod('mercadopago');
+                    setCheckoutPaymentMethod(defaultPaymentMethod);
                     setCheckoutPrefill({});
                     setCheckoutOpen(true);
                   }}
@@ -269,7 +275,7 @@ export default function ProductPage() {
           </div>
           <button
             type="button"
-            onClick={() => { setCheckoutPaymentMethod('mercadopago'); setCheckoutPrefill({}); setCheckoutOpen(true); }}
+            onClick={() => { setCheckoutPaymentMethod(defaultPaymentMethod); setCheckoutPrefill({}); setCheckoutOpen(true); }}
             className="btn-primary shrink-0 px-5 py-2.5 text-sm"
           >
             {t('product.book_cta')}
@@ -284,6 +290,7 @@ export default function ProductPage() {
           onClose={() => setCheckoutOpen(false)}
           initialPaymentMethod={checkoutPaymentMethod}
           showCash={sellerInfo?.is_permanent === true}
+          showCard={sellerInfo?.card_enabled !== false}
           initialDate={checkoutPrefill.date}
           initialAdults={checkoutPrefill.adults}
           initialChildren={checkoutPrefill.children}
@@ -299,7 +306,7 @@ export default function ProductPage() {
           onBookDate={(_bookedProduct, bookedOption, date, pax) => {
             setCheckingAvailabilityOptionId(null);
             setSelectedOptionId(bookedOption.id);
-            setCheckoutPaymentMethod('mercadopago');
+            setCheckoutPaymentMethod(defaultPaymentMethod);
             setCheckoutPrefill({ date, adults: pax?.adults, children: pax?.children });
             setCheckoutOpen(true);
           }}
@@ -496,8 +503,16 @@ function OptionCard({
 
 // Card de incentivo al lado del título de opciones — 3 pasos simples para bajar
 // la fricción de reservar justo donde el cliente está por elegir una opción.
-function HowToBookCard() {
+function HowToBookCard({ showCard, showCash }: { showCard: boolean; showCash: boolean }) {
   const { t } = useTranslation();
+  // El paso 3 depende de qué medios tiene habilitados esta cuenta puntual
+  // (sellers.card_enabled / is_permanent) -- nunca hay que nombrar un medio que
+  // después no aparece como opción real en el selector de pago.
+  const step3Key = showCard && showCash
+    ? 'product.how_to_book_step3_card_cash'
+    : showCard
+      ? 'product.how_to_book_step3_card_only'
+      : 'product.how_to_book_step3_cash_only';
   return (
     <div className="mt-5 rounded-lg border border-gold/20 bg-gold/5 p-4 sm:p-5">
       <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-0 sm:divide-x sm:divide-gold/15">
@@ -506,7 +521,9 @@ function HowToBookCard() {
             <span className="shrink-0 mt-0.5 h-5 w-5 rounded-full bg-gold/20 text-gold text-[11px] font-medium flex items-center justify-center">
               {step}
             </span>
-            <span className="text-sm text-cream/75 leading-snug">{t(`product.how_to_book_step${step}`)}</span>
+            <span className="text-sm text-cream/75 leading-snug">
+              {t(step === 3 ? step3Key : `product.how_to_book_step${step}`)}
+            </span>
           </div>
         ))}
       </div>
@@ -626,6 +643,7 @@ function BookingSummary({
   if (!option) return null;
 
   const showCash = sellerInfo?.is_permanent === true;
+  const showCard = sellerInfo?.card_enabled !== false;
   const showChildPrice = product.accepts_children && option.price_child_usd != null;
   const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
   const priceChildArs = (exchangeRate != null && showChildPrice)
@@ -672,19 +690,21 @@ function BookingSummary({
 
       <div className="mt-3 rounded-lg bg-gold/5 border border-gold/15 px-2.5 py-2 flex gap-2 items-start">
         <span className="text-gold-soft text-sm shrink-0 leading-none mt-0.5">💱</span>
-        <p className="text-[11px] text-cream/60 leading-snug">{t('product.currency_notice')}</p>
+        <p className="text-[11px] text-cream/60 leading-snug">{t(showCard ? 'product.currency_notice_card' : 'product.currency_notice_cash_only')}</p>
       </div>
 
-      {showCash ? (
-        <div className="mt-3 space-y-1.5">
+      <div className="mt-3 space-y-1.5">
+        {showCard && (
           <button
             type="button"
             onClick={() => onBook('mercadopago')}
             className="btn-primary w-full gap-2 py-2.5"
           >
             {CreditCardIcon}
-            {t('checkout.pay_with_mp')}
+            {showCash ? t('checkout.pay_with_mp') : t('product.book_cta')}
           </button>
+        )}
+        {showCard && (
           <button
             type="button"
             onClick={() => onBook('pix')}
@@ -693,36 +713,18 @@ function BookingSummary({
             {PixIcon}
             {t('checkout.pay_with_pix')}
           </button>
+        )}
+        {showCash && (
           <button
             type="button"
             onClick={() => onBook('cash')}
-            className="btn-ghost w-full py-2.5"
+            className={showCard ? 'btn-ghost w-full py-2.5' : 'btn-primary w-full py-2.5'}
           >
             {t('checkout.pay_with_seller')}
           </button>
-          <p className="mt-1 text-xs text-cream/40 text-center">{t('product.secure_payment')}</p>
-        </div>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full mt-3 gap-2 py-2.5"
-          >
-            {CreditCardIcon}
-            {t('product.book_cta')}
-          </button>
-          <button
-            type="button"
-            onClick={() => onBook('pix')}
-            className="w-full mt-2 inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-2.5 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
-          >
-            {PixIcon}
-            {t('checkout.pay_with_pix')}
-          </button>
-          <p className="mt-2 text-xs text-cream/40 text-center">{t('product.secure_payment')}</p>
-        </>
-      )}
+        )}
+        <p className="mt-1 text-xs text-cream/40 text-center">{t(showCard ? 'product.secure_payment_card' : 'product.secure_payment_cash_only')}</p>
+      </div>
     </div>
   );
 }

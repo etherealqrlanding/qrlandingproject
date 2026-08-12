@@ -17,6 +17,9 @@ interface Props {
   // El vendedor referido tiene cobro en efectivo habilitado — muestra el botón
   // "Al vendedor" en el selector. Si es false, solo quedan tarjeta y PIX.
   showCash: boolean;
+  // Tarjeta (Mercado Pago + Pix) habilitada para esta cuenta -- lo decide solo el
+  // admin de la plataforma (sellers.card_enabled). Si es false, solo queda pago manual.
+  showCard: boolean;
   // Precarga fecha/pasajeros (ej. vienen de "Verificar disponibilidad"). Siguen editables.
   initialDate?: string;
   initialAdults?: number;
@@ -43,14 +46,16 @@ const NATIONALITIES = [
   'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
 ];
 
-export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, initialDate, initialAdults, initialChildren }: Props) {
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const storedRef = getStoredRef();
-  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(initialPaymentMethod ?? 'mercadopago');
+  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(
+    initialPaymentMethod ?? (showCard ? 'mercadopago' : 'cash'),
+  );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [wantsTransfer, setWantsTransfer] = useState(option.transfer_mode !== 'none');
@@ -433,7 +438,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </div>
             <div className="mt-4 pt-3 border-t border-gold/10 flex gap-2 items-start">
               <span className="text-gold-soft shrink-0 leading-none mt-0.5">💱</span>
-              <p className="text-xs text-cream/60 leading-relaxed">{t('checkout.currency_notice')}</p>
+              <p className="text-xs text-cream/60 leading-relaxed">{t(showCard ? 'checkout.currency_notice_card' : 'checkout.currency_notice_cash_only')}</p>
             </div>
           </div>
 
@@ -457,30 +462,34 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               (típico en mobile, si no bajó hasta el final) igual pueda elegir acá. */}
           <div className="rounded-lg border border-gold/15 bg-ink/30 p-4 space-y-2">
             <p className="text-xs uppercase tracking-widest text-gold-soft">{t('checkout.payment_method')}</p>
-            <div className={`grid gap-2 ${showCash ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2'}`}>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('mercadopago')}
-                className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
-                  paymentMethod === 'mercadopago'
-                    ? 'border-gold bg-gold/10 text-cream'
-                    : 'border-gold/20 text-cream/50 hover:border-gold/40'
-                }`}
-              >
-                <span className="flex items-center gap-1.5 font-medium">{CreditCardIcon}{t('payment_methods.card_brands')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaymentMethod('pix')}
-                className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
-                  paymentMethod === 'pix'
-                    ? 'border-[#32BCAD] bg-[#32BCAD]/10 text-cream'
-                    : 'border-[#32BCAD]/25 text-cream/50 hover:border-[#32BCAD]/50'
-                }`}
-              >
-                <span className="flex items-center gap-1.5 font-medium">{PixIcon}PIX</span>
-                <span className="text-xs opacity-70">{t('payment_methods.pix_short')}</span>
-              </button>
+            <div className={`grid gap-2 ${(showCard ? 2 : 0) + (showCash ? 1 : 0) >= 3 ? 'grid-cols-1 sm:grid-cols-3' : (showCard ? 2 : 0) + (showCash ? 1 : 0) === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+              {showCard && (
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('mercadopago')}
+                  className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                    paymentMethod === 'mercadopago'
+                      ? 'border-gold bg-gold/10 text-cream'
+                      : 'border-gold/20 text-cream/50 hover:border-gold/40'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 font-medium">{CreditCardIcon}{t('payment_methods.card_brands')}</span>
+                </button>
+              )}
+              {showCard && (
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('pix')}
+                  className={`rounded-lg border px-3 py-2.5 text-sm text-left transition ${
+                    paymentMethod === 'pix'
+                      ? 'border-[#32BCAD] bg-[#32BCAD]/10 text-cream'
+                      : 'border-[#32BCAD]/25 text-cream/50 hover:border-[#32BCAD]/50'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 font-medium">{PixIcon}PIX</span>
+                  <span className="text-xs opacity-70">{t('payment_methods.pix_short')}</span>
+                </button>
+              )}
               {showCash && (
                 <button
                   type="button"

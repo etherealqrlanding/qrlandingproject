@@ -311,6 +311,7 @@ export interface AdminSeller {
   notes: string | null;
   is_active: boolean;
   is_permanent: boolean;
+  card_enabled: boolean;
   is_house: boolean;
   has_admin_pin?: boolean;
   landing_customization_enabled?: boolean;

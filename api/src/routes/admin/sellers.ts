@@ -26,6 +26,7 @@ const sellerSchema = z.object({
   notes: z.string().max(1000).optional().nullable(),
   is_active: z.boolean().optional(),
   is_permanent: z.boolean().optional(),
+  card_enabled: z.boolean().optional(),
   is_house: z.boolean().optional(),
   landing_customization_enabled: z.boolean().optional(),
   team_enabled: z.boolean().optional(),
@@ -103,6 +104,18 @@ adminSellersRouter.patch('/:id', async (req, res, next) => {
         if (owner) {
           return res.status(409).json({ error: `Ese email ya está registrado para ${owner.label}. Usá un email exclusivo para este recomendador.` });
         }
+      }
+    }
+    // Nunca pueden quedar los dos medios de pago apagados a la vez -- calculamos el
+    // estado resultante (lo que cambia + lo que ya tenía) antes de guardar, para dar un
+    // error claro acá en vez de que reviente en el constraint de la base.
+    if (parsed.data.is_permanent === false || parsed.data.card_enabled === false) {
+      const current = await getSeller(id);
+      if (!current) return res.status(404).json({ error: 'Not found' });
+      const willBePermanent = parsed.data.is_permanent ?? current.is_permanent;
+      const willBeCardEnabled = parsed.data.card_enabled ?? current.card_enabled;
+      if (!willBePermanent && !willBeCardEnabled) {
+        return res.status(400).json({ error: 'Tiene que quedar al menos un medio de pago habilitado (Tarjeta o Pago manual).' });
       }
     }
     const ok = await updateSeller(id, parsed.data);

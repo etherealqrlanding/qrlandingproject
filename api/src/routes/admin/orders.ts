@@ -67,8 +67,8 @@ adminOrdersRouter.post('/', async (req, res, next) => {
 
     // Revalidamos el vendedor server-side: el selector del admin solo lista activos,
     // pero no podemos confiar únicamente en lo que mandó el cliente.
-    const { rows: sellerRows } = await pool.query<{ id: number; code: string; name: string; is_permanent: boolean }>(
-      `SELECT id, code, name, is_permanent FROM sellers WHERE id = $1 AND is_active = TRUE LIMIT 1`,
+    const { rows: sellerRows } = await pool.query<{ id: number; code: string; name: string; is_permanent: boolean; card_enabled: boolean }>(
+      `SELECT id, code, name, is_permanent, card_enabled FROM sellers WHERE id = $1 AND is_active = TRUE LIMIT 1`,
       [input.seller_id],
     );
     const seller = sellerRows[0];
@@ -78,6 +78,12 @@ adminOrdersRouter.post('/', async (req, res, next) => {
     if (input.payment_method === 'cash' && !seller.is_permanent) {
       return res.status(403).json({
         error: 'Ese recomendador no tiene habilitado el cobro en efectivo. Usá Mercado Pago para esta reserva.',
+      });
+    }
+    // Idem tarjeta: solo si el admin de la plataforma la dejó habilitada para esa cuenta.
+    if ((input.payment_method === 'mercadopago' || input.payment_method === 'pix') && !seller.card_enabled) {
+      return res.status(403).json({
+        error: 'Ese recomendador no tiene habilitado el cobro con tarjeta. Usá pago manual para esta reserva.',
       });
     }
 

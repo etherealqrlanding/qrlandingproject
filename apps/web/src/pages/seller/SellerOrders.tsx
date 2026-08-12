@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerOrder, type SellerPendingAddon, type SellerMember } from '../../lib/sellerApi';
 import DetailRow from '../../components/DetailRow';
 import AttributionPicker from '../../components/seller/AttributionPicker';
+import PendingAttributionRequests from '../../components/seller/PendingAttributionRequests';
 import MemberPinGate, { isMemberPinMissing } from '../../components/seller/MemberPinGate';
 import OrderMemberGate from '../../components/seller/OrderMemberGate';
 import DateRangePicker from '../../components/DateRangePicker';
@@ -829,6 +830,8 @@ export default function SellerOrders() {
         </div>
       </header>
 
+      {members.length > 0 && <PendingAttributionRequests onResolved={() => reload()} />}
+
       {hasActiveFilters && !loading && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2 text-xs md:text-sm">
           <span className="text-gold-soft">Filtros aplicados</span>
@@ -949,7 +952,9 @@ export default function SellerOrders() {
                         onMemberValidated={(memberId, pin) => markUnlocked(o.public_id, memberId, pin)}
                         unlockedAdminPin={unlockedAdmin[o.public_id] ?? null}
                         onAdminValidated={(pin) => markAdminUnlocked(o.public_id, pin)}
-                        onSaved={() => reload()} />
+                        onSaved={() => reload()}
+                        pendingRequestMemberName={o.pending_attribution_member_name}
+                        onClaimed={() => reload()} />
                       {o.payment_method !== 'cash' && (
                         <>
                           <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>
@@ -1203,7 +1208,9 @@ export default function SellerOrders() {
                         onMemberValidated={(memberId, pin) => markUnlocked(o.public_id, memberId, pin)}
                         unlockedAdminPin={unlockedAdmin[o.public_id] ?? null}
                         onAdminValidated={(pin) => markAdminUnlocked(o.public_id, pin)}
-                        onSaved={() => reload()} />
+                        onSaved={() => reload()}
+                        pendingRequestMemberName={o.pending_attribution_member_name}
+                        onClaimed={() => reload()} />
                                 {o.payment_method !== 'cash' && (
                                   <>
                                     <DetailRow label="Total"><span className="text-cream font-mono">{fmtArs(o.total_ars)}</span></DetailRow>

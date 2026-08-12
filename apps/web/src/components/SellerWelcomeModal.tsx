@@ -163,19 +163,32 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
                 {t('seller_welcome.steps_title')}
               </p>
               <div className="space-y-1.5 mb-3">
-                {(['step1', 'step2', 'step3'] as const).map((key, i) => (
-                  <div key={key} className="flex items-center gap-2.5">
-                    <span className="flex-shrink-0 h-4 w-4 rounded-full border border-gold/30 bg-gold/10 flex items-center justify-center text-[9px] font-semibold text-gold">
-                      {i + 1}
-                    </span>
-                    <span className="text-xs text-cream/80 leading-snug">{t(`seller_welcome.steps.${profileKey}.${key}`)}</span>
-                  </div>
-                ))}
+                {(['step1', 'step2', 'step3'] as const).map((key, i) => {
+                  // El paso 3 (cómo se paga) no puede depender solo del perfil sugerido en
+                  // el admin -- tiene que reflejar los medios REALMENTE habilitados para
+                  // esta cuenta puntual (is_permanent/card_enabled), o termina prometiendo
+                  // un medio de pago que después no aparece como opción real.
+                  const stepText = key === 'step3'
+                    ? t(info.card_enabled && info.is_permanent
+                        ? 'product.how_to_book_step3_card_cash'
+                        : info.card_enabled
+                          ? 'product.how_to_book_step3_card_only'
+                          : 'product.how_to_book_step3_cash_only')
+                    : t(`seller_welcome.steps.${profileKey}.${key}`);
+                  return (
+                    <div key={key} className="flex items-center gap-2.5">
+                      <span className="flex-shrink-0 h-4 w-4 rounded-full border border-gold/30 bg-gold/10 flex items-center justify-center text-[9px] font-semibold text-gold">
+                        {i + 1}
+                      </span>
+                      <span className="text-xs text-cream/80 leading-snug">{stepText}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Medios de pago — efectivo solo si este vendedor lo tiene habilitado
                   (flag real is_permanent; el perfil solo lo sugiere en el admin). */}
-              <PaymentMethods variant="detailed" className="mb-4" showCash={info.is_permanent} />
+              <PaymentMethods variant="detailed" className="mb-4" showCash={info.is_permanent} showCard={info.card_enabled} />
 
               {/* CTA */}
               <button
