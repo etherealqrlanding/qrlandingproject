@@ -13,6 +13,7 @@ export default function SellerCatalog() {
   const { me } = useSellerAuth();
   const isPermanent = me?.is_permanent ?? false;
   const cardEnabled = me?.card_enabled ?? true;
+  const pinRequired = me?.team_pin_required ?? true;
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -236,6 +237,7 @@ export default function SellerCatalog() {
           initialChildren={booking.initialChildren}
           isPermanent={isPermanent}
           cardEnabled={cardEnabled}
+          pinRequired={pinRequired}
           onClose={() => setBooking(null)}
         />
       )}

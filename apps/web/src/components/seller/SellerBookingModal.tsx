@@ -10,12 +10,15 @@ interface Props {
   onClose: () => void;
   isPermanent: boolean;
   cardEnabled: boolean;
+  // Modo abierto (sellers.team_pin_required = false): elegir quién cerró la venta
+  // sigue siendo posible, pero sin pedir PIN.
+  pinRequired: boolean;
   initialDate?: string;
   initialAdults?: number;
   initialChildren?: number;
 }
 
-export default function SellerBookingModal({ product, option, onClose, isPermanent, cardEnabled, initialDate, initialAdults, initialChildren }: Props) {
+export default function SellerBookingModal({ product, option, onClose, isPermanent, cardEnabled, pinRequired, initialDate, initialAdults, initialChildren }: Props) {
   const navigate = useNavigate();
 
   const [submitting, setSubmitting] = useState(false);
@@ -47,7 +50,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
 
   const handleValidSubmit = async (payload: SellerBookingInput): Promise<void> => {
     setError(null);
-    if (memberId !== '' && !/^\d{4,6}$/.test(memberPin)) {
+    if (pinRequired && memberId !== '' && !/^\d{4,6}$/.test(memberPin)) {
       setError('Ingresá el PIN de la persona que cerró la venta (4-6 dígitos).');
       return;
     }
@@ -55,7 +58,11 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
     try {
       const res = await sellerApi.checkout.create({
         ...payload,
-        ...(memberId !== '' ? { seller_member_id: memberId, seller_member_pin: memberPin } : {}),
+        ...(memberId !== ''
+          ? pinRequired
+            ? { seller_member_id: memberId, seller_member_pin: memberPin }
+            : { seller_member_id: memberId }
+          : {}),
       });
       // MP: el vendedor no ve ni reenvía el link — se lo mandamos al pasajero por email.
       setResult(res);
@@ -176,7 +183,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                     <option value="">— Sin especificar —</option>
                     {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
-                  {memberId !== '' && (
+                  {pinRequired && memberId !== '' && (
                     <input
                       value={memberPin}
                       onChange={(e) => setMemberPin(e.target.value.replace(/\D/g, '').slice(0, 6))}

@@ -11,14 +11,18 @@ interface Props {
   // Para el override de PIN de administrador: cambia el placeholder del input y el
   // texto del select deja de ser obligatorio (el caller decide si lo valida o no).
   pinPlaceholder?: string;
+  // Si el equipo de esta cuenta opera en modo abierto (sellers.team_pin_required =
+  // false), no hay nada que identificar acá — el gate real vive en el backend y ahí
+  // no exige nada tampoco. Default true para no romper a nadie que no pasa el prop.
+  pinRequired?: boolean;
 }
 
 // Bloque "¿quién sos? + tu PIN" reutilizado en toda acción que modifica o cancela una
-// orden. Si el vendedor no tiene equipo cargado, no renderiza nada (no le agrega
-// fricción a un vendedor individual) — el gate real vive en el backend, esto es solo
-// para no dejar confirmar sin completarlo cuando sí corresponde.
-export default function MemberPinGate({ members, memberId, memberPin, onMemberIdChange, onPinChange, label, pinPlaceholder }: Props) {
-  if (members.length === 0) return null;
+// orden. Si el vendedor no tiene equipo cargado, o su equipo opera en modo abierto,
+// no renderiza nada (no le agrega fricción) — el gate real vive en el backend, esto es
+// solo para no dejar confirmar sin completarlo cuando sí corresponde.
+export default function MemberPinGate({ members, memberId, memberPin, onMemberIdChange, onPinChange, label, pinPlaceholder, pinRequired = true }: Props) {
+  if (members.length === 0 || !pinRequired) return null;
   return (
     <div className="mb-5">
       <p className="text-xs text-cream/50 mb-2">{label ?? '¿Quién sos? Necesitamos tu PIN para confirmar.'}</p>
@@ -45,6 +49,6 @@ export default function MemberPinGate({ members, memberId, memberPin, onMemberId
   );
 }
 
-export function isMemberPinMissing(members: SellerMember[], memberId: number | '', memberPin: string): boolean {
-  return members.length > 0 && (memberId === '' || !/^\d{4,6}$/.test(memberPin));
+export function isMemberPinMissing(members: SellerMember[], memberId: number | '', memberPin: string, pinRequired = true): boolean {
+  return pinRequired && members.length > 0 && (memberId === '' || !/^\d{4,6}$/.test(memberPin));
 }

@@ -313,15 +313,31 @@ export async function deleteSellerMember(sellerId: number, memberId: number): Pr
 // aunque el equipo siga ahí sin tocar, y las acciones sobre órdenes dejan de pedir
 // PIN de sub-vendedor (vuelven a comportarse como vendedor individual).
 export async function sellerHasActiveMembers(sellerId: number): Promise<boolean> {
-  const { rows } = await pool.query<{ exists: boolean }>(
-    `SELECT EXISTS(
-       SELECT 1 FROM seller_members m
-       JOIN sellers s ON s.id = m.seller_id
-       WHERE m.seller_id = $1 AND m.is_active = TRUE AND s.team_enabled = TRUE
-     ) AS exists`,
+  const { hasTeam } = await getTeamMode(sellerId);
+  return hasTeam;
+}
+
+export interface TeamMode {
+  hasTeam: boolean;
+  // Si es false, la cuenta opera en "modo abierto": cualquiera del equipo puede
+  // tomar/reasignar/modificar/cancelar sin PIN. Lo prende/apaga solo el admin de la
+  // plataforma (sellers.team_pin_required) — nunca la cuenta. Ver migración 055.
+  pinRequired: boolean;
+}
+
+export async function getTeamMode(sellerId: number): Promise<TeamMode> {
+  const { rows } = await pool.query<{ has_members: boolean; team_enabled: boolean; team_pin_required: boolean }>(
+    `SELECT
+       EXISTS(SELECT 1 FROM seller_members m WHERE m.seller_id = s.id AND m.is_active = TRUE) AS has_members,
+       s.team_enabled, s.team_pin_required
+       FROM sellers s WHERE s.id = $1 LIMIT 1`,
     [sellerId],
   );
-  return rows[0]?.exists ?? false;
+  const row = rows[0];
+  return {
+    hasTeam: Boolean(row?.team_enabled && row?.has_members),
+    pinRequired: row?.team_pin_required ?? true,
+  };
 }
 
 export type RequireMemberResult =
@@ -330,17 +346,24 @@ export type RequireMemberResult =
 
 /**
  * Gate para acciones sensibles (modificar/cancelar/cobrar) sobre una orden. Si el
- * vendedor tiene equipo cargado, exige seller_member_id + PIN válidos antes de dejar
- * pasar — "no se puede tocar la orden sin que alguien del equipo se identifique". Si
- * el vendedor no tiene equipo (caso normal, vendedor individual), no exige nada: se
- * comporta como antes de esta feature.
+ * vendedor tiene equipo cargado Y opera con PIN, exige seller_member_id + PIN válidos
+ * antes de dejar pasar. Si el vendedor no tiene equipo, o su equipo opera en modo
+ * abierto (team_pin_required = false), no exige nada obligatorio — como mucho, si
+ * mandan seller_member_id igual lo valida (para dejar registrado quién fue, sin pedir
+ * PIN), pero no bloquea la acción si no lo mandan.
  */
 export async function requireMemberIfTeamExists(
   sellerId: number,
   input: { seller_member_id?: number; seller_member_pin?: string },
 ): Promise<RequireMemberResult> {
-  const hasTeam = await sellerHasActiveMembers(sellerId);
+  const { hasTeam, pinRequired } = await getTeamMode(sellerId);
   if (!hasTeam) return { ok: true, memberId: null, memberName: null };
+  if (!pinRequired) {
+    if (input.seller_member_id == null) return { ok: true, memberId: null, memberName: null };
+    const member = await findActiveSellerMember(sellerId, input.seller_member_id);
+    if (!member) return { ok: false, httpStatus: 404, error: 'No encontramos a esa persona en tu equipo.' };
+    return { ok: true, memberId: member.id, memberName: member.name };
+  }
   if (!input.seller_member_id || !input.seller_member_pin) {
     return { ok: false, httpStatus: 400, error: 'Ingresá quién sos y tu PIN para continuar.' };
   }
@@ -356,14 +379,22 @@ export type ResolveMemberOrAdminResult =
  * el PIN de la persona (no está disponible, nadie tiene su PIN), el administrador del
  * vendedor puede desbloquear la acción con SU propio PIN. `byAdmin` le indica al caller
  * si tiene que dejarlo anotado en el historial de la orden como hecho por el admin, en
- * vez de por la persona correspondiente.
+ * vez de por la persona correspondiente. En modo abierto no hay nada que desbloquear
+ * (no se pide PIN de entrada), así que el admin_pin ni se evalúa.
  */
 export async function resolveMemberOrAdmin(
   sellerId: number,
   input: { seller_member_id?: number; seller_member_pin?: string; admin_pin?: string },
 ): Promise<ResolveMemberOrAdminResult> {
-  const hasTeam = await sellerHasActiveMembers(sellerId);
+  const { hasTeam, pinRequired } = await getTeamMode(sellerId);
   if (!hasTeam) return { ok: true, memberId: null, memberName: null, byAdmin: false };
+
+  if (!pinRequired) {
+    if (input.seller_member_id == null) return { ok: true, memberId: null, memberName: null, byAdmin: false };
+    const member = await findActiveSellerMember(sellerId, input.seller_member_id);
+    if (!member) return { ok: false, httpStatus: 404, error: 'No encontramos a esa persona en tu equipo.' };
+    return { ok: true, memberId: member.id, memberName: member.name, byAdmin: false };
+  }
 
   if (input.seller_member_id != null && input.seller_member_pin) {
     const resolved = await resolveSellerMember(sellerId, input.seller_member_id, input.seller_member_pin);

@@ -126,6 +126,7 @@ export interface SellerMe {
   kind: string | null;
   is_permanent: boolean;
   card_enabled: boolean;
+  team_pin_required: boolean;
   landing_customization_enabled: boolean;
   logo_url: string | null;
   tagline: string | null;
@@ -386,6 +387,12 @@ export const sellerApi = {
         ...(pinType === 'admin' ? { admin_pin: pin } : { seller_member_pin: pin }),
       }),
     }),
+  // Modo abierto (team_pin_required=false): asigna directo, sin ningún PIN.
+  setOrderAttributionOpen: (publicId: string, sellerMemberId: number | null) =>
+    request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution`, {
+      method: 'PATCH',
+      body: JSON.stringify({ seller_member_id: sellerMemberId }),
+    }),
   requestOrderAttribution: (publicId: string, sellerMemberId: number, pin: string) =>
     request<{ ok: true; request_id: number }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution-request`, {
       method: 'POST',
@@ -400,12 +407,14 @@ export const sellerApi = {
   members: {
     list: () => request<SellerMember[]>('/api/seller/me/members'),
     stats: () => request<SellerMemberStats[]>('/api/seller/me/members/stats'),
-    create: (name: string, pin: string, adminPin: string, email?: string) =>
+    // pin/adminPin opcionales: en modo abierto (team_pin_required=false) ni se piden.
+    create: (name: string, pin: string | undefined, adminPin: string | undefined, email?: string) =>
       request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, pin, email: email || undefined, admin_pin: adminPin }) }),
     update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; email?: string | null; admin_pin?: string; current_pin?: string }) =>
       request<SellerMember>(`/api/seller/me/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     // Borrado real (no desactivar) — solo si nunca tuvo ventas atribuidas, ver backend.
-    delete: (id: number, adminPin: string) =>
+    // adminPin opcional: en modo abierto no se pide.
+    delete: (id: number, adminPin?: string) =>
       request<{ ok: true }>(`/api/seller/me/members/${id}`, { method: 'DELETE', body: JSON.stringify({ admin_pin: adminPin }) }),
     // Interno: hay que estar logueado en esta cuenta de vendedor y saber el email
     // exacto que tenemos cargado para esa persona (ver POST /me/members/:id/forgot-pin).

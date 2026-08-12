@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
-import { hashPin, verifyPin } from '../../services/pin.js';
-import { listSellerMembers, listSellerMemberStats, getSellerAdminPinHash, resolveSellerMember, requireAdminPin, createPinResetToken, deleteSellerMember } from '../../repos/sellerMembers.js';
+import { hashPin, verifyPin, generatePin } from '../../services/pin.js';
+import { listSellerMembers, listSellerMemberStats, getSellerAdminPinHash, resolveSellerMember, requireAdminPin, createPinResetToken, deleteSellerMember, getTeamMode } from '../../repos/sellerMembers.js';
 import { sendSellerMemberPinReset } from '../../services/email.js';
 import { config } from '../../config.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
@@ -27,30 +27,41 @@ sellerMembersRouter.get('/stats', async (req, res, next) => {
 
 const createSchema = z.object({
   name: z.string().trim().min(2).max(60),
-  pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos'),
+  // Opcional: en modo abierto (sellers.team_pin_required = false) el PIN no se pide
+  // ni se usa nunca, así que ni tiene sentido cargarlo — se autogenera uno interno
+  // para no dejar la columna NOT NULL vacía.
+  pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos').optional(),
   // Opcional — habilita que esa persona pueda pedir su propio reset de PIN por email
   // si se lo olvida, sin depender del PIN de administrador (ver /members/forgot-pin).
   email: z.string().trim().email().max(160).optional().nullable(),
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
-// POST / — alta de un sub-vendedor. Solo con el PIN de administrador del vendedor: así
-// un sub-vendedor no puede darse de alta compañeros nuevos por su cuenta.
+// POST / — alta de un sub-vendedor. En equipos con PIN, exige el PIN de administrador
+// del vendedor (así un sub-vendedor no puede darse de alta compañeros por su cuenta).
+// En modo abierto (team_pin_required = false) cualquiera logueado en la cuenta puede
+// agregar gente, sin pedir nada más — mismo criterio de "honor system" que el resto
+// de las acciones en ese modo.
 sellerMembersRouter.post('/', async (req, res, next) => {
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
     const { name, pin, email, admin_pin } = parsed.data;
 
-    const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
-    if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+    const { pinRequired } = await getTeamMode(req.seller!.sellerId);
+    if (pinRequired) {
+      if (!pin) return res.status(400).json({ error: 'Ingresá el PIN para esta persona.' });
+      const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
+      if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+    }
+    const effectivePin = pin ?? generatePin();
 
     try {
       const { rows } = await pool.query(
         `INSERT INTO seller_members (seller_id, name, pin_hash, email)
          VALUES ($1, $2, $3, $4)
          RETURNING id, name, email, is_active, created_at`,
-        [req.seller!.sellerId, name, hashPin(pin), email || null],
+        [req.seller!.sellerId, name, hashPin(effectivePin), email || null],
       );
       res.status(201).json({ data: rows[0] });
     } catch (err) {
@@ -99,23 +110,29 @@ sellerMembersRouter.patch('/:id', async (req, res, next) => {
       && email != null && email.trim() !== ''
       && name === undefined && is_active === undefined && pin === undefined;
 
-    if (is_active !== undefined) {
-      // Activar/desactivar es exclusivo del PIN de administrador.
-      const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
-      if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
-    } else if (!settingEmailFirstTime) {
-      // Cambiar nombre/PIN/email existente: vale el PIN admin, o el PIN actual de ESTE mismo registro.
-      let authorized = false;
-      if (admin_pin) {
-        const hash = await getSellerAdminPinHash(req.seller!.sellerId);
-        if (hash && verifyPin(admin_pin, hash)) authorized = true;
-      }
-      if (!authorized && current_pin) {
-        const resolved = await resolveSellerMember(req.seller!.sellerId, id, current_pin);
-        if (resolved.ok) authorized = true;
-      }
-      if (!authorized) {
-        return res.status(403).json({ error: 'Ingresá tu PIN actual, o el PIN de administrador.' });
+    const { pinRequired } = await getTeamMode(req.seller!.sellerId);
+    // Modo abierto: cualquiera logueado en la cuenta puede editar o activar/desactivar
+    // a quien sea, sin PIN de ningún tipo — mismo criterio que el resto de las
+    // acciones en ese modo.
+    if (pinRequired) {
+      if (is_active !== undefined) {
+        // Activar/desactivar es exclusivo del PIN de administrador.
+        const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
+        if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+      } else if (!settingEmailFirstTime) {
+        // Cambiar nombre/PIN/email existente: vale el PIN admin, o el PIN actual de ESTE mismo registro.
+        let authorized = false;
+        if (admin_pin) {
+          const hash = await getSellerAdminPinHash(req.seller!.sellerId);
+          if (hash && verifyPin(admin_pin, hash)) authorized = true;
+        }
+        if (!authorized && current_pin) {
+          const resolved = await resolveSellerMember(req.seller!.sellerId, id, current_pin);
+          if (resolved.ok) authorized = true;
+        }
+        if (!authorized) {
+          return res.status(403).json({ error: 'Ingresá tu PIN actual, o el PIN de administrador.' });
+        }
       }
     }
 
@@ -142,13 +159,13 @@ sellerMembersRouter.patch('/:id', async (req, res, next) => {
 });
 
 const deleteSchema = z.object({
-  admin_pin: z.string().regex(/^\d{4,6}$/, 'Ingresá el PIN de administrador.'),
+  admin_pin: z.string().regex(/^\d{4,6}$/, 'Ingresá el PIN de administrador.').optional(),
 });
 
-// DELETE /:id — borrado real (no desactivar) de un sub-vendedor. Solo con el PIN de
-// administrador, y solo si nunca tuvo ventas atribuidas (ver deleteSellerMember): si
-// ya vendió algo, el borrado queda bloqueado y hay que desactivarlo en su lugar, para
-// no perder de quién fue esa venta.
+// DELETE /:id — borrado real (no desactivar) de un sub-vendedor. En equipos con PIN,
+// exige el PIN de administrador; en modo abierto no pide nada. Solo si nunca tuvo
+// ventas atribuidas (ver deleteSellerMember): si ya vendió algo, el borrado queda
+// bloqueado y hay que desactivarlo en su lugar, para no perder de quién fue esa venta.
 sellerMembersRouter.delete('/:id', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
@@ -156,8 +173,11 @@ sellerMembersRouter.delete('/:id', async (req, res, next) => {
     const parsed = deleteSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Datos inválidos' });
 
-    const adminCheck = await requireAdminPin(req.seller!.sellerId, parsed.data.admin_pin);
-    if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+    const { pinRequired } = await getTeamMode(req.seller!.sellerId);
+    if (pinRequired) {
+      const adminCheck = await requireAdminPin(req.seller!.sellerId, parsed.data.admin_pin);
+      if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
+    }
 
     const result = await deleteSellerMember(req.seller!.sellerId, id);
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });

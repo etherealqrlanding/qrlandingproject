@@ -14,6 +14,9 @@ interface Props {
   adminUnlocked: string | null;
   onAdminUnlock: (pin: string) => void;
   onAdminRelock: () => void;
+  // Modo abierto (sellers.team_pin_required = false): no hay nada que identificar,
+  // así que no renderiza nada — las acciones sobre la orden no piden PIN.
+  pinRequired?: boolean;
 }
 
 type Mode = 'member' | 'admin';
@@ -25,7 +28,7 @@ type Mode = 'member' | 'admin';
 // como uno mismo (sub-vendedor) o, si esa persona no está disponible, autorizar
 // con el PIN de administrador del vendedor. No renderiza nada si el vendedor no
 // tiene equipo cargado (nada que identificar).
-export default function OrderMemberGate({ members, unlocked, onUnlock, onRelock, adminUnlocked, onAdminUnlock, onAdminRelock }: Props) {
+export default function OrderMemberGate({ members, unlocked, onUnlock, onRelock, adminUnlocked, onAdminUnlock, onAdminRelock, pinRequired = true }: Props) {
   const [mode, setMode] = useState<Mode>('member');
   const [memberId, setMemberId] = useState<number | ''>('');
   const [pin, setPin] = useState('');
@@ -33,7 +36,7 @@ export default function OrderMemberGate({ members, unlocked, onUnlock, onRelock,
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (members.length === 0) return null;
+  if (members.length === 0 || !pinRequired) return null;
 
   if (unlocked) {
     const name = members.find((m) => m.id === unlocked.memberId)?.name ?? 'vos';

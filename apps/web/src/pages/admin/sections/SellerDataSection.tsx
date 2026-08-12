@@ -21,6 +21,7 @@ const empty = {
   notes: '', is_active: true, is_permanent: false, card_enabled: true, is_house: false,
   landing_customization_enabled: false,
   team_enabled: false,
+  team_pin_required: true,
 };
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
@@ -249,10 +250,23 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
           <span className="text-cream/80">
             Habilitar "Mi equipo" (sub-recomendadores)
             <span className="ml-2 text-xs text-cream/50">
-              (le muestra "Mi Equipo" en su portal para cargar conserjes/sub-recomendadores con PIN. Se puede apagar en cualquier momento sin perder lo ya cargado)
+              (le muestra "Mi Equipo" en su portal para cargar conserjes/sub-recomendadores. Se puede apagar en cualquier momento sin perder lo ya cargado)
             </span>
           </span>
         </label>
+        {form.team_enabled && (
+          <label className="inline-flex items-center gap-2 ml-6">
+            <Checkbox checked={form.team_pin_required ?? true} onChange={(checked) => update('team_pin_required', checked)} />
+            <span className="text-cream/80">
+              El equipo opera con PIN
+              <span className="ml-2 text-xs text-cream/50">
+                (identidad verificada en cada acción, como hoy. Desmarcalo para "modo abierto": cualquiera del equipo
+                toma/reasigna/modifica/cancela sin PIN ni blanqueos — pensado para clientes donde no hace falta verificar
+                identidad, solo prolijidad interna)
+              </span>
+            </span>
+          </label>
+        )}
         {form.is_house && (
           <p className="text-xs text-gold-soft bg-gold/5 border border-gold/15 rounded-md px-3 py-2">
             💡 Para ventas directas de la agencia (Instagram, WhatsApp, mostrador) sin pagarte incentivo a vos mismo,

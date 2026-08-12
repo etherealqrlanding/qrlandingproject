@@ -12,7 +12,7 @@ import {
   getPinResetPreview, consumePinReset, getSellerAdminPinInfo, updateSellerAdminPin,
   getAdminPinResetPreview, consumeAdminPinReset, createAdminPinResetToken,
   requestOrderAttribution, listPendingAttributionRequests, resolveAttributionRequest,
-  clearPendingAttributionRequests,
+  clearPendingAttributionRequests, getTeamMode,
 } from '../../repos/sellerMembers.js';
 import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
@@ -202,7 +202,7 @@ sellerRouter.get('/me', async (req, res, next) => {
     const { rows } = await pool.query(
       `SELECT
          s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
-         s.is_permanent, s.card_enabled,
+         s.is_permanent, s.card_enabled, s.team_pin_required,
          s.landing_customization_enabled, s.logo_url, s.tagline, s.public_phone,
          s.commission_percent::text AS commission_percent,
          COALESCE(stats.orders_paid, 0)::int       AS orders_paid,
@@ -345,13 +345,21 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     let sellerMemberId: number | null = null;
     let sellerMemberName: string | null = null;
     if (input.seller_member_id != null) {
-      if (!input.seller_member_pin) {
-        return res.status(400).json({ error: 'Ingresá el PIN de la persona que cerró la venta.' });
+      const { pinRequired } = await getTeamMode(seller.id);
+      if (!pinRequired) {
+        const member = await findActiveSellerMember(seller.id, input.seller_member_id);
+        if (!member) return res.status(404).json({ error: 'No encontramos a esa persona en tu equipo.' });
+        sellerMemberId = member.id;
+        sellerMemberName = member.name;
+      } else {
+        if (!input.seller_member_pin) {
+          return res.status(400).json({ error: 'Ingresá el PIN de la persona que cerró la venta.' });
+        }
+        const resolved = await resolveSellerMember(seller.id, input.seller_member_id, input.seller_member_pin);
+        if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
+        sellerMemberId = resolved.memberId;
+        sellerMemberName = resolved.memberName;
       }
-      const resolved = await resolveSellerMember(seller.id, input.seller_member_id, input.seller_member_pin);
-      if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
-      sellerMemberId = resolved.memberId;
-      sellerMemberName = resolved.memberName;
     }
 
     // Pago en efectivo solo permitido para vendedores permanentes (is_permanent = true)
@@ -808,7 +816,19 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
     let sellerMemberId: number | null = null;
     let sellerMemberName: string | null = null;
     let assignedByAdmin = false;
-    if (order.payment_method === 'cash' && seller_member_id != null && seller_member_pin) {
+    let assignedOpen = false;
+    const { pinRequired } = await getTeamMode(req.seller!.sellerId);
+    if (!pinRequired) {
+      // Modo abierto: cualquiera del equipo puede marcar (o corregir) directamente,
+      // sin PIN de ningún tipo — ni propio ni de administrador.
+      assignedOpen = true;
+      if (seller_member_id != null) {
+        const member = await findActiveSellerMember(req.seller!.sellerId, seller_member_id);
+        if (!member) return res.status(404).json({ error: 'No encontramos a esa persona en tu equipo.' });
+        sellerMemberId = member.id;
+        sellerMemberName = member.name;
+      }
+    } else if (order.payment_method === 'cash' && seller_member_id != null && seller_member_pin) {
       const resolved = await resolveSellerMember(req.seller!.sellerId, seller_member_id, seller_member_pin);
       if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
       sellerMemberId = resolved.memberId;
@@ -830,7 +850,12 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
       [order.id, sellerMemberId],
     );
     await clearPendingAttributionRequests(order.id);
-    if (assignedByAdmin) {
+    if (assignedOpen) {
+      await logPaymentEvent(order.id, 'attribution_set_open', null, {
+        seller_member_id: sellerMemberId,
+        seller_member_name: sellerMemberName,
+      });
+    } else if (assignedByAdmin) {
       await logPaymentEvent(order.id, 'attribution_set_by_admin', null, {
         seller_member_id: sellerMemberId,
         seller_member_name: sellerMemberName,

@@ -60,12 +60,15 @@ interface Props {
   // a pedirlo ni mostrar el toggle de "usar PIN de administrador".
   unlockedAdminPin?: string | null;
   onAdminValidated?: (pin: string) => void;
+  // Modo abierto (sellers.team_pin_required = false): no se pide identificarse para
+  // confirmar el cambio. Default true para no romper al admin (nunca lo pasa).
+  pinRequired?: boolean;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const fmtArs = (n: number) => `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 
-export default function ModifyReservationModal({ order, item, handlers, onClose, onDone, members, unlockedMember, onMemberValidated, unlockedAdminPin, onAdminValidated }: Props) {
+export default function ModifyReservationModal({ order, item, handlers, onClose, onDone, members, unlockedMember, onMemberValidated, unlockedAdminPin, onAdminValidated, pinRequired = true }: Props) {
   const origAdults = item.adults;
   const origChildren = item.children;
   const unitAdult = Number(item.unit_price_adult_usd);
@@ -98,14 +101,19 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const [memberId, setMemberId] = useState<number | ''>('');
   const [memberPin, setMemberPin] = useState('');
   const [useAdminOverride, setUseAdminOverride] = useState(false);
-  const memberFields: MemberFields = unlockedMember
-    ? { seller_member_id: unlockedMember.memberId, seller_member_pin: unlockedMember.pin }
-    : unlockedAdminPin
-      ? { ...(memberId !== '' ? { seller_member_id: memberId } : {}), admin_pin: unlockedAdminPin }
-      : useAdminOverride
-        ? { ...(memberId !== '' ? { seller_member_id: memberId } : {}), admin_pin: memberPin }
-        : (memberId !== '' ? { seller_member_id: memberId, seller_member_pin: memberPin } : {});
-  const memberMissing = !unlockedMember && !unlockedAdminPin && (
+  // Modo abierto: no hay nada que identificar, así que como mucho mandamos el
+  // seller_member_id elegido (opcional, sin PIN) si el caller lo soporta -- acá ni
+  // se ofrece, queda en null como venía siendo "sin especificar" para esta acción.
+  const memberFields: MemberFields = !pinRequired
+    ? {}
+    : unlockedMember
+      ? { seller_member_id: unlockedMember.memberId, seller_member_pin: unlockedMember.pin }
+      : unlockedAdminPin
+        ? { ...(memberId !== '' ? { seller_member_id: memberId } : {}), admin_pin: unlockedAdminPin }
+        : useAdminOverride
+          ? { ...(memberId !== '' ? { seller_member_id: memberId } : {}), admin_pin: memberPin }
+          : (memberId !== '' ? { seller_member_id: memberId, seller_member_pin: memberPin } : {});
+  const memberMissing = pinRequired && !unlockedMember && !unlockedAdminPin && (
     useAdminOverride ? !/^\d{4,6}$/.test(memberPin) : isMemberPinMissing(teamMembers, memberId, memberPin)
   );
 
@@ -341,7 +349,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             <p className="text-xs text-cream/40">El cliente recibe el email de confirmación cuando confirmás el cobro.</p>
           )}
 
-          {!unlockedMember && !unlockedAdminPin && (
+          {pinRequired && !unlockedMember && !unlockedAdminPin && (
             <div>
               <MemberPinGate
                 members={teamMembers}

@@ -23,6 +23,10 @@ interface Props {
   // ofrece reclamarla de nuevo (el admin la aprueba/rechaza desde el panel de arriba).
   pendingRequestMemberName?: string | null;
   onClaimed?: () => void;
+  // Modo abierto (sellers.team_pin_required = false): asignar/reasignar es un simple
+  // select, sin pedir ningún PIN — ni propio ni de administrador. Default true para
+  // no romper a nadie que no pasa el prop.
+  pinRequired?: boolean;
 }
 
 // Fila editable "¿quién de mi equipo cerró esta venta?" dentro del detalle de una
@@ -33,7 +37,7 @@ interface Props {
 // administrador del vendedor.
 export default function AttributionPicker({
   publicId, currentName, members, paymentMethod, unlockedMember, onMemberValidated, unlockedAdminPin, onAdminValidated, onSaved,
-  pendingRequestMemberName, onClaimed,
+  pendingRequestMemberName, onClaimed, pinRequired = true,
 }: Props) {
   const [editing, setEditing] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -96,6 +100,19 @@ export default function AttributionPicker({
 
   const handleSave = async () => {
     setError(null);
+    if (!pinRequired) {
+      setSaving(true);
+      try {
+        await sellerApi.setOrderAttributionOpen(publicId, memberId === '' ? null : memberId);
+        resetForm();
+        onSaved();
+      } catch (err) {
+        setError((err as SellerApiError).message);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const effectivePin = canSkipMemberPin ? unlockedMember!.pin : canSkipAdminPin ? unlockedAdminPin! : pin;
     if (!/^\d{4,6}$/.test(effectivePin)) {
       setError(needsAdminPin ? 'Ingresá el PIN de administrador (4-6 dígitos).' : 'Ingresá tu PIN (4-6 dígitos).');
@@ -158,10 +175,9 @@ export default function AttributionPicker({
         <span className="text-cream/80">
           {currentName ?? (pendingRequestMemberName ? `Reclamo pendiente de aprobar (${pendingRequestMemberName})` : 'Sin especificar')}
         </span>
-        {/* Autoreclamo: cualquiera del equipo puede pedir con SU PROPIO PIN que se le
-            sume una venta sin asignar — no la asigna, queda pendiente hasta que el
-            administrador la aprueba desde el panel de "Reclamos pendientes". */}
-        {members.length > 0 && !currentName && !pendingRequestMemberName && (
+        {/* Autoreclamo: solo tiene sentido en equipos con PIN (pedir+aprobar). En modo
+            abierto no hace falta — "asignar/cambiar" de abajo ya es sin fricción. */}
+        {pinRequired && members.length > 0 && !currentName && !pendingRequestMemberName && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setClaiming(true); }}
@@ -173,8 +189,9 @@ export default function AttributionPicker({
         {/* Si la orden ya está identificada de una forma que alcanza para esta
             acción, no tiene sentido pedir de nuevo un select+PIN acá — para
             reasignar hay que "cambiar" primero arriba (relock) y volver a
-            identificarse. */}
-        {members.length > 0 && !alreadyIdentified && (
+            identificarse. En modo abierto no hay nada que identificar, así que
+            siempre está disponible. */}
+        {members.length > 0 && (!pinRequired || !alreadyIdentified) && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setEditing(true); }}
@@ -201,7 +218,7 @@ export default function AttributionPicker({
             ...members.map((m) => ({ value: String(m.id), label: m.name })),
           ]}
         />
-        {!canSkipPin && (
+        {pinRequired && !canSkipPin && (
           <input
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -226,7 +243,7 @@ export default function AttributionPicker({
           ✕
         </button>
       </div>
-      {paymentMethod === 'cash' && memberId !== '' && !canSkipPin && (
+      {pinRequired && paymentMethod === 'cash' && memberId !== '' && !canSkipPin && (
         <button
           type="button"
           onClick={() => setUseAdminOverride((v) => !v)}

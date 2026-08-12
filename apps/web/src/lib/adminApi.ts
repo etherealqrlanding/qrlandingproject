@@ -316,6 +316,7 @@ export interface AdminSeller {
   has_admin_pin?: boolean;
   landing_customization_enabled?: boolean;
   team_enabled?: boolean;
+  team_pin_required?: boolean;
   created_at: string;
   supabase_user_id?: string | null;
   orders_total?: number;

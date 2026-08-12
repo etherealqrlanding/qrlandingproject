@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { sellerApi, SellerApiError, type SellerMemberStats, type SellerAdminPinInfo } from '../../lib/sellerApi';
+import { useSellerAuth } from '../../hooks/useSellerAuth';
 
 function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
@@ -18,6 +19,12 @@ type RowAction = { id: number; kind: 'pin' | 'toggle' | 'forgot' | 'delete' } | 
 //  - Cambiar el propio PIN o nombre: cualquiera puede hacerlo con SU PROPIO PIN
 //    actual — o también con el PIN de administrador si lo tiene a mano.
 export default function SellerTeamSection() {
+  const { me } = useSellerAuth();
+  // Modo abierto (sellers.team_pin_required = false): nadie pide ni usa PIN acá —
+  // ni el propio de cada persona, ni el de administrador. Default true mientras
+  // carga `me`, para no mostrar por un instante una UI sin PIN en una cuenta que sí
+  // lo requiere.
+  const pinRequired = me?.team_pin_required ?? true;
   const [members, setMembers] = useState<SellerMemberStats[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -168,11 +175,13 @@ export default function SellerTeamSection() {
   const handleAdd = async () => {
     setAddError(null);
     if (name.trim().length < 2) return setAddError('Ingresá un nombre.');
-    if (!/^\d{4,6}$/.test(pin)) return setAddError('El PIN debe tener entre 4 y 6 dígitos.');
-    if (!/^\d{4,6}$/.test(adminPin)) return setAddError('Ingresá el PIN de administrador para agregar a alguien.');
+    if (pinRequired) {
+      if (!/^\d{4,6}$/.test(pin)) return setAddError('El PIN debe tener entre 4 y 6 dígitos.');
+      if (!/^\d{4,6}$/.test(adminPin)) return setAddError('Ingresá el PIN de administrador para agregar a alguien.');
+    }
     setSaving(true);
     try {
-      await sellerApi.members.create(name.trim(), pin, adminPin, email.trim() || undefined);
+      await sellerApi.members.create(name.trim(), pinRequired ? pin : undefined, pinRequired ? adminPin : undefined, email.trim() || undefined);
       setName('');
       setPin('');
       setEmail('');
@@ -187,10 +196,10 @@ export default function SellerTeamSection() {
   };
 
   const handleToggleActive = async (m: SellerMemberStats) => {
-    if (!/^\d{4,6}$/.test(toggleAdminPin)) return setRowError('Ingresá el PIN de administrador.');
+    if (pinRequired && !/^\d{4,6}$/.test(toggleAdminPin)) return setRowError('Ingresá el PIN de administrador.');
     setBusyId(m.id);
     try {
-      await sellerApi.members.update(m.id, { is_active: !m.is_active, admin_pin: toggleAdminPin });
+      await sellerApi.members.update(m.id, { is_active: !m.is_active, ...(pinRequired ? { admin_pin: toggleAdminPin } : {}) });
       closeRowAction();
       load();
     } catch (err) {
@@ -209,9 +218,10 @@ export default function SellerTeamSection() {
     // Cargar el email por primera vez (todavía no tenía ninguno) no pide PIN — es el
     // paso que habilita después el self-service de "olvidé mi PIN" sin depender del
     // PIN de administrador. Cualquier otro cambio (PIN, nombre, o cambiar un email
-    // que ya existía) sigue pidiendo el gate de siempre.
+    // que ya existía) sigue pidiendo el gate de siempre. En modo abierto, directamente
+    // no hay PIN que pedir nunca.
     const settingEmailFirstTime = !m.email && emailChanged && trimmedEmail !== '' && !newPin;
-    if (!settingEmailFirstTime && !/^\d{4,6}$/.test(authPin)) {
+    if (pinRequired && !settingEmailFirstTime && !/^\d{4,6}$/.test(authPin)) {
       return setRowError('Ingresá tu PIN actual, o el PIN de administrador.');
     }
 
@@ -222,7 +232,7 @@ export default function SellerTeamSection() {
       await sellerApi.members.update(m.id, {
         ...(newPin ? { pin: newPin } : {}),
         ...(emailChanged ? { email: trimmedEmail || null } : {}),
-        ...(settingEmailFirstTime ? {} : { admin_pin: authPin, current_pin: authPin }),
+        ...(pinRequired && !settingEmailFirstTime ? { admin_pin: authPin, current_pin: authPin } : {}),
       });
       closeRowAction();
       load();
@@ -248,10 +258,10 @@ export default function SellerTeamSection() {
   };
 
   const handleDeleteMember = async (m: SellerMemberStats) => {
-    if (!/^\d{4,6}$/.test(deletePin)) return setRowError('Ingresá el PIN de administrador.');
+    if (pinRequired && !/^\d{4,6}$/.test(deletePin)) return setRowError('Ingresá el PIN de administrador.');
     setBusyId(m.id);
     try {
-      await sellerApi.members.delete(m.id, deletePin);
+      await sellerApi.members.delete(m.id, pinRequired ? deletePin : undefined);
       closeRowAction();
       load();
     } catch (err) {
@@ -274,13 +284,25 @@ export default function SellerTeamSection() {
         </button>
       </div>
       <p className="text-cream/50 text-xs mb-4">
-        Si trabajás con más gente bajo tu mismo código (ej. conserjes), cargalos acá para que cada uno pueda
-        firmar con su PIN qué venta cerró. No es un login — solo queda registrado en la venta para tu propio control.
-        Cada quien puede cambiar su propio PIN ingresándolo; agregar gente nueva, activar/desactivar o eliminar
-        requiere el PIN de administrador (te lo damos nosotros).
+        {pinRequired ? (
+          <>
+            Si trabajás con más gente bajo tu mismo código (ej. conserjes), cargalos acá para que cada uno pueda
+            firmar con su PIN qué venta cerró. No es un login — solo queda registrado en la venta para tu propio control.
+            Cada quien puede cambiar su propio PIN ingresándolo; agregar gente nueva, activar/desactivar o eliminar
+            requiere el PIN de administrador (te lo damos nosotros).
+          </>
+        ) : (
+          <>
+            Si trabajás con más gente bajo tu mismo código (ej. conserjes), cargalos acá para que después puedan
+            marcar entre ustedes quién cerró cada venta. No es un login ni pide PIN — cualquiera con acceso a esta
+            cuenta puede agregar, editar o dar de baja a alguien.
+          </>
+        )}
       </p>
 
-      {/* ── ADMIN de la cuenta: el PIN que gatea el resto de estas operaciones ── */}
+      {/* ── ADMIN de la cuenta: el PIN que gatea el resto de estas operaciones — solo
+          existe (y tiene sentido mostrarlo) en equipos que operan con PIN. ── */}
+      {pinRequired && (
       <div className="mb-4 rounded-xl border border-gold/25 bg-ink-soft/40 p-3.5">
         <div className="sm:flex sm:items-center sm:justify-between gap-3">
           <div className="min-w-0">
@@ -404,6 +426,7 @@ export default function SellerTeamSection() {
 
         {adminSaveSuccess && <p className="text-xs text-emerald-400 mt-2">✓ Actualizado.</p>}
       </div>
+      )}
 
       {showAdd && (
         <div className="mb-4 rounded-xl border border-gold/20 bg-ink-soft/40 p-4 space-y-3">
@@ -415,29 +438,33 @@ export default function SellerTeamSection() {
               maxLength={60}
               className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
             />
-            <input
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="Su PIN (4-6 dígitos)"
-              inputMode="numeric"
-              className="sm:w-40 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
-            />
+            {pinRequired && (
+              <input
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Su PIN (4-6 dígitos)"
+                inputMode="numeric"
+                className="sm:w-40 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+              />
+            )}
           </div>
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
-            placeholder="Email (opcional — para que pueda resetear su PIN solo)"
+            placeholder={pinRequired ? 'Email (opcional — para que pueda resetear su PIN solo)' : 'Email (opcional)'}
             maxLength={160}
             className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
           />
-          <input
-            value={adminPin}
-            onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="PIN de administrador"
-            inputMode="numeric"
-            className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
-          />
+          {pinRequired && (
+            <input
+              value={adminPin}
+              onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="PIN de administrador"
+              inputMode="numeric"
+              className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+            />
+          )}
           {addError && <p className="text-xs text-bordeaux-light">⚠ {addError}</p>}
           <button
             type="button"
@@ -511,7 +538,7 @@ export default function SellerTeamSection() {
                     >
                       {m.is_active ? 'Desactivar' : 'Activar'}
                     </button>
-                    {m.email && (
+                    {pinRequired && m.email && (
                       <button
                         type="button"
                         onClick={() => {
@@ -546,30 +573,33 @@ export default function SellerTeamSection() {
                   return (
                   <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
                     <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        value={newPin}
-                        onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="Nuevo PIN (opcional)"
-                        inputMode="numeric"
-                        autoFocus
-                        className="w-full sm:w-40 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
-                      />
+                      {pinRequired && (
+                        <input
+                          value={newPin}
+                          onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="Nuevo PIN (opcional)"
+                          inputMode="numeric"
+                          autoFocus
+                          className="w-full sm:w-40 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                        />
+                      )}
                       <input
                         value={editEmail}
                         onChange={(e) => setEditEmail(e.target.value)}
                         type="email"
                         placeholder="Email (opcional)"
+                        autoFocus={!pinRequired}
                         className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
                       />
                     </div>
-                    {!m.email && (
+                    {pinRequired && !m.email && (
                       <p className="text-[10px] text-cream/35">
                         {settingEmailFirstTime
                           ? 'Como todavía no tiene email cargado, esto se guarda sin pedir PIN.'
                           : 'Cargarle un email por primera vez no pide PIN.'}
                       </p>
                     )}
-                    {!settingEmailFirstTime && (
+                    {pinRequired && !settingEmailFirstTime && (
                       <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                         <input
                           value={authPin}
@@ -597,14 +627,16 @@ export default function SellerTeamSection() {
 
                 {isOpen && rowAction?.kind === 'toggle' && (
                   <div className="mt-3 pt-3 border-t border-gold/10 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                    <input
-                      value={toggleAdminPin}
-                      onChange={(e) => setToggleAdminPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      placeholder="PIN de administrador"
-                      inputMode="numeric"
-                      autoFocus
-                      className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
-                    />
+                    {pinRequired && (
+                      <input
+                        value={toggleAdminPin}
+                        onChange={(e) => setToggleAdminPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="PIN de administrador"
+                        inputMode="numeric"
+                        autoFocus
+                        className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                      />
+                    )}
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -655,14 +687,16 @@ export default function SellerTeamSection() {
                       Borra a {m.name} de tu equipo. Si ya tiene ventas registradas, no se va a poder — desactivala en su lugar.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-                      <input
-                        value={deletePin}
-                        onChange={(e) => setDeletePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                        placeholder="PIN de administrador"
-                        inputMode="numeric"
-                        autoFocus
-                        className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
-                      />
+                      {pinRequired && (
+                        <input
+                          value={deletePin}
+                          onChange={(e) => setDeletePin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          placeholder="PIN de administrador"
+                          inputMode="numeric"
+                          autoFocus
+                          className="w-full sm:w-56 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                        />
+                      )}
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
