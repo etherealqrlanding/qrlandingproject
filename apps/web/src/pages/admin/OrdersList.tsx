@@ -498,19 +498,15 @@ export default function OrdersList() {
                     ) : <span className="text-cream/30">—</span>}
                   </td>
                   <td className="py-2 px-2 text-center">
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center justify-center gap-1 flex-nowrap">
                       <StatusBadge status={o.status} />
-                      {(o.payment_method === 'cash' || !o.admin_viewed_at) && (
-                        <div className="flex items-center gap-1">
-                          {o.payment_method === 'cash' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5 whitespace-nowrap">
-                              Ef.{o.cash_collected_currency ? ` ${o.cash_collected_currency}` : ''}
-                            </span>
-                          )}
-                          {!o.admin_viewed_at && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold whitespace-nowrap">🆕 Nueva</span>
-                          )}
-                        </div>
+                      {o.payment_method === 'cash' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5 whitespace-nowrap">
+                          Ef.{o.cash_collected_currency ? ` ${o.cash_collected_currency}` : ''}
+                        </span>
+                      )}
+                      {!o.admin_viewed_at && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold whitespace-nowrap">🆕 Nueva</span>
                       )}
                     </div>
                   </td>
