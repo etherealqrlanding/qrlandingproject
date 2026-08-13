@@ -7,6 +7,16 @@ import { sendSellerMemberPinReset } from '../../services/email.js';
 import { config } from '../../config.js';
 import { authLimiter } from '../../middleware/rateLimit.js';
 
+// Formato WhatsApp: lo que importa es que, sacando todo lo que no sea dígito, quede
+// un número de largo internacional válido (8-15 dígitos, rango E.164) — es el mismo
+// criterio que usa después el botón de WhatsApp del admin (wa.me/<dígitos>). Se
+// guarda el string tal cual lo tipeó la persona (con +, espacios, guiones), no la
+// versión normalizada — el link se arma pelando los no-dígitos recién ahí.
+const whatsappPhoneSchema = z.string().trim().max(40).refine(
+  (v) => { const digits = v.replace(/\D/g, ''); return digits.length >= 8 && digits.length <= 15; },
+  'Ingresá un teléfono con WhatsApp válido, con código de país (ej: +54 9 11 1234-5678).',
+);
+
 // Montado bajo /api/seller/me/members, ya protegido por requireSeller (ver index.ts).
 export const sellerMembersRouter = Router();
 
@@ -34,6 +44,10 @@ const createSchema = z.object({
   // Opcional — habilita que esa persona pueda pedir su propio reset de PIN por email
   // si se lo olvida, sin depender del PIN de administrador (ver /members/forgot-pin).
   email: z.string().trim().email().max(160).optional().nullable(),
+  // A diferencia del email, el teléfono siempre se pide al dar de alta — sirve para
+  // contactar por WhatsApp a esa persona puntual del equipo (ej. un conserje) desde
+  // el admin de la plataforma.
+  phone: whatsappPhoneSchema,
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
@@ -46,7 +60,7 @@ sellerMembersRouter.post('/', async (req, res, next) => {
   try {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
-    const { name, pin, email, admin_pin } = parsed.data;
+    const { name, pin, email, phone, admin_pin } = parsed.data;
 
     const { pinRequired } = await getTeamMode(req.seller!.sellerId);
     if (pinRequired) {
@@ -58,10 +72,10 @@ sellerMembersRouter.post('/', async (req, res, next) => {
 
     try {
       const { rows } = await pool.query(
-        `INSERT INTO seller_members (seller_id, name, pin_hash, email)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, name, email, is_active, created_at`,
-        [req.seller!.sellerId, name, hashPin(effectivePin), email || null],
+        `INSERT INTO seller_members (seller_id, name, pin_hash, email, phone)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, name, email, phone, is_active, created_at`,
+        [req.seller!.sellerId, name, hashPin(effectivePin), email || null, phone],
       );
       res.status(201).json({ data: rows[0] });
     } catch (err) {
@@ -78,8 +92,10 @@ const updateSchema = z.object({
   is_active: z.boolean().optional(),
   pin: z.string().regex(/^\d{4,6}$/, 'El PIN debe tener entre 4 y 6 dígitos').optional(),
   email: z.string().trim().email().max(160).optional().nullable(),
-  // Cualquiera de los dos autoriza cambiar nombre/PIN/email; activar/desactivar exige
-  // admin_pin sin excepción (ni el dueño del registro puede auto-activarse/desactivarse).
+  phone: whatsappPhoneSchema.optional(),
+  // Cualquiera de los dos autoriza cambiar nombre/PIN/email/teléfono; activar/
+  // desactivar exige admin_pin sin excepción (ni el dueño del registro puede
+  // auto-activarse/desactivarse).
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
   current_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
@@ -90,8 +106,8 @@ sellerMembersRouter.patch('/:id', async (req, res, next) => {
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID inválido' });
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
-    const { name, is_active, pin, email, admin_pin, current_pin } = parsed.data;
-    if (name === undefined && is_active === undefined && pin === undefined && email === undefined) {
+    const { name, is_active, pin, email, phone, admin_pin, current_pin } = parsed.data;
+    if (name === undefined && is_active === undefined && pin === undefined && email === undefined && phone === undefined) {
       return res.status(400).json({ error: 'Nada para actualizar' });
     }
 
@@ -108,7 +124,7 @@ sellerMembersRouter.patch('/:id', async (req, res, next) => {
     // (que nadie le pise el email de recuperación a otra persona sin autorización).
     const settingEmailFirstTime = currentRows[0].email == null
       && email != null && email.trim() !== ''
-      && name === undefined && is_active === undefined && pin === undefined;
+      && name === undefined && is_active === undefined && pin === undefined && phone === undefined;
 
     const { pinRequired } = await getTeamMode(req.seller!.sellerId);
     // Modo abierto: cualquiera logueado en la cuenta puede editar o activar/desactivar
@@ -142,10 +158,11 @@ sellerMembersRouter.patch('/:id', async (req, res, next) => {
             SET name = COALESCE($3, name),
                 is_active = COALESCE($4, is_active),
                 pin_hash = COALESCE($5, pin_hash),
-                email = CASE WHEN $6::boolean THEN $7 ELSE email END
+                email = CASE WHEN $6::boolean THEN $7 ELSE email END,
+                phone = COALESCE($8, phone)
           WHERE id = $1 AND seller_id = $2
-          RETURNING id, name, email, is_active, created_at`,
-        [id, req.seller!.sellerId, name ?? null, is_active ?? null, pin ? hashPin(pin) : null, email !== undefined, email || null],
+          RETURNING id, name, email, phone, is_active, created_at`,
+        [id, req.seller!.sellerId, name ?? null, is_active ?? null, pin ? hashPin(pin) : null, email !== undefined, email || null, phone ?? null],
       );
       if (!rows[0]) return res.status(404).json({ error: 'No encontrado' });
       res.json({ data: rows[0] });

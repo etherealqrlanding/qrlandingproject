@@ -7,6 +7,14 @@ function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
 }
 
+// Mismo criterio que el backend: sacando todo lo que no sea dígito, tiene que quedar
+// un número de largo internacional válido (8-15 dígitos) — es lo que después usa el
+// botón de WhatsApp del admin (wa.me/<dígitos>).
+function isValidWhatsappPhone(phone: string) {
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
 type RowAction = { id: number; kind: 'pin' | 'toggle' | 'forgot' | 'delete' } | null;
 
 // Autogestión de "mi equipo": sub-vendedores (ej. conserjes de un hotel) que venden
@@ -30,6 +38,7 @@ export default function SellerTeamSection() {
   const [error, setError] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState('');
   // El email es el canal de recuperación si se pierde el PIN — pedimos confirmarlo
@@ -50,6 +59,7 @@ export default function SellerTeamSection() {
   const [newPin, setNewPin] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editEmailConfirm, setEditEmailConfirm] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   // Activar/desactivar: solo vale el PIN de administrador.
   const [toggleAdminPin, setToggleAdminPin] = useState('');
   // Olvidé mi PIN: confirmar el email para pedir el link de reset por su cuenta.
@@ -101,6 +111,7 @@ export default function SellerTeamSection() {
     setNewPin('');
     setEditEmail('');
     setEditEmailConfirm('');
+    setEditPhone('');
     setToggleAdminPin('');
     setForgotEmail('');
     setDeletePin('');
@@ -188,6 +199,7 @@ export default function SellerTeamSection() {
   const handleAdd = async () => {
     setAddError(null);
     if (name.trim().length < 2) return setAddError('Ingresá un nombre.');
+    if (!isValidWhatsappPhone(phone)) return setAddError('Ingresá un teléfono con WhatsApp válido, con código de país (ej: +54 9 11 1234-5678).');
     if (email.trim() !== '' && email.trim().toLowerCase() !== emailConfirm.trim().toLowerCase()) {
       return setAddError('El email y su confirmación no coinciden.');
     }
@@ -197,8 +209,9 @@ export default function SellerTeamSection() {
     }
     setSaving(true);
     try {
-      await sellerApi.members.create(name.trim(), pinRequired ? pin : undefined, pinRequired ? adminPin : undefined, email.trim() || undefined);
+      await sellerApi.members.create(name.trim(), phone.trim(), pinRequired ? pin : undefined, pinRequired ? adminPin : undefined, email.trim() || undefined);
       setName('');
+      setPhone('');
       setPin('');
       setEmail('');
       setEmailConfirm('');
@@ -229,18 +242,22 @@ export default function SellerTeamSection() {
   const handleEditMember = async (m: SellerMemberStats) => {
     const trimmedEmail = editEmail.trim();
     const emailChanged = trimmedEmail !== (m.email ?? '');
-    if (!newPin && !emailChanged) return setRowError('Cambiá el PIN y/o el email antes de guardar.');
+    const trimmedPhone = editPhone.trim();
+    const phoneChanged = trimmedPhone !== (m.phone ?? '');
+    if (!newPin && !emailChanged && !phoneChanged) return setRowError('Cambiá el PIN, el email y/o el teléfono antes de guardar.');
     if (newPin && !/^\d{4,6}$/.test(newPin)) return setRowError('El nuevo PIN debe tener entre 4 y 6 dígitos.');
     if (emailChanged && trimmedEmail !== '' && trimmedEmail.toLowerCase() !== editEmailConfirm.trim().toLowerCase()) {
       return setRowError('El email y su confirmación no coinciden.');
     }
+    if (phoneChanged && trimmedPhone === '') return setRowError('El teléfono no puede quedar vacío.');
+    if (phoneChanged && !isValidWhatsappPhone(trimmedPhone)) return setRowError('Ingresá un teléfono con WhatsApp válido, con código de país (ej: +54 9 11 1234-5678).');
 
     // Cargar el email por primera vez (todavía no tenía ninguno) no pide PIN — es el
     // paso que habilita después el self-service de "olvidé mi PIN" sin depender del
-    // PIN de administrador. Cualquier otro cambio (PIN, nombre, o cambiar un email
-    // que ya existía) sigue pidiendo el gate de siempre. En modo abierto, directamente
-    // no hay PIN que pedir nunca.
-    const settingEmailFirstTime = !m.email && emailChanged && trimmedEmail !== '' && !newPin;
+    // PIN de administrador. Cualquier otro cambio (PIN, nombre, teléfono, o cambiar un
+    // email que ya existía) sigue pidiendo el gate de siempre. En modo abierto,
+    // directamente no hay PIN que pedir nunca.
+    const settingEmailFirstTime = !m.email && emailChanged && trimmedEmail !== '' && !newPin && !phoneChanged;
     if (pinRequired && !settingEmailFirstTime && !/^\d{4,6}$/.test(authPin)) {
       return setRowError('Ingresá tu PIN actual, o el PIN de administrador.');
     }
@@ -252,6 +269,7 @@ export default function SellerTeamSection() {
       await sellerApi.members.update(m.id, {
         ...(newPin ? { pin: newPin } : {}),
         ...(emailChanged ? { email: trimmedEmail || null } : {}),
+        ...(phoneChanged ? { phone: trimmedPhone } : {}),
         ...(pinRequired && !settingEmailFirstTime ? { admin_pin: authPin, current_pin: authPin } : {}),
       });
       closeRowAction();
@@ -480,6 +498,17 @@ export default function SellerTeamSection() {
             )}
           </div>
           <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            type="tel"
+            placeholder="Teléfono (con WhatsApp), ej: +54 9 11 1234-5678"
+            maxLength={40}
+            className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+          />
+          <p className="text-[11px] text-cream/35 -mt-1.5">
+            📱 Es el teléfono con el que te vamos a contactar por WhatsApp si hace falta — asegurate de que sea correcto y tenga WhatsApp activo.
+          </p>
+          <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             type="email"
@@ -552,6 +581,7 @@ export default function SellerTeamSection() {
                       {m.orders_paid} venta{m.orders_paid !== 1 ? 's' : ''}
                       {m.orders_paid > 0 && <> · {fmtArs(m.revenue_paid_ars)}</>}
                     </p>
+                    {m.phone && <p className="text-[11px] text-cream/30 truncate">📞 {m.phone}</p>}
                     {m.email && <p className="text-[11px] text-cream/30 truncate">{m.email}</p>}
                   </div>
                   <div className="flex items-center gap-2 mt-2 sm:mt-0 shrink-0">
@@ -565,6 +595,7 @@ export default function SellerTeamSection() {
                         setNewPin('');
                         setEditEmail(m.email ?? '');
                         setEditEmailConfirm(m.email ?? '');
+                        setEditPhone(m.phone ?? '');
                       }}
                       className="text-xs text-gold-soft hover:text-gold transition underline underline-offset-2"
                     >
@@ -636,6 +667,16 @@ export default function SellerTeamSection() {
                         className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
                       />
                     </div>
+                    <input
+                      value={editPhone}
+                      onChange={(e) => setEditPhone(e.target.value)}
+                      type="tel"
+                      placeholder="Teléfono (con WhatsApp)"
+                      className="w-full rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                    />
+                    <p className="text-[10px] text-cream/30">
+                      📱 Es el teléfono con el que te contactamos por WhatsApp si hace falta.
+                    </p>
                     {editEmail.trim() !== '' && editEmail.trim() !== (m.email ?? '') && (
                       <input
                         value={editEmailConfirm}

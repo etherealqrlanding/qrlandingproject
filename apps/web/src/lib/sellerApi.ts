@@ -208,6 +208,7 @@ export interface SellerMember {
   id: number;
   name: string;
   email: string | null;
+  phone: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -215,6 +216,20 @@ export interface SellerMember {
 export interface SellerMemberStats extends SellerMember {
   orders_paid: number;
   revenue_paid_ars: number;
+}
+
+export interface SellerPeriodStats {
+  orders_paid: number;
+  revenue_paid_usd: number;
+  revenue_paid_ars: number;
+  commission_earned_usd: number;
+  commission_earned_ars: number;
+  commission_paid_usd: number;
+  commission_paid_ars: number;
+  commission_pending_usd: number;
+  commission_pending_ars: number;
+  net_pending_settlement_usd: number;
+  net_pending_settlement_ars: number;
 }
 
 export interface SellerAdminPinInfo {
@@ -351,6 +366,16 @@ export async function getNotificationStreamUrl(): Promise<string | null> {
 
 export const sellerApi = {
   me: () => request<SellerMe>('/api/seller/me'),
+  // Mismas métricas que `me()`, recortables por sub-vendedor y/o período — usado por
+  // el dashboard de estadísticas de "Mi equipo". Sin filtros, da lo mismo que `me()`.
+  stats: (opts: { memberId?: number; from?: string; to?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.memberId != null) params.set('member_id', String(opts.memberId));
+    if (opts.from) params.set('from', opts.from);
+    if (opts.to) params.set('to', opts.to);
+    const qs = params.toString();
+    return request<SellerPeriodStats>(`/api/seller/me/stats${qs ? `?${qs}` : ''}`);
+  },
   orders: (status?: string) => {
     const qs = status ? `?status=${encodeURIComponent(status)}` : '';
     return request<SellerOrder[]>(`/api/seller/me/orders${qs}`);
@@ -408,9 +433,10 @@ export const sellerApi = {
     list: () => request<SellerMember[]>('/api/seller/me/members'),
     stats: () => request<SellerMemberStats[]>('/api/seller/me/members/stats'),
     // pin/adminPin opcionales: en modo abierto (team_pin_required=false) ni se piden.
-    create: (name: string, pin: string | undefined, adminPin: string | undefined, email?: string) =>
-      request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, pin, email: email || undefined, admin_pin: adminPin }) }),
-    update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; email?: string | null; admin_pin?: string; current_pin?: string }) =>
+    // El teléfono, a diferencia del email, siempre se pide.
+    create: (name: string, phone: string, pin: string | undefined, adminPin: string | undefined, email?: string) =>
+      request<SellerMember>('/api/seller/me/members', { method: 'POST', body: JSON.stringify({ name, phone, pin, email: email || undefined, admin_pin: adminPin }) }),
+    update: (id: number, body: { name?: string; is_active?: boolean; pin?: string; email?: string | null; phone?: string; admin_pin?: string; current_pin?: string }) =>
       request<SellerMember>(`/api/seller/me/members/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
     // Borrado real (no desactivar) — solo si nunca tuvo ventas atribuidas, ver backend.
     // adminPin opcional: en modo abierto no se pide.

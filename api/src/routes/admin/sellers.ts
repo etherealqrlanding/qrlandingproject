@@ -9,7 +9,7 @@ import { config } from '../../config.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { pool } from '../../db.js';
 import { hashPin } from '../../services/pin.js';
-import { listSellerMemberStats, resetSellerMemberPinByAdmin } from '../../repos/sellerMembers.js';
+import { listSellerMemberStats, resetSellerMemberPinByAdmin, getSellerPeriodStats } from '../../repos/sellerMembers.js';
 import { requireRole } from '../../middleware/requireAdmin.js';
 import { sendSellerPortalInvite, sendSellerPasswordReset, sendSellerCommissionPaid, sendNetSettledConfirmation } from '../../services/email.js';
 import { createCommissionPaidNotification, createNetSettledNotification } from '../../repos/notifications.js';
@@ -199,6 +199,28 @@ adminSellersRouter.get('/:id/members', async (req, res, next) => {
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
     const rows = await listSellerMemberStats(id);
     res.json({ data: rows });
+  } catch (err) { next(err); }
+});
+
+const periodStatsSchema = z.object({
+  member_id: z.coerce.number().int().positive().optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// GET /api/admin/sellers/:id/stats — mismas métricas que /members pero con paridad
+// completa a GET /me del portal del vendedor (facturación/comisión/neto a rendir),
+// recortable por sub-vendedor y/o período. Espejo de GET /me/stats del lado seller
+// (misma función de repo, acá con el :id de la URL en vez del seller de la sesión).
+adminSellersRouter.get('/:id/stats', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = periodStatsSchema.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Parámetros inválidos' });
+    const { member_id, from, to } = parsed.data;
+    const stats = await getSellerPeriodStats(id, { memberId: member_id, from, to });
+    res.json({ data: stats });
   } catch (err) { next(err); }
 });
 

@@ -6,6 +6,7 @@ export interface SellerMember {
   id: number;
   name: string;
   email: string | null;
+  phone: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -15,9 +16,75 @@ export interface SellerMemberStats extends SellerMember {
   revenue_paid_ars: number;
 }
 
+export interface SellerPeriodStats {
+  orders_paid: number;
+  revenue_paid_usd: number;
+  revenue_paid_ars: number;
+  commission_earned_usd: number;
+  commission_earned_ars: number;
+  commission_paid_usd: number;
+  commission_paid_ars: number;
+  commission_pending_usd: number;
+  commission_pending_ars: number;
+  net_pending_settlement_usd: number;
+  net_pending_settlement_ars: number;
+}
+
+/**
+ * Misma paridad de métricas que GET /me (facturación/comisión solo Mercado Pago,
+ * neto a rendir solo efectivo), pero con dos recortes opcionales: por sub-vendedor
+ * (memberId — si se omite, es toda la cuenta) y por período (from/to, fechas
+ * YYYY-MM-DD sobre orders.paid_at — si se omiten, es todo el histórico, igual que
+ * /me). El corte de fecha se aplica a TODAS las métricas por igual (ej. "comisión
+ * pendiente" con período = comisión generada en ese rango que sigue sin liquidar,
+ * no el estado actual de ventas de otros rangos). No hace falta que memberId
+ * pertenezca realmente al vendedor autenticado para blindar esto: la condición
+ * `a.seller_id = $1` ya acota todo a las propias atribuciones del seller
+ * autenticado, así que un memberId ajeno simplemente no matchea ninguna fila.
+ */
+export async function getSellerPeriodStats(
+  sellerId: number,
+  opts: { memberId?: number; from?: string; to?: string },
+): Promise<SellerPeriodStats> {
+  const { rows } = await pool.query<SellerPeriodStats>(
+    `SELECT
+       COALESCE(COUNT(*) FILTER (WHERE o.status = 'paid'), 0)::int AS orders_paid,
+       COALESCE(SUM(o.total_usd) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago'), 0)::float AS revenue_paid_usd,
+       COALESCE(SUM(o.total_ars) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago'), 0)::float AS revenue_paid_ars,
+       COALESCE(SUM(a.commission_amount_usd) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago'), 0)::float AS commission_earned_usd,
+       COALESCE(SUM(a.commission_amount_ars) FILTER (WHERE o.status = 'paid' AND o.payment_method = 'mercadopago'), 0)::float AS commission_earned_ars,
+       COALESCE(SUM(a.commission_amount_usd) FILTER (
+         WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NOT NULL
+       ), 0)::float AS commission_paid_usd,
+       COALESCE(SUM(a.commission_amount_ars) FILTER (
+         WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NOT NULL
+       ), 0)::float AS commission_paid_ars,
+       COALESCE(SUM(a.commission_amount_usd) FILTER (
+         WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL
+       ), 0)::float AS commission_pending_usd,
+       COALESCE(SUM(a.commission_amount_ars) FILTER (
+         WHERE o.status = 'paid' AND o.payment_method = 'mercadopago' AND a.paid_to_seller_at IS NULL
+       ), 0)::float AS commission_pending_ars,
+       COALESCE(SUM(a.net_total_usd_snapshot) FILTER (
+         WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL
+       ), 0)::float AS net_pending_settlement_usd,
+       COALESCE(SUM(a.net_total_usd_snapshot * o.exchange_rate_used) FILTER (
+         WHERE o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL
+       ), 0)::float AS net_pending_settlement_ars
+       FROM order_attributions a
+       JOIN orders o ON o.id = a.order_id
+      WHERE a.seller_id = $1
+        AND ($2::int IS NULL OR a.seller_member_id = $2)
+        AND ($3::date IS NULL OR o.paid_at >= $3::date)
+        AND ($4::date IS NULL OR o.paid_at < ($4::date + INTERVAL '1 day'))`,
+    [sellerId, opts.memberId ?? null, opts.from ?? null, opts.to ?? null],
+  );
+  return rows[0];
+}
+
 export async function listSellerMembers(sellerId: number): Promise<SellerMember[]> {
   const { rows } = await pool.query<SellerMember>(
-    `SELECT id, name, email, is_active, created_at
+    `SELECT id, name, email, phone, is_active, created_at
        FROM seller_members
       WHERE seller_id = $1
       ORDER BY is_active DESC, name`,
@@ -29,14 +96,14 @@ export async function listSellerMembers(sellerId: number): Promise<SellerMember[
 export async function listSellerMemberStats(sellerId: number): Promise<SellerMemberStats[]> {
   const { rows } = await pool.query<SellerMemberStats>(
     `SELECT
-       m.id, m.name, m.email, m.is_active, m.created_at,
+       m.id, m.name, m.email, m.phone, m.is_active, m.created_at,
        COUNT(*) FILTER (WHERE o.status = 'paid')::int AS orders_paid,
        COALESCE(SUM(o.total_ars) FILTER (WHERE o.status = 'paid'), 0)::float AS revenue_paid_ars
        FROM seller_members m
        LEFT JOIN order_attributions a ON a.seller_member_id = m.id
        LEFT JOIN orders o ON o.id = a.order_id
       WHERE m.seller_id = $1
-      GROUP BY m.id, m.name, m.email, m.is_active, m.created_at
+      GROUP BY m.id, m.name, m.email, m.phone, m.is_active, m.created_at
       ORDER BY m.is_active DESC, m.name`,
     [sellerId],
   );

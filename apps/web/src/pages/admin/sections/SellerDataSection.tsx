@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminSeller } from '../../../lib/adminApi';
 import { SELLER_KINDS, sellerKindSuggestsCash } from '../../../lib/sellerKinds';
 import InvitePortalSection from './InvitePortalSection';
-import TeamAdminPinSection from './TeamAdminPinSection';
 import Checkbox from '../../../components/Checkbox';
 
 interface Props {
@@ -298,10 +297,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
       </div>
 
       {!isNew && seller && (
-        <>
-          <InvitePortalSection seller={seller} onUpdated={onUpdated} />
-          <TeamAdminPinSection seller={seller} onUpdated={onUpdated} />
-        </>
+        <InvitePortalSection seller={seller} onUpdated={onUpdated} />
       )}
     </form>
   );

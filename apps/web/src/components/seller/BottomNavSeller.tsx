@@ -16,9 +16,9 @@ const PINNED = [
 ];
 
 const MORE_BASE = [
+  { to: '/seller/configuracion', label: 'Configuración', icon: '⚙' },
   { to: '/seller/liquidaciones', label: 'Liquidaciones', icon: '⬡' },
   { to: '/seller/archivo', label: 'Archivo', icon: '📁' },
-  { to: '/seller/configuracion', label: 'Configuración', icon: '⚙' },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
 

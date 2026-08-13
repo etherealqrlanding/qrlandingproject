@@ -12,7 +12,7 @@ import {
   getPinResetPreview, consumePinReset, getSellerAdminPinInfo, updateSellerAdminPin,
   getAdminPinResetPreview, consumeAdminPinReset, createAdminPinResetToken,
   requestOrderAttribution, listPendingAttributionRequests, resolveAttributionRequest,
-  clearPendingAttributionRequests, getTeamMode,
+  clearPendingAttributionRequests, getTeamMode, getSellerPeriodStats,
 } from '../../repos/sellerMembers.js';
 import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
@@ -274,6 +274,29 @@ sellerRouter.get('/me', async (req, res, next) => {
       [req.seller!.sellerId],
     );
     res.json({ data: rows[0] });
+  } catch (err) { next(err); }
+});
+
+const periodStatsSchema = z.object({
+  member_id: z.coerce.number().int().positive().optional(),
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// GET /me/stats — mismo set de métricas que GET /me (facturación/comisión/neto a
+// rendir), pero recortable por sub-vendedor (member_id) y/o por período (from/to).
+// Usado por el dashboard de estadísticas de "Mi equipo" (SellerTeamStats.tsx) para
+// tanto la vista de toda la cuenta como el desglose por persona — sin filtros, da
+// exactamente lo mismo que los campos de GET /me. Sin chequeo de PIN acá a
+// propósito: el gate de "quién puede ver a quién" es enteramente de frontend (ver
+// TeamStatsGate.tsx), mismo criterio que el resto del sistema de PIN de esta app.
+sellerRouter.get('/me/stats', async (req, res, next) => {
+  try {
+    const parsed = periodStatsSchema.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'Parámetros inválidos' });
+    const { member_id, from, to } = parsed.data;
+    const stats = await getSellerPeriodStats(req.seller!.sellerId, { memberId: member_id, from, to });
+    res.json({ data: stats });
   } catch (err) { next(err); }
 });
 

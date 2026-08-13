@@ -337,10 +337,25 @@ export interface AdminSellerMember {
   id: number;
   name: string;
   email: string | null;
+  phone: string | null;
   is_active: boolean;
   created_at: string;
   orders_paid: number;
   revenue_paid_ars: number;
+}
+
+export interface AdminSellerPeriodStats {
+  orders_paid: number;
+  revenue_paid_usd: number;
+  revenue_paid_ars: number;
+  commission_earned_usd: number;
+  commission_earned_ars: number;
+  commission_paid_usd: number;
+  commission_paid_ars: number;
+  commission_pending_usd: number;
+  commission_pending_ars: number;
+  net_pending_settlement_usd: number;
+  net_pending_settlement_ars: number;
 }
 
 export interface AdminSellerOrder {
@@ -757,6 +772,17 @@ export const adminApi = {
       }),
     // Sub-vendedores (ej. conserjes) que el vendedor cargó en su equipo — solo lectura.
     members: (id: number) => request<AdminSellerMember[]>(`/api/admin/sellers/${id}/members`),
+    // Mismas métricas que /members pero con paridad completa a GET /me del portal
+    // del vendedor, recortable por sub-vendedor y/o período. Espejo admin de
+    // sellerApi.stats().
+    stats: (id: number, opts: { memberId?: number; from?: string; to?: string } = {}) => {
+      const params = new URLSearchParams();
+      if (opts.memberId != null) params.set('member_id', String(opts.memberId));
+      if (opts.from) params.set('from', opts.from);
+      if (opts.to) params.set('to', opts.to);
+      const qs = params.toString();
+      return request<AdminSellerPeriodStats>(`/api/admin/sellers/${id}/stats${qs ? `?${qs}` : ''}`);
+    },
     // Blanqueo de emergencia (solo super_admin): genera un PIN nuevo para un
     // sub-vendedor puntual sin depender del vendedor ni de su email cargado.
     resetMemberPin: (sellerId: number, memberId: number) =>

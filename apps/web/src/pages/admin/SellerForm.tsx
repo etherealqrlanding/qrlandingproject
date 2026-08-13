@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminSeller } from '../../lib/adminApi';
 import SellerDataSection from './sections/SellerDataSection';
 import SellerQrSection from './sections/SellerQrSection';
 import SellerOrdersSection from './sections/SellerOrdersSection';
+import TeamAdminPinSection from './sections/TeamAdminPinSection';
+import SellerTeamStatsSection from './sections/SellerTeamStatsSection';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
-type Tab = 'data' | 'qr' | 'orders';
+type Tab = 'data' | 'qr' | 'orders' | 'team';
 type DeleteDialog = 'deactivate' | 'permanent' | 'permanent-force';
 
 export default function SellerForm() {
@@ -21,6 +23,16 @@ export default function SellerForm() {
   const [dialog, setDialog] = useState<DeleteDialog | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [forceCount, setForceCount] = useState(0);
+  // Compartido entre el roster de "Su equipo" (TeamAdminPinSection) y las tarjetas de
+  // estadísticas (SellerTeamStatsSection) — clickear a alguien en el roster filtra
+  // directo las tarjetas de abajo, sin tener que ir a buscarlo de nuevo en el select.
+  const [statsSelection, setStatsSelection] = useState<'account' | number>('account');
+  const statsRef = useRef<HTMLDivElement>(null);
+
+  const handleSelectMemberStats = (memberId: number) => {
+    setStatsSelection(memberId);
+    statsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     if (isNew) return;
@@ -142,7 +154,7 @@ export default function SellerForm() {
         <>
           {!isNew && (
             <div className="flex gap-1 border-b border-gold/10 mb-6">
-              {(['data', 'qr', 'orders'] as Tab[]).map((t) => (
+              {(['data', 'qr', 'orders', 'team'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -154,6 +166,7 @@ export default function SellerForm() {
                   {t === 'data' && 'Datos'}
                   {t === 'qr' && 'Código QR'}
                   {t === 'orders' && 'Ventas e incentivos'}
+                  {t === 'team' && 'Equipo'}
                 </button>
               ))}
             </div>
@@ -171,6 +184,23 @@ export default function SellerForm() {
           )}
           {tab === 'qr' && seller && <SellerQrSection seller={seller} />}
           {tab === 'orders' && seller && <SellerOrdersSection seller={seller} />}
+          {tab === 'team' && seller && (
+            <div className="space-y-6">
+              <TeamAdminPinSection
+                seller={seller}
+                onUpdated={handleUpdated}
+                selectedMemberId={typeof statsSelection === 'number' ? statsSelection : null}
+                onSelectMember={handleSelectMemberStats}
+              />
+              <div ref={statsRef} className="rounded-xl border border-gold/10 bg-ink-soft/30 p-5 scroll-mt-4">
+                <p className="text-sm font-medium text-cream/90 mb-1">Estadísticas por sub-recomendador</p>
+                <p className="text-xs text-cream/50 max-w-md mb-4">
+                  Ventas, incentivo y liquidación de la cuenta o de una persona puntual del equipo, con filtro de período.
+                </p>
+                <SellerTeamStatsSection seller={seller} selection={statsSelection} onSelectionChange={setStatsSelection} />
+              </div>
+            </div>
+          )}
         </>
       )}
 

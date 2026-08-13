@@ -10,10 +10,17 @@ const TYPE_CONFIG: Record<string, { icon: string; accent: string }> = {
   cash_booking_pending: { icon: '💵', accent: 'border-amber-800/40 bg-amber-900/10' },
 };
 
-// Notificaciones "en lote" (varias órdenes a la vez, ej. una liquidación) no tienen
-// una única orden a la que ir -- para esas mandamos a Liquidaciones en vez de a una
-// orden puntual. El resto de los tipos ya trae order_public_id en su metadata.
-const BULK_TYPES = new Set(['commission_paid', 'net_settled']);
+// Notificaciones "en lote" (varias órdenes a la vez) no tienen una única orden a la
+// que ir -- para esas mandamos a otra pantalla en vez de a una orden puntual. El
+// resto de los tipos ya trae order_public_id en su metadata. Ojo: commission_paid
+// (incentivo por Mercado Pago que te liquidamos) y net_settled (neto en efectivo que
+// VOS nos rendiste) son cosas distintas -- la primera va a Liquidaciones, la segunda
+// a Archivo con el filtro "Rendidas", porque Liquidaciones nunca mostró rendiciones
+// de efectivo (solo trackea comisión de MP).
+const BULK_CTA: Record<string, { to: string; label: string }> = {
+  commission_paid: { to: '/seller/liquidaciones', label: 'Ver liquidaciones →' },
+  net_settled: { to: '/seller/archivo?status=settled', label: 'Ver rendidas →' },
+};
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', {
@@ -112,12 +119,12 @@ export default function SellerNotifications() {
                           Ver venta →
                         </Link>
                       )}
-                      {BULK_TYPES.has(n.type) && (
+                      {BULK_CTA[n.type] && (
                         <Link
-                          to="/seller/liquidaciones"
+                          to={BULK_CTA[n.type].to}
                           className="ml-auto rounded-lg border border-gold/30 bg-gold/5 px-3 py-1.5 text-xs font-medium text-gold-soft hover:bg-gold/15 transition-colors"
                         >
-                          Ver liquidaciones →
+                          {BULK_CTA[n.type].label}
                         </Link>
                       )}
                     </div>

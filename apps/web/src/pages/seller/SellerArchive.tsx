@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerArchivedOrder, type SellerMember, type ArchivePage } from '../../lib/sellerApi';
 import DetailRow from '../../components/DetailRow';
 import SimpleSelect from '../../components/SimpleSelect';
@@ -44,8 +45,14 @@ function fmtArs(n: number) {
 const PAGE_SIZE = 20;
 
 export default function SellerArchive() {
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<ArchivePage<SellerArchivedOrder> | null>(null);
-  const [status, setStatus] = useState('');
+  // Precarga el filtro de estado si se llega con ?status=... (ej. desde la notificación
+  // de rendición, que apunta acá con status=settled para mostrar directo "Rendidas").
+  const [status, setStatus] = useState(() => {
+    const s = searchParams.get('status') ?? '';
+    return STATUS_TABS.some((t) => t.value === s) ? s : '';
+  });
   const [memberId, setMemberId] = useState(''); // '' = todos
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -105,7 +112,7 @@ export default function SellerArchive() {
     setRestoreMsg(null);
     try {
       await sellerApi.archive.restore(publicId);
-      setRestoreMsg('✓ Orden restaurada a "Mis Órdenes".');
+      setRestoreMsg('✓ Orden restaurada a "Órdenes".');
       setExpanded(null);
       await load();
     } catch (err) {
@@ -277,7 +284,7 @@ export default function SellerArchive() {
                           disabled={restoring === o.public_id}
                           className="w-full rounded-lg border border-gold/25 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/10 transition-colors disabled:opacity-50"
                         >
-                          {restoring === o.public_id ? 'Restaurando...' : '↺ Restaurar a Mis Órdenes'}
+                          {restoring === o.public_id ? 'Restaurando...' : '↺ Restaurar a Órdenes'}
                         </button>
                       </div>
                     )}

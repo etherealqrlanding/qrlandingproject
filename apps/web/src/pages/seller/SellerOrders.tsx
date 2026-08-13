@@ -82,7 +82,7 @@ const TERMINAL_STATUSES = ['cancelled', 'refunded', 'expired', 'failed'];
 
 // El vendedor puede archivar a mano: (a) algo que había restaurado y quiere volver a
 // mandar al archivo, o (b) una orden ya cancelada/reintegrada/vencida/fallida que
-// todavía sigue en "Mis Órdenes" porque no pasaron los días configurados de archivado
+// todavía sigue en "Órdenes" porque no pasaron los días configurados de archivado
 // automático — no tiene por qué esperar esa ventana si ya no la necesita a la vista.
 function canArchiveManually(o: SellerOrder): boolean {
   return Boolean(o.restored_at) || TERMINAL_STATUSES.includes(o.status);
@@ -827,7 +827,7 @@ export default function SellerOrders() {
       <header className="mb-4 md:mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <div>
-            <h1 className="font-display text-3xl md:text-4xl text-cream">Mis Órdenes</h1>
+            <h1 className="font-display text-3xl md:text-4xl text-cream">Órdenes</h1>
             <p className="mt-0.5 text-xs md:text-sm text-cream/50">Órdenes generadas con tu código</p>
           </div>
         </div>

@@ -13,10 +13,10 @@ const NAV: NavItem[] = [
   { to: '/seller', label: 'Resumen', icon: '◆', end: true },
   { to: '/seller/catalogo', label: 'Catálogo', icon: '◈' },
   { to: '/seller/nueva-reserva', label: 'Nueva Reserva', icon: '＋' },
-  { to: '/seller/ventas', label: 'Mis Órdenes', icon: '✦' },
+  { to: '/seller/ventas', label: 'Órdenes', icon: '✦' },
+  { to: '/seller/configuracion', label: 'Configuración', icon: '⚙' },
   { to: '/seller/liquidaciones', label: 'Liquidaciones', icon: '⬡' },
   { to: '/seller/notificaciones', label: 'Notificaciones', icon: '🔔' },
-  { to: '/seller/configuracion', label: 'Configuración', icon: '⚙' },
   { to: '/seller/archivo', label: 'Archivo', icon: '📁' },
   { to: '/seller/ayuda', label: 'Ayuda', icon: '?' },
 ];
