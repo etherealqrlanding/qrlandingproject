@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import type { FaqContent } from '../types/api';
 import { LoadingBlock } from '../components/Spinner';
 import Reveal from '../components/Reveal';
+import Collapse from '../components/Collapse';
 
 export default function Faq() {
   const { t, i18n } = useTranslation();
@@ -62,9 +63,9 @@ export default function Faq() {
                   <span className={`shrink-0 text-gold transition-transform ${isOpen ? 'rotate-45' : ''}`}>+</span>
                 </button>
                 {isOpen && it.a.trim() && (
-                  <div className="px-5 pb-5 -mt-1 text-cream/75 leading-relaxed whitespace-pre-line">
+                  <Collapse className="px-5 pb-5 -mt-1 text-cream/75 leading-relaxed whitespace-pre-line">
                     {it.a}
-                  </div>
+                  </Collapse>
                 )}
               </div>
             );

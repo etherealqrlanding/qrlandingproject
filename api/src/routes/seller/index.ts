@@ -31,7 +31,7 @@ import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPayment
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification, notifyAdminsNewOrderPaid } from '../../repos/notifications.js';
 import { checkSingleDateAvailability, checkAvailabilityTxLocked } from '../../repos/availability.js';
-import { authLimiter } from '../../middleware/rateLimit.js';
+import { authLimiter, pinLimiter } from '../../middleware/rateLimit.js';
 
 export const sellerRouter = Router();
 
@@ -128,6 +128,16 @@ sellerRouter.post('/admin-pin/reset-pin/:token', authLimiter, async (req, res, n
 
 // ─── Rutas protegidas ─────────────────────────────────────
 sellerRouter.use(requireSeller);
+
+// Freno de fuerza bruta sobre PIN (propio o de administrador): la sesión de este
+// portal es de la CUENTA, compartida por todo el equipo, no personal por login — así
+// que nada más impide probar PINs en secuencia salvo esto. Solo en mutaciones (los
+// GET no validan PIN, no hace falta limitarlos y así no se traba el uso normal de
+// recargar/listar). Cubre también /me/members más abajo, montado después de esto.
+sellerRouter.use((req, res, next) => {
+  if (req.method === 'GET') return next();
+  return pinLimiter(req, res, next);
+});
 
 // Mi equipo: sub-vendedores (ej. conserjes) que comparten mi código/QR. Alta/baja y
 // stats de "quién vendió qué" dentro de mi cuenta — solo trazabilidad interna, no

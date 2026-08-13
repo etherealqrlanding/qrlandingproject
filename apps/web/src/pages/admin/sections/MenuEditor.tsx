@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { adminApi, AdminApiError, type AdminMenu, type AdminMenuInput, type AdminProductDetail } from '../../../lib/adminApi';
 import Checkbox from '../../../components/Checkbox';
 import RichTextEditor from '../../../components/admin/RichTextEditor';
+import Collapse from '../../../components/Collapse';
 
 interface Props {
   product: AdminProductDetail;
@@ -43,7 +44,7 @@ export default function MenuEditor({ product, onChange }: Props) {
               </span>
             </button>
             {expanded && (
-              <div className="border-t border-gold/10 p-4">
+              <Collapse className="border-t border-gold/10 p-4">
                 <MenuScopeForm
                   key={own?.id ?? `option-${opt.id}-empty`}
                   initial={own}
@@ -51,7 +52,7 @@ export default function MenuEditor({ product, onChange }: Props) {
                   onDelete={own ? async () => { await adminApi.products.menu.deleteOption(opt.id); await refresh(); } : undefined}
                   deleteLabel="Eliminar menú"
                 />
-              </div>
+              </Collapse>
             )}
           </div>
         );

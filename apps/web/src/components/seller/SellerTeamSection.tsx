@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { sellerApi, SellerApiError, type SellerMemberStats, type SellerAdminPinInfo } from '../../lib/sellerApi';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
+import Collapse from '../Collapse';
 
 function fmtArs(n: number) {
   return `ARS ${Math.round(n).toLocaleString('es-AR')}`;
@@ -31,6 +32,10 @@ export default function SellerTeamSection() {
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState('');
+  // El email es el canal de recuperación si se pierde el PIN — pedimos confirmarlo
+  // (sin poder pegarlo) para no cargar uno mal tipeado y que la persona quede sin
+  // forma de resetear su PIN sola el día que lo necesite.
+  const [emailConfirm, setEmailConfirm] = useState('');
   const [adminPin, setAdminPin] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,6 +49,7 @@ export default function SellerTeamSection() {
   const [authPin, setAuthPin] = useState('');
   const [newPin, setNewPin] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editEmailConfirm, setEditEmailConfirm] = useState('');
   // Activar/desactivar: solo vale el PIN de administrador.
   const [toggleAdminPin, setToggleAdminPin] = useState('');
   // Olvidé mi PIN: confirmar el email para pedir el link de reset por su cuenta.
@@ -60,6 +66,7 @@ export default function SellerTeamSection() {
   const [adminEditing, setAdminEditing] = useState(false);
   const [adminNewPin, setAdminNewPin] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
+  const [adminEmailConfirm, setAdminEmailConfirm] = useState('');
   const [adminCurrentPin, setAdminCurrentPin] = useState('');
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminSaveError, setAdminSaveError] = useState<string | null>(null);
@@ -93,6 +100,7 @@ export default function SellerTeamSection() {
     setAuthPin('');
     setNewPin('');
     setEditEmail('');
+    setEditEmailConfirm('');
     setToggleAdminPin('');
     setForgotEmail('');
     setDeletePin('');
@@ -103,6 +111,7 @@ export default function SellerTeamSection() {
     setAdminSaveError(null);
     setAdminNewPin('');
     setAdminEmail(adminInfo?.email ?? '');
+    setAdminEmailConfirm(adminInfo?.email ?? '');
     setAdminCurrentPin('');
   };
 
@@ -111,6 +120,7 @@ export default function SellerTeamSection() {
     setAdminSaveError(null);
     setAdminNewPin('');
     setAdminEmail('');
+    setAdminEmailConfirm('');
     setAdminCurrentPin('');
   };
 
@@ -120,6 +130,9 @@ export default function SellerTeamSection() {
     const emailChanged = trimmedEmail !== (adminInfo.email ?? '');
     if (!adminNewPin && !emailChanged) return setAdminSaveError('Cambiá el PIN y/o el email antes de guardar.');
     if (adminNewPin && !/^\d{4,6}$/.test(adminNewPin)) return setAdminSaveError('El nuevo PIN debe tener entre 4 y 6 dígitos.');
+    if (emailChanged && trimmedEmail !== '' && trimmedEmail.toLowerCase() !== adminEmailConfirm.trim().toLowerCase()) {
+      return setAdminSaveError('El email y su confirmación no coinciden.');
+    }
 
     const settingEmailFirstTime = !adminInfo.email && emailChanged && trimmedEmail !== '' && !adminNewPin;
     if (!settingEmailFirstTime && !/^\d{4,6}$/.test(adminCurrentPin)) {
@@ -175,6 +188,9 @@ export default function SellerTeamSection() {
   const handleAdd = async () => {
     setAddError(null);
     if (name.trim().length < 2) return setAddError('Ingresá un nombre.');
+    if (email.trim() !== '' && email.trim().toLowerCase() !== emailConfirm.trim().toLowerCase()) {
+      return setAddError('El email y su confirmación no coinciden.');
+    }
     if (pinRequired) {
       if (!/^\d{4,6}$/.test(pin)) return setAddError('El PIN debe tener entre 4 y 6 dígitos.');
       if (!/^\d{4,6}$/.test(adminPin)) return setAddError('Ingresá el PIN de administrador para agregar a alguien.');
@@ -185,6 +201,7 @@ export default function SellerTeamSection() {
       setName('');
       setPin('');
       setEmail('');
+      setEmailConfirm('');
       setAdminPin('');
       setShowAdd(false);
       load();
@@ -214,6 +231,9 @@ export default function SellerTeamSection() {
     const emailChanged = trimmedEmail !== (m.email ?? '');
     if (!newPin && !emailChanged) return setRowError('Cambiá el PIN y/o el email antes de guardar.');
     if (newPin && !/^\d{4,6}$/.test(newPin)) return setRowError('El nuevo PIN debe tener entre 4 y 6 dígitos.');
+    if (emailChanged && trimmedEmail !== '' && trimmedEmail.toLowerCase() !== editEmailConfirm.trim().toLowerCase()) {
+      return setRowError('El email y su confirmación no coinciden.');
+    }
 
     // Cargar el email por primera vez (todavía no tenía ninguno) no pide PIN — es el
     // paso que habilita después el self-service de "olvidé mi PIN" sin depender del
@@ -341,7 +361,7 @@ export default function SellerTeamSection() {
         </div>
 
         {adminForgotOpen && (
-          <div className="mt-3 pt-3 border-t border-gold/10">
+          <Collapse className="mt-3 pt-3 border-t border-gold/10">
             {!adminForgotSuccess ? (
               <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                 <input
@@ -368,13 +388,13 @@ export default function SellerTeamSection() {
               <p className="text-xs text-emerald-400">✓ {adminForgotSuccess}</p>
             )}
             {adminForgotError && <p className="text-[10px] text-bordeaux-light mt-2">⚠ {adminForgotError}</p>}
-          </div>
+          </Collapse>
         )}
 
         {adminEditing && (() => {
           const settingEmailFirstTime = !adminInfo?.email && adminEmail.trim() !== '' && !adminNewPin;
           return (
-            <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+            <Collapse className="mt-3 pt-3 border-t border-gold/10 space-y-2">
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   value={adminNewPin}
@@ -392,6 +412,17 @@ export default function SellerTeamSection() {
                   className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
                 />
               </div>
+              {adminEmail.trim() !== '' && adminEmail.trim() !== (adminInfo?.email ?? '') && (
+                <input
+                  value={adminEmailConfirm}
+                  onChange={(e) => setAdminEmailConfirm(e.target.value)}
+                  onPaste={(e) => e.preventDefault()}
+                  type="email"
+                  placeholder="Confirmar email"
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                />
+              )}
               {!adminInfo?.email && (
                 <p className="text-[10px] text-cream/35">
                   {settingEmailFirstTime
@@ -420,7 +451,7 @@ export default function SellerTeamSection() {
                 </button>
                 <button type="button" onClick={closeAdminEdit} className="text-xs text-cream/40 hover:text-cream/70 transition">Cancelar</button>
               </div>
-            </div>
+            </Collapse>
           );
         })()}
 
@@ -429,7 +460,7 @@ export default function SellerTeamSection() {
       )}
 
       {showAdd && (
-        <div className="mb-4 rounded-xl border border-gold/20 bg-ink-soft/40 p-4 space-y-3">
+        <Collapse className="mb-4 rounded-xl border border-gold/20 bg-ink-soft/40 p-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               value={name}
@@ -456,6 +487,18 @@ export default function SellerTeamSection() {
             maxLength={160}
             className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
           />
+          {email.trim() !== '' && (
+            <input
+              value={emailConfirm}
+              onChange={(e) => setEmailConfirm(e.target.value)}
+              onPaste={(e) => e.preventDefault()}
+              type="email"
+              placeholder="Confirmar email"
+              maxLength={160}
+              autoComplete="off"
+              className="w-full rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+            />
+          )}
           {pinRequired && (
             <input
               value={adminPin}
@@ -474,7 +517,7 @@ export default function SellerTeamSection() {
           >
             {saving ? 'Guardando...' : 'Guardar'}
           </button>
-        </div>
+        </Collapse>
       )}
 
       {error && <p className="text-sm text-bordeaux-light">{error}</p>}
@@ -521,6 +564,7 @@ export default function SellerTeamSection() {
                         setAuthPin('');
                         setNewPin('');
                         setEditEmail(m.email ?? '');
+                        setEditEmailConfirm(m.email ?? '');
                       }}
                       className="text-xs text-gold-soft hover:text-gold transition underline underline-offset-2"
                     >
@@ -571,7 +615,7 @@ export default function SellerTeamSection() {
                 {isOpen && rowAction?.kind === 'pin' && (() => {
                   const settingEmailFirstTime = !m.email && editEmail.trim() !== '' && !newPin;
                   return (
-                  <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+                  <Collapse className="mt-3 pt-3 border-t border-gold/10 space-y-2">
                     <div className="flex flex-col sm:flex-row gap-2">
                       {pinRequired && (
                         <input
@@ -592,6 +636,17 @@ export default function SellerTeamSection() {
                         className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
                       />
                     </div>
+                    {editEmail.trim() !== '' && editEmail.trim() !== (m.email ?? '') && (
+                      <input
+                        value={editEmailConfirm}
+                        onChange={(e) => setEditEmailConfirm(e.target.value)}
+                        onPaste={(e) => e.preventDefault()}
+                        type="email"
+                        placeholder="Confirmar email"
+                        autoComplete="off"
+                        className="w-full rounded-lg border border-gold/20 bg-ink/60 px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
+                      />
+                    )}
                     {pinRequired && !m.email && (
                       <p className="text-[10px] text-cream/35">
                         {settingEmailFirstTime
@@ -621,12 +676,12 @@ export default function SellerTeamSection() {
                         </button>
                         <button type="button" onClick={closeRowAction} className="text-xs text-cream/40 hover:text-cream/70 transition">✕</button>
                     </div>
-                  </div>
+                  </Collapse>
                   );
                 })()}
 
                 {isOpen && rowAction?.kind === 'toggle' && (
-                  <div className="mt-3 pt-3 border-t border-gold/10 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+                  <Collapse className="mt-3 pt-3 border-t border-gold/10 flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                     {pinRequired && (
                       <input
                         value={toggleAdminPin}
@@ -648,11 +703,11 @@ export default function SellerTeamSection() {
                       </button>
                       <button type="button" onClick={closeRowAction} className="text-xs text-cream/40 hover:text-cream/70 transition">✕</button>
                     </div>
-                  </div>
+                  </Collapse>
                 )}
 
                 {isOpen && rowAction?.kind === 'forgot' && (
-                  <div className="mt-3 pt-3 border-t border-gold/10">
+                  <Collapse className="mt-3 pt-3 border-t border-gold/10">
                     {!rowSuccess ? (
                       <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
                         <input
@@ -678,11 +733,11 @@ export default function SellerTeamSection() {
                     ) : (
                       <p className="text-xs text-emerald-400">✓ {rowSuccess}</p>
                     )}
-                  </div>
+                  </Collapse>
                 )}
 
                 {isOpen && rowAction?.kind === 'delete' && (
-                  <div className="mt-3 pt-3 border-t border-gold/10 space-y-2">
+                  <Collapse className="mt-3 pt-3 border-t border-gold/10 space-y-2">
                     <p className="text-[11px] text-bordeaux-light/90">
                       Borra a {m.name} de tu equipo. Si ya tiene ventas registradas, no se va a poder — desactivala en su lugar.
                     </p>
@@ -709,7 +764,7 @@ export default function SellerTeamSection() {
                         <button type="button" onClick={closeRowAction} className="text-xs text-cream/40 hover:text-cream/70 transition">✕</button>
                       </div>
                     </div>
-                  </div>
+                  </Collapse>
                 )}
 
                 {isOpen && rowError && (

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { ProductOption } from '../../types/api';
 import MenuBlock from '../MenuBlock';
+import Collapse from '../Collapse';
 
 const DAY = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -14,6 +16,7 @@ interface Props {
 export function OptionInfoCard({ option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, onBook }: Props) {
   const hasTimes = option.pickup_window_es || option.dinner_time_es || option.show_time_es;
   const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="rounded-xl border border-gold/15 bg-ink/40 p-4 space-y-3">
@@ -121,15 +124,21 @@ export function OptionInfoCard({ option, productAvailableDays, productAcceptsChi
       {option.menu && option.menu.content_html && (
         // Arranca cerrado — un menú con varios cursos/platos puede ser largo y no
         // queremos alargar la card por defecto (mismo criterio que ProductPage).
-        <details className="group">
-          <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold">
-            <span className="transition-transform group-open:rotate-90">▸</span>
+        <div>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="cursor-pointer flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold"
+          >
+            <span className={`transition-transform ${menuOpen ? 'rotate-90' : ''}`}>▸</span>
             Ver menú
-          </summary>
-          <div className="mt-2">
-            <MenuBlock menu={option.menu} />
-          </div>
-        </details>
+          </button>
+          {menuOpen && (
+            <Collapse className="mt-2">
+              <MenuBlock menu={option.menu} />
+            </Collapse>
+          )}
+        </div>
       )}
 
       {onBook && (

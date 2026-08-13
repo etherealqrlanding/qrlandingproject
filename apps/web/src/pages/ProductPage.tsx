@@ -12,6 +12,7 @@ import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
 import AvailabilityCheckModal from '../components/AvailabilityCheckModal';
 import ShareButton from '../components/ShareButton';
+import Collapse from '../components/Collapse';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
 // Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
@@ -346,6 +347,7 @@ function OptionCard({
   const priceChildArs = (exchangeRate != null && showChildPrice)
     ? Math.round(option.price_child_usd! * exchangeRate) : null;
   const hasTimes = Boolean(pickup || dinner || show);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div
@@ -470,15 +472,21 @@ function OptionCard({
       {option.menu && option.menu.content_html && (
         // Siempre arranca cerrado: el contenido de un menú puede ser largo
         // (varios cursos y platos) y no queremos alargar la card por defecto.
-        <details className="mt-4 group" onClick={(e) => e.stopPropagation()}>
-          <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold">
-            <span className="transition-transform group-open:rotate-90">▸</span>
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            className="cursor-pointer flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-gold-soft hover:text-gold"
+          >
+            <span className={`transition-transform ${menuOpen ? 'rotate-90' : ''}`}>▸</span>
             {t('product.menu_view')}
-          </summary>
-          <div className="mt-2">
-            <MenuBlock menu={option.menu} />
-          </div>
-        </details>
+          </button>
+          {menuOpen && (
+            <Collapse className="mt-2">
+              <MenuBlock menu={option.menu} />
+            </Collapse>
+          )}
+        </div>
       )}
 
       <div className="mt-4 flex flex-col sm:flex-row gap-2">

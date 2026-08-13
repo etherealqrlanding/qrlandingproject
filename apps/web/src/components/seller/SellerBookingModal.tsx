@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerBookingInput, type SellerBookingResult, type SellerMember } from '../../lib/sellerApi';
 import type { ProductDetail, ProductOption } from '../../types/api';
 import BookingForm from '../booking/BookingForm';
+import { getLastMemberId, setLastMemberId } from '../../lib/lastMember';
 
 interface Props {
   product: ProductDetail;
@@ -33,7 +34,17 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
   const [memberPin, setMemberPin] = useState('');
 
   useEffect(() => {
-    sellerApi.members.list().then((list) => setMembers(list.filter((m) => m.is_active))).catch(() => {});
+    sellerApi.members.list().then((list) => {
+      const active = list.filter((m) => m.is_active);
+      setMembers(active);
+      // Modo abierto: precarga el último elegido en este dispositivo, para no
+      // tener que volver a buscarlo en el select en cada venta del turno.
+      if (!pinRequired) {
+        const last = getLastMemberId();
+        if (last != null && active.some((m) => m.id === last)) setMemberId(last);
+      }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -64,6 +75,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             : { seller_member_id: memberId }
           : {}),
       });
+      if (!pinRequired) setLastMemberId(memberId === '' ? null : memberId);
       // MP: el vendedor no ve ni reenvía el link — se lo mandamos al pasajero por email.
       setResult(res);
     } catch (err) {
@@ -171,9 +183,14 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
           <div className="p-7">
             {members.length > 0 && (
               <div className="mb-5 rounded-lg border border-gold/20 bg-gold/5 p-3 md:p-4">
-                <p className="text-xs text-cream/70 mb-2">
+                <p className="text-xs text-cream/70 mb-1">
                   <strong className="text-cream/90">¿Quién de tu equipo cerró esta venta?</strong> Opcional — dejalo en blanco si la venta es "de la casa".
                 </p>
+                {pinRequired && (
+                  <p className="text-[11px] text-cream/35 mb-2">
+                    Si elegís a alguien, va a pedirle su PIN — no es una contraseña, solo confirma que fue esa persona.
+                  </p>
+                )}
                 <div className="flex flex-col sm:flex-row gap-2">
                   <select
                     value={memberId}

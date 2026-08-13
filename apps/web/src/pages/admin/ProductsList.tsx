@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { adminApi, type AdminProductSummary, type AdminProductOptionPreview } from '../../lib/adminApi';
 import { useExchangeRate } from '../../lib/useExchangeRate';
 import Checkbox from '../../components/Checkbox';
+import Collapse from '../../components/Collapse';
 import { useReturnHighlight } from '../../hooks/useReturnHighlight';
 
 const LAST_VIEWED_KEY = 'lastViewedProductId';
@@ -193,9 +194,9 @@ function ProductCard({ p, toggling, onToggle, expanded, onToggleExpand, rate, hi
         </button>
       )}
       {expanded && (
-        <div className="px-4 pb-3 pt-1">
+        <Collapse className="px-4 pb-3 pt-1">
           <TierBreakdown options={p.options} rate={rate} />
-        </div>
+        </Collapse>
       )}
     </div>
   );

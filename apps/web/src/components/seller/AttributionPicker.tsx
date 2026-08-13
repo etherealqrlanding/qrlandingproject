@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { sellerApi, SellerApiError, type SellerMember } from '../../lib/sellerApi';
 import DetailRow from '../DetailRow';
 import SimpleSelect from '../SimpleSelect';
+import { getLastMemberId, setLastMemberId } from '../../lib/lastMember';
 
 interface Props {
   publicId: string;
@@ -104,6 +105,7 @@ export default function AttributionPicker({
       setSaving(true);
       try {
         await sellerApi.setOrderAttributionOpen(publicId, memberId === '' ? null : memberId);
+        setLastMemberId(memberId === '' ? null : memberId);
         resetForm();
         onSaved();
       } catch (err) {
@@ -136,6 +138,9 @@ export default function AttributionPicker({
     return (
       <div className="flex flex-col gap-1.5 py-1" onClick={(e) => e.stopPropagation()}>
         <span className="text-xs text-cream/50">¿Quién la vendió?</span>
+        <span className="text-[10px] text-cream/30">
+          Con tu PIN quedás anotado como quien la cerró — el administrador todavía tiene que confirmarlo.
+        </span>
         <div className="flex flex-wrap items-center gap-1.5">
           <SimpleSelect
             size="sm"
@@ -194,7 +199,16 @@ export default function AttributionPicker({
         {members.length > 0 && (!pinRequired || !alreadyIdentified) && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              // Modo abierto: precarga el último elegido en este dispositivo, para no
+              // tener que volver a buscarlo en el select cada vez durante el turno.
+              if (!pinRequired) {
+                const last = getLastMemberId();
+                if (last != null && members.some((m) => m.id === last)) setMemberId(last);
+              }
+              setEditing(true);
+            }}
             className="ml-2 text-[10px] text-gold-soft hover:text-gold transition underline underline-offset-2"
           >
             {currentName ? 'cambiar' : 'asignar'}
@@ -207,6 +221,13 @@ export default function AttributionPicker({
   return (
     <div className="flex flex-col gap-1.5 py-1" onClick={(e) => e.stopPropagation()}>
       <span className="text-xs text-cream/50">Atendido por</span>
+      {pinRequired && !canSkipPin && (
+        <span className="text-[10px] text-cream/30">
+          {needsAdminPin
+            ? 'Esta venta no tuvo a nadie identificándose en el momento, así que la asigna quien tiene el PIN de administrador.'
+            : 'Confirmá con tu propio PIN — no es una contraseña, solo queda registrado quién cerró la venta.'}
+        </span>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         <SimpleSelect
           size="sm"

@@ -3,6 +3,7 @@ import { sellerApi, SellerApiError, type SellerArchivedOrder, type SellerMember,
 import DetailRow from '../../components/DetailRow';
 import SimpleSelect from '../../components/SimpleSelect';
 import DateRangePicker from '../../components/DateRangePicker';
+import Collapse from '../../components/Collapse';
 
 const STATUS_TABS = [
   { value: '', label: 'Todas' },
@@ -229,7 +230,7 @@ export default function SellerArchive() {
                 </div>
 
                 {isOpen && (
-                  <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20 space-y-1.5">
+                  <Collapse className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20 space-y-1.5">
                     <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
                     <DetailRow label="Email">{o.customer_email}</DetailRow>
                     {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
@@ -280,7 +281,7 @@ export default function SellerArchive() {
                         </button>
                       </div>
                     )}
-                  </div>
+                  </Collapse>
                 )}
               </div>
             );

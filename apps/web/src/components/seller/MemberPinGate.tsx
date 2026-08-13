@@ -25,7 +25,10 @@ export default function MemberPinGate({ members, memberId, memberPin, onMemberId
   if (members.length === 0 || !pinRequired) return null;
   return (
     <div className="mb-5">
-      <p className="text-xs text-cream/50 mb-2">{label ?? '¿Quién sos? Necesitamos tu PIN para confirmar.'}</p>
+      <p className="text-xs text-cream/50 mb-1">{label ?? '¿Quién sos? Necesitamos tu PIN para confirmar.'}</p>
+      <p className="text-[11px] text-cream/35 mb-2">
+        No es una contraseña — es solo para que quede registrado quién del equipo hizo esto. Si no sabés tu PIN, pedíselo a quien administra la cuenta, o restablecelo vos mismo desde Mi Equipo (si tenés tu email cargado).
+      </p>
       <div className="flex gap-2">
         <SimpleSelect
           size="sm"

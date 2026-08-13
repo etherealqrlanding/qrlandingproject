@@ -108,12 +108,15 @@ export default function OrderMemberGate({ members, unlocked, onUnlock, onRelock,
 
   return (
     <div className="mb-4 pb-3 border-b border-gold/10" onClick={(e) => e.stopPropagation()}>
-      <div className="flex items-center gap-3 mb-2">
+      <div className="flex items-center gap-3 mb-1">
         <p className="text-xs text-cream/50">
           Identificate para modificar, cancelar, cobrar o asignar esta reserva — se pide una sola vez por orden.
         </p>
       </div>
-      <div className="flex gap-1 mb-2">
+      <p className="text-[11px] text-cream/35 mb-2">
+        No es una contraseña ni protege nada: es solo para que quede registrado quién del equipo hizo este cambio.
+      </p>
+      <div className="flex gap-1 mb-1">
         <button
           type="button"
           onClick={() => { setMode('member'); setError(null); }}
@@ -133,6 +136,12 @@ export default function OrderMemberGate({ members, unlocked, onUnlock, onRelock,
           Soy administrador
         </button>
       </div>
+      <p className="text-[10px] text-cream/30 mb-2">
+        {mode === 'member'
+          ? 'Elegí tu nombre y usá tu propio PIN corto (el que te dieron al sumarte al equipo).'
+          : 'Solo si la persona que hizo esto no está disponible — autorizás vos con el PIN de administrador de la cuenta.'}
+        {' '}¿No sabés tu PIN? Pedíselo a quien administra la cuenta, o restablecelo vos mismo desde Mi Equipo (si tenés tu email cargado).
+      </p>
 
       {mode === 'member' ? (
         <div className="flex flex-wrap items-center gap-1.5">

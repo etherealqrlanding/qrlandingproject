@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { sellerApi, SellerApiError, SELLER_NOTIFICATION_EVENT, type SellerCommission, type SellerCommissionOrder } from '../../lib/sellerApi';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
+import Collapse from '../../components/Collapse';
 
 const PAGE_SIZE = 10;
 const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c', 'sk-d'];
@@ -70,7 +71,7 @@ function CommissionCard({
       </button>
 
       {isOpen && (
-        <div className="border-t border-gold/10 px-4 py-4">
+        <Collapse className="border-t border-gold/10 px-4 py-4">
           {detailState?.loading && (
             <div className="space-y-2">
               {['det-a', 'det-b'].map((k) => (
@@ -90,7 +91,7 @@ function CommissionCard({
               {detailState?.orders?.map((o) => <OrderCard key={o.public_id} o={o} />)}
             </div>
           )}
-        </div>
+        </Collapse>
       )}
     </div>
   );
@@ -284,7 +285,9 @@ export default function SellerCommissions() {
                     {isOpen && (
                       <tr className="border-b border-gold/10 bg-ink-soft/20">
                         <td colSpan={4} className="px-4 py-4">
-                          <DetailTable d={detail[c.paid_date]} />
+                          <Collapse>
+                            <DetailTable d={detail[c.paid_date]} />
+                          </Collapse>
                         </td>
                       </tr>
                     )}

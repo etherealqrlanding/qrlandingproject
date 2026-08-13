@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { HOTELS_BY_NEIGHBORHOOD, ALL_HOTELS } from '../lib/hotels';
+import Collapse from './Collapse';
 
 interface Props {
   wantsTransfer: boolean;
@@ -107,7 +108,7 @@ export default function TransferSection({
       </div>
 
       {(included || wantsTransfer) && (
-        <div className="space-y-2">
+        <Collapse className="space-y-2">
           <p className="text-xs text-cream/60">
             {isEs
               ? 'Buscá tu hotel para que coordinemos el pickup:'
@@ -208,7 +209,7 @@ export default function TransferSection({
                 : 'We use this to let the driver notify you on arrival.'}
             </p>
           </label>
-        </div>
+        </Collapse>
       )}
     </div>
   );

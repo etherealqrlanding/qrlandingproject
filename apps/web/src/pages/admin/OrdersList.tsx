@@ -9,6 +9,7 @@ import SimpleSelect from '../../components/SimpleSelect';
 import Checkbox from '../../components/Checkbox';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
+import Collapse from '../../components/Collapse';
 import { useCountUp } from '../../hooks/useCountUp';
 
 
@@ -182,10 +183,10 @@ function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpan
       </div>
 
       {expanded && (
-        <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20">
+        <Collapse className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20">
           <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
           <OrderExtraDetails o={o} />
-        </div>
+        </Collapse>
       )}
     </div>
   );
@@ -535,9 +536,9 @@ export default function OrdersList() {
                   <tr className="border-t border-gold/5 bg-ink-soft/20">
                     <td colSpan={9} className="px-6 py-2.5">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
-                      <div className="max-w-xl">
+                      <Collapse className="max-w-xl">
                         <OrderExtraDetails o={o} twoColumns />
-                      </div>
+                      </Collapse>
                     </td>
                   </tr>
                 )}

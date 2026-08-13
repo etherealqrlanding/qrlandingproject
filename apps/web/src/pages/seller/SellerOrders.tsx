@@ -8,6 +8,7 @@ import MemberPinGate, { isMemberPinMissing } from '../../components/seller/Membe
 import OrderMemberGate from '../../components/seller/OrderMemberGate';
 import DateRangePicker from '../../components/DateRangePicker';
 import SimpleSelect from '../../components/SimpleSelect';
+import Collapse from '../../components/Collapse';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 
 function isWindowBlocked(hours: number | null, serviceDate: string): boolean {
@@ -930,7 +931,7 @@ export default function SellerOrders() {
                   </div>
 
                   {isOpen && (
-                    <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20 space-y-1.5">
+                    <Collapse className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20 space-y-1.5">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
                       <OrderMemberGate
                         members={members}
@@ -1078,7 +1079,7 @@ export default function SellerOrders() {
                           <OrderHistory events={eventsByOrder[o.public_id]} />
                         </div>
                       )}
-                    </div>
+                    </Collapse>
                   )}
                 </div>
               );
@@ -1178,6 +1179,7 @@ export default function SellerOrders() {
                       {isOpen && (
                         <tr key={`${o.order_id}-detail`} className="border-b border-gold/10 bg-ink-soft/20">
                           <td colSpan={members.length > 0 ? 10 : 9} className="px-5 py-4">
+                          <Collapse>
                             <OrderMemberGate
                               members={members}
                               unlocked={unlockedMembers[o.public_id] ?? null}
@@ -1343,6 +1345,7 @@ export default function SellerOrders() {
                                 <OrderHistory events={eventsByOrder[o.public_id]} />
                               </div>
                             )}
+                          </Collapse>
                           </td>
                         </tr>
                       )}

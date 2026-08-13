@@ -3,6 +3,7 @@ import { adminApi, AdminApiError, type AdminOption, type AdminProductDetail } fr
 import AvailabilityEditor from './AvailabilityEditor';
 import Checkbox from '../../../components/Checkbox';
 import IncludesEditor from '../../../components/admin/IncludesEditor';
+import Collapse from '../../../components/Collapse';
 
 interface Props {
   product: AdminProductDetail;
@@ -139,14 +140,14 @@ export default function OptionsEditor({ product, onChange }: Props) {
       </div>
 
       {expandedId === 'new' && (
-        <div className="rounded-lg border border-gold/30 bg-gold/5 p-5">
+        <Collapse className="rounded-lg border border-gold/30 bg-gold/5 p-5">
           <h3 className="font-display text-lg text-cream mb-4">Nuevo tier</h3>
           <OptionFormFields option={draftNew} onChange={setDraftNew} productAcceptsChildren={product.accepts_children} />
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost text-sm">Cancelar</button>
             <button type="button" onClick={handleCreate} className="btn-primary text-sm">Crear tier</button>
           </div>
-        </div>
+        </Collapse>
       )}
 
       {product.options.map((opt) => (
@@ -250,7 +251,7 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
       </button>
 
       {expanded && (
-        <div className="p-5 border-t border-gold/10">
+        <Collapse className="p-5 border-t border-gold/10">
           <OptionFormFields option={draft} onChange={setDraft} productAcceptsChildren={productAcceptsChildren} />
           <div className="mt-5 flex items-center justify-between">
             <div className="flex gap-2">
@@ -269,7 +270,7 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
               Guardar cambios
             </button>
           </div>
-        </div>
+        </Collapse>
       )}
     </div>
   );

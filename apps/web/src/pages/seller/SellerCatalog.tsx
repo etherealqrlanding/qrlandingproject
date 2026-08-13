@@ -6,6 +6,7 @@ import SellerBookingModal from '../../components/seller/SellerBookingModal';
 import SellerQuickSettings from '../../components/seller/SellerQuickSettings';
 import AvailabilityCheckModal from '../../components/AvailabilityCheckModal';
 import ShareButton from '../../components/ShareButton';
+import Collapse from '../../components/Collapse';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { buildShareUrl } from '../../lib/shareLinks';
 
@@ -141,7 +142,7 @@ export default function SellerCatalog() {
 
                 {/* Detalle expandido */}
                 {isOpen && (
-                  <div className="border-t border-gold/10 px-5 py-5 space-y-5">
+                  <Collapse className="border-t border-gold/10 px-5 py-5 space-y-5">
                     {detail === 'loading' && (
                       <div className="space-y-3">
                         {[1, 2].map((i) => (
@@ -216,7 +217,7 @@ export default function SellerCatalog() {
                         </div>
                       </>
                     )}
-                  </div>
+                  </Collapse>
                 )}
               </div>
             );

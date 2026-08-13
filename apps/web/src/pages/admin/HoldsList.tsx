@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { adminApi, type AdminHoldRow } from '../../lib/adminApi';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
+import Collapse from '../../components/Collapse';
 
 const POLL_MS = 10_000;
 
@@ -146,10 +147,10 @@ export default function HoldsList() {
                     </div>
                   </div>
                   {expanded && (
-                    <div className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20">
+                    <Collapse className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
                       <HoldExtraDetails h={h} />
-                    </div>
+                    </Collapse>
                   )}
                 </div>
               );
@@ -204,9 +205,9 @@ export default function HoldsList() {
                         <tr className="border-t border-gold/5 bg-ink-soft/20">
                           <td colSpan={9} className="px-6 py-2.5">
                             <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
-                            <div className="max-w-xl">
+                            <Collapse className="max-w-xl">
                               <HoldExtraDetails h={h} twoColumns />
-                            </div>
+                            </Collapse>
                           </td>
                         </tr>
                       )}
