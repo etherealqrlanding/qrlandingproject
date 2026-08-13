@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { adminApi, type AdminOrderListItem } from '../../lib/adminApi';
+import { adminApi, type AdminOrderListItem, type AdminSeller, type AdminSellerMember } from '../../lib/adminApi';
 import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
 import AdminBookingModal from '../../components/admin/AdminBookingModal';
 import SellerFilterSelect from '../../components/admin/SellerFilterSelect';
@@ -16,6 +16,23 @@ import { useCountUp } from '../../hooks/useCountUp';
 
 const PAGE_SIZE = 10;
 const SKELETON_KEYS = ['sk-a', 'sk-b', 'sk-c', 'sk-d', 'sk-e'];
+
+const EMPTY_FILTERS = { status: '', ref: '', member_id: '', from: '', to: '' };
+const FILTERS_STORAGE_KEY = 'admin_orders_filters';
+
+// Persistidos en localStorage para que sobrevivan navegar a un detalle y volver, o
+// cerrar y volver a abrir la pestaña -- evita tener que re-armar el mismo filtro
+// (ej. un recomendador + rango de fechas puntual) cada vez que se entra a la pantalla.
+function loadStoredFilters(): typeof EMPTY_FILTERS {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return EMPTY_FILTERS;
+    const parsed = JSON.parse(raw);
+    return { ...EMPTY_FILTERS, ...parsed };
+  } catch {
+    return EMPTY_FILTERS;
+  }
+}
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos los estados' },
@@ -268,8 +285,28 @@ export default function OrdersList() {
   const [orders, setOrders] = useState<AdminOrderListItem[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFilters] = useState({ status: '', ref: '', from: '', to: '', search: '' });
+  const [filters, setFilters] = useState(loadStoredFilters);
   const [page, setPage] = useState(0);
+
+  useEffect(() => {
+    localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
+
+  const clearFilters = () => setFilters(EMPTY_FILTERS);
+  const hasActiveFilters = Object.values(filters).some(Boolean);
+
+  // Para el segundo select (sub-vendedor): solo tiene sentido si el recomendador
+  // elegido en `ref` tiene "Mi equipo" activado. Traemos la lista completa de
+  // vendedores acá (no solo lo que ya carga SellerFilterSelect internamente) para
+  // poder resolver su team_enabled/id a partir del código elegido.
+  const [sellers, setSellers] = useState<AdminSeller[]>([]);
+  const [members, setMembers] = useState<AdminSellerMember[]>([]);
+  useEffect(() => { adminApi.sellers.list().then(setSellers).catch(() => {}); }, []);
+  const selectedSeller = useMemo(() => sellers.find((s) => s.code === filters.ref) ?? null, [sellers, filters.ref]);
+  useEffect(() => {
+    if (!selectedSeller?.team_enabled) { setMembers([]); return; }
+    adminApi.sellers.members(selectedSeller.id).then(setMembers).catch(() => setMembers([]));
+  }, [selectedSeller]);
 
   // Selección
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -287,7 +324,7 @@ export default function OrdersList() {
   // vendedor, rango de fechas) vive en el modal "Más filtros".
   const [statsOpen, setStatsOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const extraFilterCount = [filters.search, filters.ref, filters.from, filters.to].filter(Boolean).length;
+  const extraFilterCount = [filters.ref, filters.member_id, filters.from, filters.to].filter(Boolean).length;
 
   // No vaciamos `orders` al arrancar un reload: si ya había datos en pantalla
   // (ej. el admin tocó un filtro) los dejamos mientras llega la respuesta nueva,
@@ -685,19 +722,42 @@ export default function OrdersList() {
             </span>
           )}
         </button>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="shrink-0 text-xs text-cream/40 hover:text-cream/70 transition underline underline-offset-2"
+          >
+            Limpiar
+          </button>
+        )}
       </div>
 
       {/* ── Desktop: todos los filtros inline ── */}
-      <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1fr_140px] gap-2 mb-4">
-        <input type="search" placeholder="Email o nombre..." value={filters.search}
-          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-          className="input" />
-        <SellerFilterSelect value={filters.ref}
-          onChange={(v) => setFilters({ ...filters, ref: v })} />
-        <DateRangePicker from={filters.from} to={filters.to}
+      <div className="hidden md:flex md:flex-wrap items-center gap-2 mb-4">
+        <SellerFilterSelect className="flex-1 min-w-[220px]" value={filters.ref}
+          onChange={(v) => setFilters({ ...filters, ref: v, member_id: '' })} />
+        {selectedSeller?.team_enabled && members.length > 0 && (
+          <SimpleSelect className="w-52" value={filters.member_id}
+            onChange={(v) => setFilters({ ...filters, member_id: v })}
+            options={[
+              { value: '', label: 'Todo el equipo' },
+              ...members.map((m) => ({ value: String(m.id), label: m.is_active ? m.name : `${m.name} (inactivo)` })),
+            ]} />
+        )}
+        <DateRangePicker className="flex-1 min-w-[220px]" from={filters.from} to={filters.to}
           onChange={(from, to) => setFilters({ ...filters, from, to })} />
-        <SimpleSelect options={STATUS_OPTIONS} value={filters.status}
+        <SimpleSelect className="w-56" options={STATUS_OPTIONS} value={filters.status}
           onChange={(v) => setFilters({ ...filters, status: v })} />
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="shrink-0 text-xs text-cream/40 hover:text-cream/70 transition underline underline-offset-2"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
 
       {filtersOpen && (
@@ -722,7 +782,7 @@ export default function OrdersList() {
               {extraFilterCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => setFilters({ ...filters, search: '', ref: '', from: '', to: '' })}
+                  onClick={() => setFilters({ ...filters, ref: '', member_id: '', from: '', to: '' })}
                   className="text-xs text-cream/40 hover:text-cream/70 transition"
                 >
                   Limpiar
@@ -731,16 +791,21 @@ export default function OrdersList() {
             </div>
             <div className="space-y-3">
               <label className="block">
-                <span className="block text-xs text-cream/50 mb-1">Email o nombre</span>
-                <input type="search" placeholder="Email o nombre..." value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                  className="input w-full" />
-              </label>
-              <label className="block">
                 <span className="block text-xs text-cream/50 mb-1">Recomendador</span>
                 <SellerFilterSelect value={filters.ref} className="w-full"
-                  onChange={(v) => setFilters({ ...filters, ref: v })} />
+                  onChange={(v) => setFilters({ ...filters, ref: v, member_id: '' })} />
               </label>
+              {selectedSeller?.team_enabled && members.length > 0 && (
+                <label className="block">
+                  <span className="block text-xs text-cream/50 mb-1">Sub-vendedor</span>
+                  <SimpleSelect value={filters.member_id} className="w-full"
+                    onChange={(v) => setFilters({ ...filters, member_id: v })}
+                    options={[
+                      { value: '', label: 'Todo el equipo' },
+                      ...members.map((m) => ({ value: String(m.id), label: m.is_active ? m.name : `${m.name} (inactivo)` })),
+                    ]} />
+                </label>
+              )}
               <label className="block">
                 <span className="block text-xs text-cream/50 mb-1">Rango de fechas</span>
                 <DateRangePicker from={filters.from} to={filters.to} className="block w-full"

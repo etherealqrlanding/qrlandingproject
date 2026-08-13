@@ -797,7 +797,7 @@ export const adminApi = {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    list: (filters?: { status?: string; ref?: string; from?: string; to?: string; search?: string; limit?: number }) => {
+    list: (filters?: { status?: string; ref?: string; member_id?: string; from?: string; to?: string; search?: string; limit?: number }) => {
       const qs = filters
         ? '?' + Object.entries(filters).filter(([_, v]) => v != null && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')
         : '';

@@ -26,6 +26,9 @@ const collectCashCurrencySchema = z.object({ currency: z.enum(['ARS', 'USD']).de
 const listQuery = z.object({
   status: z.enum(['pending', 'paid', 'failed', 'cancelled', 'refunded', 'expired']).optional(),
   ref: z.string().regex(/^[A-Za-z0-9_-]{3,32}$/).optional(),
+  // Sub-vendedor puntual dentro del equipo del recomendador filtrado por `ref` — solo
+  // tiene sentido combinado con `ref` (el frontend lo resetea si cambia el recomendador).
+  member_id: z.coerce.number().int().positive().optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   search: z.string().max(120).optional(),
@@ -343,6 +346,7 @@ adminOrdersRouter.get('/', async (req, res, next) => {
     };
     if (parsed.data.status) add(`o.status = $${params.length + 1}`, parsed.data.status);
     if (parsed.data.ref) add(`o.ref_code = $${params.length + 1}`, parsed.data.ref);
+    if (parsed.data.member_id) add(`a.seller_member_id = $${params.length + 1}`, parsed.data.member_id);
     if (parsed.data.from) add(`o.created_at >= $${params.length + 1}::date`, parsed.data.from);
     if (parsed.data.to) add(`o.created_at < ($${params.length + 1}::date + INTERVAL '1 day')`, parsed.data.to);
     if (parsed.data.search) {
