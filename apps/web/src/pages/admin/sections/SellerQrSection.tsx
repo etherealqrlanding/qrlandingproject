@@ -34,8 +34,8 @@ export default function SellerQrSection({ seller }: Props) {
       const apiUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
       const headers = { Authorization: `Bearer ${token}` };
       const [pngRes, svgRes] = await Promise.all([
-        fetch(`${apiUrl}/api/admin/sellers/${seller.id}/qr?format=png&size=${size}&base_url=${encodeURIComponent(window.location.origin)}`, { headers }),
-        fetch(`${apiUrl}/api/admin/sellers/${seller.id}/qr?format=svg&size=${size}&base_url=${encodeURIComponent(window.location.origin)}`, { headers }),
+        fetch(`${apiUrl}/api/admin/sellers/${seller.id}/qr?format=png&size=${size}`, { headers }),
+        fetch(`${apiUrl}/api/admin/sellers/${seller.id}/qr?format=svg&size=${size}`, { headers }),
       ]);
       if (cancelled) return;
       if (pngRes.ok) setPngBlobUrl(URL.createObjectURL(await pngRes.blob()));

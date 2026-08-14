@@ -16,6 +16,10 @@ const schema = z.object({
   // compartir el mismo origin — en producción, si están detrás del mismo dominio con
   // proxy a /api, se puede setear igual a WEB_ORIGIN.
   API_PUBLIC_URL: z.string().url().default('http://localhost:4000'),
+  // Host público que recibe el webhook de Mercado Pago (notification_url). Por defecto
+  // se usa WEB_ORIGIN, pero en dev local (localhost) MP no puede pegarle ahí — hace falta
+  // un túnel (ngrok) o el dominio real, seteado acá aparte.
+  WEBHOOK_PUBLIC_URL: z.string().url().optional(),
   DATABASE_URL: z.string().min(1),
   COOKIE_SECRET: z.string().min(8),
   // Mercado Pago
@@ -45,7 +49,7 @@ const schema = z.object({
   // Emails — opcionales para que el server arranque sin estar configurado todavía.
   // Transporte preferido: SMTP (ej. Gmail) si SMTP_* está configurado; si no, Resend.
   RESEND_API_KEY: z.string().min(10).optional(),
-  EMAIL_FROM: z.string().default('Tangos y Milongas Tickets <onboarding@resend.dev>'),
+  EMAIL_FROM: z.string().default('Tango QR <onboarding@resend.dev>'),
   ADMIN_NOTIFICATION_EMAIL: z.string().email().optional(),
   // SMTP (Gmail u otro). Para Gmail: host=smtp.gmail.com, port=465, user=tu@gmail.com,
   // pass=contraseña de aplicación (requiere 2FA). EMAIL_FROM debe usar ese mismo gmail.

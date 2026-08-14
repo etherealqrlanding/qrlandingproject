@@ -217,7 +217,7 @@ export default function ActionPage() {
           </div>
         )}
 
-        <p className="text-center text-xs text-cream/20 mt-8">Tangos y Milongas Tickets · Portal de recomendadores</p>
+        <p className="text-center text-xs text-cream/20 mt-8">Tango QR · Portal de recomendadores</p>
       </div>
     </div>
   );

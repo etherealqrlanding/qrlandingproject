@@ -61,7 +61,7 @@ export default function SellerHelp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supportWhatsapp = useSupportWhatsapp();
-  const waUrl = `https://wa.me/${supportWhatsapp}?text=${encodeURIComponent('Hola, soy recomendador de Tangos y Milongas Tickets y necesito ayuda con el portal.')}`;
+  const waUrl = `https://wa.me/${supportWhatsapp}?text=${encodeURIComponent('Hola, soy recomendador de Tango QR y necesito ayuda con el portal.')}`;
 
   useEffect(() => {
     sellerApi.faq()

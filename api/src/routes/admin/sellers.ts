@@ -475,9 +475,10 @@ adminSellersRouter.get('/:id/qr', async (req, res, next) => {
     const format = req.query.format === 'svg' ? 'svg' : 'png';
     const size = Math.min(2048, Math.max(128, Number(req.query.size ?? 512)));
 
-    // URL pública con el code del vendedor
-    const baseUrl = (typeof req.query.base_url === 'string' && req.query.base_url) || config.WEB_ORIGIN;
-    const target = `${baseUrl.replace(/\/$/, '')}/?ref=${encodeURIComponent(seller.code)}`;
+    // URL pública con el code del vendedor. Siempre WEB_ORIGIN (no el origin del browser del
+    // admin): así un QR generado durante una migración de dominio nunca queda apuntando al
+    // dominio viejo solo porque el admin todavía tenía esa pestaña abierta.
+    const target = `${config.WEB_ORIGIN.replace(/\/$/, '')}/?ref=${encodeURIComponent(seller.code)}`;
 
     const qrOptions: QRCode.QRCodeToBufferOptions = {
       errorCorrectionLevel: 'M',

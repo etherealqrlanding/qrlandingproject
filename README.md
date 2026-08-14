@@ -1,4 +1,4 @@
-# Ethereal Tours
+# Tango QR
 
 Landing comercial + API para una agencia de turismo que comercializa casas de tango en Buenos Aires.
 
@@ -14,7 +14,7 @@ Landing comercial + API para una agencia de turismo que comercializa casas de ta
 ## Estructura
 
 ```
-ethereal-tours/
+tangoqr/
 ├── apps/
 │   └── web/         # Landing pública
 ├── api/             # API + webhooks Stripe
@@ -70,7 +70,7 @@ ethereal-tours/
 Cada vendedor (Uber, conserje, hotel) recibe un código único. Su QR apunta a:
 
 ```
-https://ethereal-tours.com/?ref=COD123
+https://tangoqr.net/?ref=COD123
 ```
 
 Al cargar la landing, el hook `useRefCapture` valida el código y lo guarda en una cookie `et_ref` por 30 días. Al checkout, ese código se envía al backend y se persiste como `order_attribution` para el cálculo de comisiones.

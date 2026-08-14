@@ -165,7 +165,7 @@ export default function SellerLogin() {
               </h1>
               <p className="mt-1 text-sm text-cream/50">
                 {isInvite
-                  ? 'Bienvenido a Tangos y Milongas Tickets. Elegí una contraseña para acceder al portal cuando quieras.'
+                  ? 'Bienvenido a Tango QR. Elegí una contraseña para acceder al portal cuando quieras.'
                   : 'Ingresá y confirmá tu nueva contraseña.'}
               </p>
             </div>

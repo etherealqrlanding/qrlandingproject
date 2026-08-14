@@ -144,7 +144,7 @@ export default function SellerLayout() {
     const refLink = buildShareUrl('/', me.code);
     const waMessage = `Hola! Te paso el link para reservar la experiencia: ${refLink}`;
     if (typeof navigator.share === 'function') {
-      try { await navigator.share({ title: 'Tangos y Milongas Tickets', text: waMessage, url: refLink }); } catch { /* cancelado */ }
+      try { await navigator.share({ title: 'Tango QR', text: waMessage, url: refLink }); } catch { /* cancelado */ }
       return;
     }
     try {

@@ -116,7 +116,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         <Field
           label="Código del QR"
           required
-          hint="Va en la URL: tangosymilongastickets.com/?ref=CODIGO. Solo letras, números, guion y guion bajo."
+          hint="Va en la URL: tangoqr.net/?ref=CODIGO. Solo letras, números, guion y guion bajo."
         >
           <div className="flex gap-2">
             <input

@@ -122,7 +122,7 @@ export default function SellerForm() {
           </div>
           {seller?.contact_phone && (
             <a
-              href={`https://wa.me/${seller.contact_phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${seller.name.split(' ')[0]}, te contacto desde Tangos y Milongas Tickets.`)}`}
+              href={`https://wa.me/${seller.contact_phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${seller.name.split(' ')[0]}, te contacto desde Tango QR.`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-lg bg-[#25D366]/15 border border-[#25D366]/30 px-3 py-2 text-sm font-medium text-[#25D366] hover:bg-[#25D366]/25 transition-colors"

@@ -74,8 +74,8 @@ export async function createPreference(input: CreatePreferenceInput): Promise<{ 
         pending: `${input.webOrigin}/checkout/pending?order=${input.orderPublicId}`,
       },
       ...(isLocalOrigin ? {} : { auto_return: 'approved' as const }),
-      notification_url: `${process.env.WEBHOOK_PUBLIC_URL ?? input.webOrigin}/api/checkout/webhook`,
-      statement_descriptor: 'TANGOS Y MILONGAS',
+      notification_url: `${config.WEBHOOK_PUBLIC_URL ?? input.webOrigin}/api/checkout/webhook`,
+      statement_descriptor: 'TANGO QR',
       metadata: input.metadata,
       binary_mode: false,
       ...(input.expiresInMinutes != null ? {

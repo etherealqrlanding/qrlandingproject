@@ -321,7 +321,7 @@ function htmlForCustomer(data: OrderEmailData): string {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(data.customer_name)}, recibimos tu pago para una experiencia inolvidable en Buenos Aires. Acá tenés todos los detalles de tu reserva:</p>
@@ -332,7 +332,7 @@ function htmlForCustomer(data: OrderEmailData): string {
   </div>
   <p>Guardá este email como comprobante. Si tenés cualquier consulta, respondé este mismo correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
 }
 
@@ -340,7 +340,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Nueva venta confirmada</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden</p>
@@ -361,7 +361,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     <div style="${baseStyles.row}"><span>Incentivo por recomendación a pagar</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, data.exchange_rate_used)}</strong></div>
   </div>` : ''}
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
 }
 
@@ -371,7 +371,7 @@ function htmlForSellerRefund(data: OrderEmailData & {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya fue cancelada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, te avisamos que una venta atribuida a tu código fue ${data.is_partial ? 'reintegrada parcialmente' : 'cancelada y reintegrada al cliente'}${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   ${data.is_partial
@@ -386,7 +386,7 @@ function htmlForSellerRefund(data: OrderEmailData & {
   </div>
   <p>Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
 }
 
@@ -394,14 +394,14 @@ function htmlForRefund(data: OrderEmailData & { reason?: string | null }): strin
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
   <p>Hola ${escapeHtml(data.customer_name)}, lamentamos comunicarte que no pudimos confirmar tu reserva${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   <p><strong style="color:#c8a85a">Te reintegramos ARS ${data.total_ars.toLocaleString('es-AR')}</strong> al mismo medio de pago con el que abonaste. El reintegro tarda entre 2 y 5 días hábiles en aparecer.</p>
   ${reservationCard(data, { showAmounts: false })}
   <p>Si querés reservar otra fecha u otra casa, escribinos por WhatsApp o respondé este email y te ayudamos a coordinar.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
 }
 
@@ -409,7 +409,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">¡Tenés una nueva venta!</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, un cliente que escaneó tu QR acaba de comprar una experiencia. Te corresponde un incentivo por recomendación.</p>
   <div style="${baseStyles.card}">
@@ -430,7 +430,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   </div>
   <p>Vamos a procesar el pago de tu incentivo por recomendación junto con los del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
 }
 
@@ -524,7 +524,7 @@ export async function sendPaymentLinkEmail(orderId: number, initPoint: string): 
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Completá tu pago</h1>
   <p>Hola ${escapeHtml(orderData.customer_name)}, ¡ya casi! Para confirmar tu reserva de ${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}, pagá con ${payLabel}${isPix ? ' (en reales)' : ''} acá:</p>
   <div style="text-align:center;margin:24px 0">
@@ -533,7 +533,7 @@ export async function sendPaymentLinkEmail(orderId: number, initPoint: string): 
   ${reservationCard(orderData, { showContact: true })}
   <p style="font-size:13px;color:rgba(245,239,230,0.6)">El lugar queda reservado hasta que completes el pago; si no lo hacés a tiempo, la reserva caduca. Si necesitás que te reenviemos este link, escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `Completá tu pago — ${orderData.option_name}`, html, 'CLIENTE');
 }
@@ -609,7 +609,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Nueva reserva en efectivo</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden</p>
@@ -629,7 +629,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el recomendador confirme el cobro desde su portal.</p>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, adminHtml, 'ADMIN');
   }
@@ -666,7 +666,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Tenés una reserva para cobrar</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, registramos una reserva a tu nombre. Coordiná el cobro con el cliente.</p>
   <div style="${baseStyles.card}">
@@ -680,7 +680,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">Al pasajero le cobrás el monto que definas; a nosotros nos rendís el neto.</p>
   ${actionButtons}
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Reserva para cobrar — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml, 'VENDEDOR');
   }
@@ -702,7 +702,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">¡Reserva confirmada!</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(baseData.customer_name)}, tu reserva está confirmada (pago en efectivo). ¡Nos vemos pronto en Buenos Aires! Acá tenés todos los detalles:</p>
@@ -710,7 +710,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   ${voucherButtonBlock(baseData.public_id)}
   <p>Guardá este email como comprobante. Si tenés alguna consulta, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `¡Reserva confirmada! — ${baseData.option_name}`, customerHtml, 'CLIENTE');
 
@@ -722,7 +722,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Reserva cobrada y confirmada</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden</p>
@@ -742,7 +742,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
     <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${cashNetDisplay(data, baseData)}</strong></div>
   </div>` : ''}
   <p style="color:rgba(245,239,230,0.7);">${actorNote}</p>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cobrado] ${baseData.option_name} — ${escapeHtml(data.customer_name)} (${fmtArs(baseData.total_ars)})`, adminHtml, 'ADMIN');
   }
@@ -750,12 +750,12 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   // 3) Vendedor — texto diferente según quién confirmó
   if (data.seller_name && data.seller_email && data.commission_usd != null) {
     const sellerIntro = actor === 'admin'
-      ? `Hola ${escapeHtml(data.seller_name)}, el equipo de Tangos y Milongas Tickets confirmó el cobro de esta reserva en tu nombre. La reserva quedó confirmada y el email fue enviado al pasajero.`
+      ? `Hola ${escapeHtml(data.seller_name)}, el equipo de Tango QR confirmó el cobro de esta reserva en tu nombre. La reserva quedó confirmada y el email fue enviado al pasajero.`
       : `Hola ${escapeHtml(data.seller_name)}, confirmaste la recepción del dinero. La reserva quedó confirmada y el email fue enviado al pasajero.`;
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">¡Cobro registrado!</h1>
   <p>${sellerIntro}</p>
   <div style="${baseStyles.card}">
@@ -767,7 +767,7 @@ export async function sendCashCollectedNotifications(orderId: number, actor: 'se
   </div>
   <p style="font-size:13px;color:rgba(245,239,230,0.6);margin:0">El monto que le cobraste al pasajero lo definiste vos; lo que nos rendís es el neto.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `¡Cobro confirmado! — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, sellerHtml, 'VENDEDOR');
   }
@@ -782,9 +782,9 @@ export async function sendSellerPortalInvite(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Portal de recomendadores</p>
   <h1 style="${baseStyles.title}">¡Bienvenido al portal!</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets te invitó a acceder a tu portal de ventas.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tango QR te invitó a acceder a tu portal de ventas.</p>
   <p>Desde ahí vas a poder ver tus ventas, incentivos por recomendación y liquidaciones en tiempo real.</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic en el botón para crear tu contraseña e ingresar:</p>
@@ -797,9 +797,9 @@ export async function sendSellerPortalInvite(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo pediste vos, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
-  return send(sellerEmail, 'Acceso a tu portal de ventas — Tangos y Milongas Tickets', html, 'VENDEDOR');
+  return send(sellerEmail, 'Acceso a tu portal de ventas — Tango QR', html, 'VENDEDOR');
 }
 
 export async function sendSellerPasswordReset(
@@ -810,9 +810,9 @@ export async function sendSellerPasswordReset(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Portal de recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Portal de recomendadores</p>
   <h1 style="${baseStyles.title}">Acceso a tu portal</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets te envió un nuevo link de acceso.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tango QR te envió un nuevo link de acceso.</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic para crear una nueva contraseña:</p>
     <a href="${resetLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
@@ -824,9 +824,9 @@ export async function sendSellerPasswordReset(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo pediste vos, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
-  return send(sellerEmail, 'Restablecé tu acceso al portal — Tangos y Milongas Tickets', html, 'VENDEDOR');
+  return send(sellerEmail, 'Restablecé tu acceso al portal — Tango QR', html, 'VENDEDOR');
 }
 
 export async function sendSellerMemberPinReset(
@@ -837,7 +837,7 @@ export async function sendSellerMemberPinReset(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Mi equipo</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Mi equipo</p>
   <h1 style="${baseStyles.title}">Restablecer tu PIN</h1>
   <p>Hola ${escapeHtml(memberName)}, pediste restablecer el PIN que usás para firmar tus ventas.</p>
   <div style="${baseStyles.card}">
@@ -851,9 +851,9 @@ export async function sendSellerMemberPinReset(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 2 horas y sirve una sola vez. Si no lo pediste vos, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets</p>
+  <p style="${baseStyles.footer}">Tango QR</p>
 </div></body></html>`;
-  return send(memberEmail, 'Restablecé tu PIN — Tangos y Milongas Tickets', html, 'VENDEDOR');
+  return send(memberEmail, 'Restablecé tu PIN — Tango QR', html, 'VENDEDOR');
 }
 
 export async function sendSellerAdminPinReset(
@@ -864,7 +864,7 @@ export async function sendSellerAdminPinReset(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Mi equipo</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Mi equipo</p>
   <h1 style="${baseStyles.title}">Restablecer el PIN de administrador</h1>
   <p>Hola, pidieron restablecer el PIN de administrador de la cuenta de ${escapeHtml(sellerName)} (el que gestiona el equipo de sub-recomendadores).</p>
   <div style="${baseStyles.card}">
@@ -878,9 +878,9 @@ export async function sendSellerAdminPinReset(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 2 horas y sirve una sola vez. Si no lo pediste vos, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets</p>
+  <p style="${baseStyles.footer}">Tango QR</p>
 </div></body></html>`;
-  return send(adminEmail, 'Restablecé el PIN de administrador — Tangos y Milongas Tickets', html, 'VENDEDOR');
+  return send(adminEmail, 'Restablecé el PIN de administrador — Tango QR', html, 'VENDEDOR');
 }
 
 export async function sendAdminPortalInvite(
@@ -891,9 +891,9 @@ export async function sendAdminPortalInvite(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Panel de administración</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Panel de administración</p>
   <h1 style="${baseStyles.title}">¡Bienvenido al panel!</h1>
-  <p>Hola ${escapeHtml(adminName)}, te dieron acceso de administrador al panel de Tangos y Milongas Tickets.</p>
+  <p>Hola ${escapeHtml(adminName)}, te dieron acceso de administrador al panel de Tango QR.</p>
   <div style="${baseStyles.card}">
     <p style="margin:0 0 16px;color:rgba(245,239,230,0.7);">Hacé clic en el botón para crear tu contraseña e ingresar:</p>
     <a href="${inviteLink}" style="display:inline-block;background:#c8a85a;color:#0d0a0a;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;font-size:15px;">
@@ -905,9 +905,9 @@ export async function sendAdminPortalInvite(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 24 horas. Si no lo esperabas, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Panel de administración</p>
+  <p style="${baseStyles.footer}">Tango QR · Panel de administración</p>
 </div></body></html>`;
-  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html, 'ADMIN');
+  return send(adminEmail, 'Acceso al panel de administración — Tango QR', html, 'ADMIN');
 }
 
 export async function sendAdminPasswordReset(
@@ -918,7 +918,7 @@ export async function sendAdminPasswordReset(
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Panel de administración</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Panel de administración</p>
   <h1 style="${baseStyles.title}">Acceso al panel</h1>
   <p>Hola ${escapeHtml(adminName)}, se agregó/actualizó tu acceso de administrador.</p>
   <div style="${baseStyles.card}">
@@ -932,9 +932,9 @@ export async function sendAdminPasswordReset(
   </p>
   <p style="color:rgba(245,239,230,0.4);font-size:12px;">Este enlace expira en 1 hora. Si no lo esperabas, podés ignorar este email.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Panel de administración</p>
+  <p style="${baseStyles.footer}">Tango QR · Panel de administración</p>
 </div></body></html>`;
-  return send(adminEmail, 'Acceso al panel de administración — Tangos y Milongas Tickets', html, 'ADMIN');
+  return send(adminEmail, 'Acceso al panel de administración — Tango QR', html, 'ADMIN');
 }
 
 /**
@@ -1048,7 +1048,7 @@ export async function sendOrderModifiedNotifications(
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Actualizamos tu reserva</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, modificamos tu reserva según lo acordado${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
@@ -1059,7 +1059,7 @@ export async function sendOrderModifiedNotifications(
   ${voucherButtonBlock(orderData.public_id)}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `Reserva actualizada — reintegro ARS ${arsStr}`, customerHtml, 'CLIENTE');
 
@@ -1068,7 +1068,7 @@ export async function sendOrderModifiedNotifications(
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Reserva modificada</h1>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
@@ -1079,7 +1079,7 @@ export async function sendOrderModifiedNotifications(
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
   </div>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Modificada] ${orderData.customer_name} — reintegro ARS ${arsStr}`, adminHtml, 'ADMIN');
   }
@@ -1089,7 +1089,7 @@ export async function sendOrderModifiedNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya se modificó</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código se redujo${reason ? ` — ${escapeHtml(reason)}` : ''}. Tu incentivo por recomendación se ajustó al nuevo total.</p>
   <div style="${baseStyles.card}">
@@ -1099,7 +1099,7 @@ export async function sendOrderModifiedNotifications(
     <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta modificada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
@@ -1126,7 +1126,7 @@ export async function sendOrderIncreasedNotifications(
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Sumamos pasajeros a tu reserva</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, actualizamos tu reserva con los pasajeros que agregaste${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
@@ -1135,7 +1135,7 @@ export async function sendOrderIncreasedNotifications(
   ${voucherButtonBlock(orderData.public_id)}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `Reserva actualizada — ${orderData.option_name}`, customerHtml, 'CLIENTE');
 
@@ -1144,7 +1144,7 @@ export async function sendOrderIncreasedNotifications(
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Reserva ampliada</h1>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
@@ -1154,7 +1154,7 @@ export async function sendOrderIncreasedNotifications(
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
   </div>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliada] ${orderData.customer_name} — +ARS ${arsStr}`, adminHtml, 'ADMIN');
   }
@@ -1164,7 +1164,7 @@ export async function sendOrderIncreasedNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya se amplió</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código sumó pasajeros. Tu incentivo por recomendación se ajustó al nuevo total.</p>
   <div style="${baseStyles.card}">
@@ -1174,7 +1174,7 @@ export async function sendOrderIncreasedNotifications(
     <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
   </div>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta ampliada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
@@ -1203,7 +1203,7 @@ export async function sendOrderRescheduledNotifications(
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Reprogramamos tu reserva</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, ${actorLabel} reprogramó tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
@@ -1212,7 +1212,7 @@ export async function sendOrderRescheduledNotifications(
   ${voucherButtonBlock(orderData.public_id)}
   <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `Reserva reprogramada — nueva fecha ${newDate}`, customerHtml, 'CLIENTE');
 
@@ -1221,7 +1221,7 @@ export async function sendOrderRescheduledNotifications(
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Reserva reprogramada</h1>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
@@ -1231,7 +1231,7 @@ export async function sendOrderRescheduledNotifications(
     <div style="${baseStyles.row}"><span>Reprogramado por</span><strong>${actor === 'seller' ? 'Recomendador' : 'Admin'}</strong></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
   </div>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Reprogramada] ${orderData.customer_name} — ${prevDate} → ${newDate}`, adminHtml, 'ADMIN');
   }
@@ -1241,7 +1241,7 @@ export async function sendOrderRescheduledNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una venta tuya se reprogramó</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, una reserva atribuida a tu código cambió de fecha${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <div style="${baseStyles.card}">
@@ -1250,7 +1250,7 @@ export async function sendOrderRescheduledNotifications(
     <div style="${baseStyles.row}"><span>Fecha nueva</span><strong style="color:#c8a85a">${newDate}</strong></div>
   </div>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `Venta reprogramada — ${orderData.option_name}`, sellerHtml, 'VENDEDOR');
   }
@@ -1285,7 +1285,7 @@ export async function sendSellerCancelledNotifications(
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
   <p>Hola ${escapeHtml(orderData.customer_name)}, ${sellerLabel} canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   ${refundLine}
@@ -1293,7 +1293,7 @@ export async function sendSellerCancelledNotifications(
   ${reasonLine}
   <p>Si querés reservar otra fecha u otra experiencia, respondé este email o escribinos por WhatsApp y te ayudamos a coordinar.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(
     data.customer_email,
@@ -1307,7 +1307,7 @@ export async function sendSellerCancelledNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Cancelación registrada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, confirmamos que cancelaste la siguiente reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <p>${wasCollected
@@ -1323,7 +1323,7 @@ export async function sendSellerCancelledNotifications(
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">Si necesitás asistencia para coordinar la devolución, escribinos por WhatsApp.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(
       data.seller_email,
@@ -1338,7 +1338,7 @@ export async function sendSellerCancelledNotifications(
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Reserva cancelada por recomendador</h1>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Orden cancelada</p>
@@ -1361,7 +1361,7 @@ export async function sendSellerCancelledNotifications(
   <p style="color:rgba(245,239,230,0.55);font-size:13px;">${wasCollected
     ? '⚠ El cliente fue notificado para coordinar la devolución del dinero directamente con el recomendador.'
     : 'ℹ La reserva no había sido cobrada — el cliente fue notificado de que no hay ningún trámite de devolución pendiente.'}</p>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(
       config.ADMIN_NOTIFICATION_EMAIL,
@@ -1401,15 +1401,15 @@ export async function sendAdminCancelledNotifications(
   const customerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Buenos Aires</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
   <h1 style="${baseStyles.title}">Tu reserva fue cancelada</h1>
-  <p>Hola ${escapeHtml(orderData.customer_name)}, el equipo de Tangos y Milongas Tickets canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, el equipo de Tango QR canceló tu reserva${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <p>${refundLine}</p>
   ${reservationCard(orderData, { showAmounts: true, showContact: true })}
   ${reasonLine}
   <p>Si querés reservar otra fecha u otra experiencia, respondé este email o escribinos por WhatsApp.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Buenos Aires · ${new Date().getFullYear()}</p>
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
 </div></body></html>`;
   await send(data.customer_email, `Tu reserva fue cancelada — ${orderData.option_name}`, customerHtml, 'CLIENTE');
 
@@ -1418,7 +1418,7 @@ export async function sendAdminCancelledNotifications(
     const sellerHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Recomendadores</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Recomendadores</p>
   <h1 style="${baseStyles.title}">Una reserva tuya fue cancelada</h1>
   <p>Hola ${escapeHtml(data.seller_name)}, el administrador canceló la siguiente reserva atribuida a tu código${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
   <div style="${baseStyles.card}">
@@ -1431,7 +1431,7 @@ export async function sendAdminCancelledNotifications(
   ${reasonLine}
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">El pasajero fue notificado. Si tenés dudas escribinos por WhatsApp.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
     await send(data.seller_email, `[Cancelada por admin] ${escapeHtml(orderData.customer_name)} — ${escapeHtml(orderData.option_name)}`, sellerHtml, 'VENDEDOR');
   }
@@ -1441,7 +1441,7 @@ export async function sendAdminCancelledNotifications(
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Reserva cancelada por admin</h1>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
@@ -1453,7 +1453,7 @@ export async function sendAdminCancelledNotifications(
     ${data.seller_name ? `<div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(data.seller_name)}</strong></div>` : ''}
   </div>
   ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Cancelada admin] ${orderData.customer_name} — ${escapeHtml(orderData.option_name)}`, adminHtml, 'ADMIN');
   }
@@ -1473,9 +1473,9 @@ export async function sendSellerCommissionPaid(input: {
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Liquidaciones</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Liquidaciones</p>
   <h1 style="${baseStyles.title}">¡Liquidación procesada!</h1>
-  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tangos y Milongas Tickets procesó una liquidación de incentivos por recomendación a tu favor.</p>
+  <p>Hola ${escapeHtml(sellerName)}, el equipo de Tango QR procesó una liquidación de incentivos por recomendación a tu favor.</p>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Detalle de la liquidación</p>
     <div style="${baseStyles.row}"><span>Ventas liquidadas</span><strong>${ordersCount} venta${ordersCount === 1 ? '' : 's'}</strong></div>
@@ -1489,7 +1489,7 @@ export async function sendSellerCommissionPaid(input: {
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Tenés alguna duda sobre el monto o las ventas incluidas? Escribinos por WhatsApp y te respondemos a la brevedad.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
   await send(sellerEmail, `Liquidación procesada — USD ${totalCommissionUsd.toFixed(2)} acreditados`, html, 'VENDEDOR');
 
@@ -1497,7 +1497,7 @@ export async function sendSellerCommissionPaid(input: {
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Liquidación MP confirmada</h1>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(sellerName)}</strong></div>
@@ -1505,7 +1505,7 @@ export async function sendSellerCommissionPaid(input: {
     <div style="${baseStyles.row}"><span>Total pagado</span><strong style="color:#c8a85a">${fmtArs(totalCommissionArs)} (USD ${totalCommissionUsd.toFixed(2)})</strong></div>
     <div style="${baseStyles.row}"><span>Recomendador ID</span><span style="font-family:monospace">${sellerId}</span></div>
   </div>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Liquidación MP] ${sellerName} — ${fmtArs(totalCommissionArs)}`, adminHtml, 'ADMIN');
   }
@@ -1526,7 +1526,7 @@ export async function sendNetSettledConfirmation(input: {
   const html = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Liquidaciones</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Liquidaciones</p>
   <h1 style="${baseStyles.title}">¡Rendición confirmada!</h1>
   <p>Hola ${escapeHtml(sellerName)}, confirmamos que recibimos tu rendición en efectivo. Ya quedó todo en orden.</p>
   <div style="${baseStyles.card}">
@@ -1542,7 +1542,7 @@ export async function sendNetSettledConfirmation(input: {
   </div>
   <p style="color:rgba(245,239,230,0.6);font-size:13px;">¿Alguna diferencia en el monto? Escribinos por WhatsApp y lo revisamos.</p>
   ${supportBlock()}
-  <p style="${baseStyles.footer}">Tangos y Milongas Tickets · Programa de incentivos por recomendación</p>
+  <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
 </div></body></html>`;
   await send(sellerEmail, `Rendición confirmada — ${fmtArs(totalNetArs)} recibidos`, html, 'VENDEDOR');
 
@@ -1550,7 +1550,7 @@ export async function sendNetSettledConfirmation(input: {
     const adminHtml = `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
-  <p style="${baseStyles.eyebrow}">Tangos y Milongas Tickets · Admin</p>
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
   <h1 style="${baseStyles.title}">Rendición en efectivo confirmada</h1>
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(sellerName)}</strong></div>
@@ -1558,7 +1558,7 @@ export async function sendNetSettledConfirmation(input: {
     <div style="${baseStyles.row}"><span>Neto recibido</span><strong style="color:#c8a85a">${fmtArs(totalNetArs)}</strong></div>
     <div style="${baseStyles.row}"><span>Recomendador ID</span><span style="font-family:monospace">${sellerId}</span></div>
   </div>
-  <p style="${baseStyles.footer}">Notificación automática · Tangos y Milongas Tickets admin</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Rendición efectivo] ${sellerName} — ${fmtArs(totalNetArs)}`, adminHtml, 'ADMIN');
   }

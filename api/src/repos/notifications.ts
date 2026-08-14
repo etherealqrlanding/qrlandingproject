@@ -335,7 +335,7 @@ export async function createCommissionPaidNotification(
     seller_id: sellerId,
     type: 'commission_paid',
     title: 'Liquidación procesada',
-    body: `El equipo de Tangos y Milongas Tickets liquidó ${count} venta${count !== 1 ? 's' : ''} por un total de ${fmtArs(totalCommissionArs)}. El monto ya está disponible en tu historial de liquidaciones. Ante cualquier duda, contactanos por WhatsApp.`,
+    body: `El equipo de Tango QR liquidó ${count} venta${count !== 1 ? 's' : ''} por un total de ${fmtArs(totalCommissionArs)}. El monto ya está disponible en tu historial de liquidaciones. Ante cualquier duda, contactanos por WhatsApp.`,
     metadata: { order_ids: orderIds, total_ars: totalCommissionArs, orders_count: count },
   });
 }

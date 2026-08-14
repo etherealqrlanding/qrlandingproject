@@ -166,7 +166,7 @@ export default function SellerDashboard() {
                   <span className="text-xs text-cream/60 font-mono truncate min-w-0 flex-1">{refLink}</span>
                   <ShareButton
                     url={refLink}
-                    title="Tangos y Milongas Tickets"
+                    title="Tango QR"
                     waMessage={`Hola! Te paso el link para reservar la experiencia: ${refLink}`}
                     label="Compartir"
                   />

@@ -193,7 +193,7 @@ function buildDryRunIndex(): string {
     <h2>${title} (${list.length})</h2>
     <ul>${list.map((f) => `<li><a href="${encodeURIComponent(f)}" target="preview">${f.split('__').slice(2).join('__').replace('.html', '')}</a></li>`).join('')}</ul>`;
   const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>MAIL TESTING — Ethereal Tours</title>
+<html><head><meta charset="utf-8"><title>MAIL TESTING — Tango QR</title>
 <style>
   body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
   nav { width: 380px; overflow-y: auto; padding: 16px; border-right: 1px solid #ccc; box-sizing: border-box; }

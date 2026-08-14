@@ -1,8 +1,8 @@
 {
-  "name": "ethereal-tours",
+  "name": "tango-qr",
   "version": "0.1.0",
   "private": true,
-  "description": "Ethereal Tours — landing + admin + API para agencia de tango en Buenos Aires",
+  "description": "Tango QR — landing + admin + API para agencia de tango en Buenos Aires",
   "workspaces": [
     "apps/*",
     "api"

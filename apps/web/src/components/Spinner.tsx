@@ -28,7 +28,7 @@ const BRAND_SIZES: Record<NonNullable<SpinnerProps['size']>, string> = {
 };
 
 /**
- * Loader de marca: el isotipo de Tangos y Milongas dentro de un anillo dorado que gira,
+ * Loader de marca: el isotipo de Tango QR dentro de un anillo dorado que gira,
  * con un halo tenue que late. Para estados de carga grandes (pantalla completa / secciones);
  * los botones siguen usando <Spinner> chico (un isotipo de 16px no se leería).
  */

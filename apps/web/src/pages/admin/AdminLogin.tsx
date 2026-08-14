@@ -143,7 +143,7 @@ export default function AdminLogin() {
   return (
     <div className="h-[100dvh] overflow-y-auto flex flex-col items-center bg-ink px-4">
       <div className="w-full max-w-md my-auto py-6">
-        <Link to="/" className="flex justify-center mb-3" aria-label="Tangos y Milongas Tickets">
+        <Link to="/" className="flex justify-center mb-3" aria-label="Tango QR">
           <Logo className="h-20 w-auto" />
         </Link>
         <p className="text-center text-xs uppercase tracking-[0.3em] text-gold-soft mb-4 sm:mb-8">

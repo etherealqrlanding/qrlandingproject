@@ -55,7 +55,7 @@ export async function generateVoucherPdf(orderId: number): Promise<Buffer | null
   const bufferPromise = collectPdfBuffer(doc);
 
   doc.font('Helvetica').fontSize(10).fillColor(GOLD)
-    .text('TANGOS Y MILONGAS TICKETS · BUENOS AIRES', { characterSpacing: 1 });
+    .text('TANGO QR · BUENOS AIRES', { characterSpacing: 1 });
   doc.moveDown(0.3);
   doc.font('Helvetica-Bold').fontSize(24).fillColor(INK).text('Voucher de reserva');
   doc.moveDown(0.2);

@@ -161,7 +161,7 @@ function MaintenanceScreen() {
       <p className="text-cream/60 max-w-sm text-sm leading-relaxed">
         Estamos realizando tareas de mantenimiento. Volvemos en breve.
       </p>
-      <p className="mt-6 text-xs text-cream/30 uppercase tracking-widest">Tangos y Milongas Tickets</p>
+      <p className="mt-6 text-xs text-cream/30 uppercase tracking-widest">Tango QR</p>
     </div>
   );
 }

@@ -1,18 +1,18 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ethereal-postgres
+    container_name: tangoqr-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ethereal
-      POSTGRES_PASSWORD: ethereal
-      POSTGRES_DB: ethereal_tours
+      POSTGRES_USER: tangoqr
+      POSTGRES_PASSWORD: tangoqr
+      POSTGRES_DB: tangoqr
     ports:
       - "5432:5432"
     volumes:
       - ./.pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ethereal -d ethereal_tours"]
+      test: ["CMD-SHELL", "pg_isready -U tangoqr -d tangoqr"]
       interval: 5s
       timeout: 5s
       retries: 10

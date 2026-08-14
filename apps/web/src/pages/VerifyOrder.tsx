@@ -27,7 +27,7 @@ export default function VerifyOrder() {
     <section className="container-narrow py-16 md:py-24">
       <div className="max-w-lg mx-auto">
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft text-center">
-          Tangos y Milongas Tickets
+          Tango QR
         </p>
         <h1 className="mt-2 font-display text-3xl md:text-4xl text-cream text-center">
           Verificación de reserva

@@ -17,7 +17,7 @@ function fmtArs(n: number) {
 
 function waUrl(phone: string, name: string) {
   const digits = phone.replace(/\D/g, '');
-  const msg = encodeURIComponent(`Hola ${name}, te contacto desde Tangos y Milongas Tickets.`);
+  const msg = encodeURIComponent(`Hola ${name}, te contacto desde Tango QR.`);
   return `https://wa.me/${digits}?text=${msg}`;
 }
 

@@ -14,7 +14,7 @@ export default function Logo({ variant = 'light', className = 'h-12 w-auto' }: L
   return (
     <img
       src={src}
-      alt="Tangos y Milongas Tickets"
+      alt="Tango QR"
       className={className}
       width={1324}
       height={614}

@@ -22,7 +22,7 @@
     "code_invalid": "Código inválido. Verifique se está correto.",
     "code_inactive": "Esse vendedor não está mais ativo. Solicite um novo código.",
     "code_error": "Não foi possível verificar o código. Tente novamente.",
-    "footer": "Tangos y Milongas Tickets · Buenos Aires"
+    "footer": "Tango QR · Buenos Aires"
   },
   "about": {
     "default_title": "Sobre nós",
@@ -100,7 +100,7 @@
   },
   "share": {
     "button": "Compartilhar",
-    "site_message": "Conheça o Tangos y Milongas Tickets: {{link}}",
+    "site_message": "Conheça o Tango QR: {{link}}",
     "shows_message": "Veja todos os shows de tango de Buenos Aires: {{link}}",
     "house_message": "Te mando o link desta experiência: {{link}}"
   },
@@ -270,7 +270,7 @@
     "transfers": "Translados"
   },
   "footer": {
-    "tagline": "Tangos y Milongas Tickets · Buenos Aires desde 2026",
+    "tagline": "Tango QR · Buenos Aires desde 2026",
     "rights": "Todos os direitos reservados."
   },
   "ref": {
@@ -302,13 +302,13 @@
       "comercios": "Comércio Parceiro"
     },
     "message": {
-      "default": "Você escaneou o QR de {{name}}, um vendedor registrado e autorizado pela Tangos y Milongas Tickets. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
-      "recepcion": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com o respaldo e a garantia oficial da Tangos y Milongas Tickets.",
+      "default": "Você escaneou o QR de {{name}}, um vendedor registrado e autorizado pela Tango QR. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
+      "recepcion": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com o respaldo e a garantia oficial da Tango QR.",
       "choferes": "Olá! Esta experiência foi recomendada por {{name}} durante a sua viagem.",
       "guias": "Olá! Esta experiência foi selecionada e recomendada pelo seu guia {{name}}.",
-      "agencias": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tangos y Milongas Tickets.",
-      "freelance": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tangos y Milongas Tickets.",
-      "comercios": "Olá! Você encontrou esta recomendação em {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tangos y Milongas Tickets."
+      "agencias": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tango QR.",
+      "freelance": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tango QR.",
+      "comercios": "Olá! Você encontrou esta recomendação em {{name}}. Reserve seu lugar diretamente com preços oficiais e a garantia da Tango QR."
     },
     "steps": {
       "default": {
