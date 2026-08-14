@@ -175,6 +175,8 @@
     "phone_required": "Enter your phone number.",
     "nationality": "Nationality",
     "nationality_required": "Select your nationality.",
+    "terms_prefix": "I accept the",
+    "terms_required": "You need to accept the Terms and Conditions to continue.",
     "service_date": "Service date",
     "adults": "Adults",
     "children": "Children",

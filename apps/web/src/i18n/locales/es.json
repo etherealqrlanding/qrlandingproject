@@ -175,6 +175,8 @@
     "phone_required": "Ingresá tu teléfono.",
     "nationality": "Nacionalidad",
     "nationality_required": "Seleccioná tu nacionalidad.",
+    "terms_prefix": "Acepto los",
+    "terms_required": "Tenés que aceptar los Términos y Condiciones para continuar.",
     "service_date": "Fecha del servicio",
     "adults": "Adultos",
     "children": "Menores",

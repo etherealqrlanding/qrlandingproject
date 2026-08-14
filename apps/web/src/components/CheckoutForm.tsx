@@ -8,6 +8,7 @@ import TransferSection from './TransferSection';
 import { useExchangeRate } from '../lib/useExchangeRate';
 import Spinner from './Spinner';
 import AvailabilityCalendar from './AvailabilityCalendar';
+import Checkbox from './Checkbox';
 
 interface Props {
   product: ProductDetail;
@@ -61,6 +62,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const [wantsTransfer, setWantsTransfer] = useState(option.transfer_mode !== 'none');
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   // Validación en tiempo real: se marca "touched" recién al salir del campo (blur),
   // para no tirarle un error en la cara al pasajero mientras todavía está escribiendo.
   const [touched, setTouched] = useState<Record<'name' | 'phone' | 'email' | 'nationality', boolean>>({
@@ -197,6 +199,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     transfer_requested: transferApplies,
     transfer_hotel: transferApplies ? (transferHotel || null) : null,
     transfer_room: transferApplies ? (transferRoom.trim() || null) : null,
+    terms_accepted: termsAccepted,
   };
 
   // Errores por campo — se usan para el feedback en vivo (debajo de cada input,
@@ -221,6 +224,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     if (emailError) return emailError;
     if (form.email.trim().toLowerCase() !== form.emailConfirm.trim().toLowerCase()) return t('checkout.email_mismatch');
     if (nationalityError) return nationalityError;
+    if (!termsAccepted) return t('checkout.terms_required');
     if (form.service_date < today) return t('checkout.date_past');
     if (isDateBlocked) {
       if (selectedDateStatus === 'full') return t('checkout.date_full');
@@ -513,6 +517,22 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             )}
           </div>
 
+          <div className="flex items-start gap-2.5">
+            <Checkbox id="checkout-terms" checked={termsAccepted} onChange={setTermsAccepted} className="mt-0.5" />
+            <label htmlFor="checkout-terms" className="text-sm text-cream/70 cursor-pointer select-none">
+              {t('checkout.terms_prefix')}{' '}
+              <a
+                href="/terminos-y-condiciones"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-gold underline decoration-gold/40 hover:text-gold-soft"
+              >
+                {t('nav.terms')}
+              </a>
+            </label>
+          </div>
+
           {error && (
             <div className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-sm text-cream/90">
               {error}
@@ -521,7 +541,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
 
           <button
             type="submit"
-            disabled={submitting || isDateBlocked}
+            disabled={submitting || isDateBlocked || !termsAccepted}
             className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (

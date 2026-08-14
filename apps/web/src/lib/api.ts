@@ -50,6 +50,7 @@ export interface CheckoutInput {
   transfer_requested?: boolean;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
+  terms_accepted: boolean;
 }
 
 export interface CheckoutResponse {

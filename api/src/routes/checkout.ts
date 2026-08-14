@@ -74,6 +74,11 @@ const createCheckoutSchema = z.object({
   transfer_requested: z.boolean().optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  // El check "Acepto los Términos y Condiciones" del checkout es obligatorio — z.literal(true)
+  // rechaza cualquier otro valor (false, ausente, etc.), no solo lo marca opcional.
+  terms_accepted: z.literal(true, {
+    errorMap: () => ({ message: 'Tenés que aceptar los Términos y Condiciones para continuar.' }),
+  }),
 });
 
 // Prepara un checkout_hold de cupo (MP o PIX): valida vendedor, opción, fecha,
