@@ -13,7 +13,6 @@ import CheckoutForm from '../components/CheckoutForm';
 import AvailabilityCheckModal from '../components/AvailabilityCheckModal';
 import ShareButton from '../components/ShareButton';
 import Collapse from '../components/Collapse';
-import TransferHotelsInfo from '../components/TransferHotelsInfo';
 import { useExchangeRate } from '../lib/useExchangeRate';
 
 // Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
@@ -552,13 +551,9 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
   // Esta sección es "Servicios incluidos" — un traslado opcional (con costo) no
   // cuenta acá, solo el que ya viene incluido en el precio sin cargo extra.
   const anyTransfer = product.options.some((o) => o.transfer_mode === 'included');
-  // El listado de hoteles, en cambio, es relevante apenas hay traslado disponible
-  // (incluido u opcional): el cliente quiere saber si lo cubrimos antes de reservar,
-  // más allá de si lo paga aparte o no.
-  const anyTransferAvailable = product.options.some((o) => o.transfer_mode !== 'none');
   const hasDays = product.available_days.length > 0;
 
-  if (!hasDays && !schedule && !neighborhood && !anyDinner && !anyTransfer && !anyTransferAvailable) return null;
+  if (!hasDays && !schedule && !neighborhood && !anyDinner && !anyTransfer) return null;
 
   return (
     <div className="rounded-lg border border-gold/10 bg-ink-soft/40 p-5">
@@ -566,7 +561,7 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
 
       <div className="flex flex-col divide-y divide-gold/10">
         {(hasDays || schedule) && (
-          <div className="py-4 first:pt-0 last:pb-0">
+          <div className="pb-4">
             <p className="text-xs text-cream/40 mb-1.5">🗓 {t('product.schedule')}</p>
             {hasDays && (
               <div className="flex flex-wrap gap-1.5 mb-1.5">
@@ -589,14 +584,14 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
         )}
 
         {neighborhood && (
-          <div className="py-4 first:pt-0 last:pb-0">
+          <div className="py-4">
             <p className="text-xs text-cream/40 mb-1.5">📍 {t('product.location')}</p>
             <p className="text-sm text-cream/70">{neighborhood}</p>
           </div>
         )}
 
         {(anyDinner || anyTransfer) && (
-          <div className="py-4 first:pt-0 last:pb-0">
+          <div className="pt-4">
             <p className="text-xs text-cream/40 mb-1.5">{t('product.services_included')}</p>
             <div className="flex flex-wrap gap-1.5">
               {anyDinner && (
@@ -610,14 +605,6 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
                 </span>
               )}
             </div>
-          </div>
-        )}
-
-        {anyTransferAvailable && (
-          <div className="py-4 first:pt-0 last:pb-0">
-            <p className="text-xs text-cream/40 mb-1.5">🚐 {t('product.transfer_hotels_title')}</p>
-            <p className="text-sm text-cream/70 mb-2">{t('product.transfer_hotels_intro')}</p>
-            <TransferHotelsInfo />
           </div>
         )}
       </div>
