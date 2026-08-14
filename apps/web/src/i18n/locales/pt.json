@@ -14,15 +14,15 @@
   },
   "gate": {
     "badge": "Acesso exclusivo",
-    "title": "Entre com seu vendedor autorizado",
-    "message": "Esta plataforma é exclusiva para clientes indicados pelos nossos vendedores. Peça ao seu vendedor o link ou QR code de acesso para ver as casas de tango e reservar.",
-    "invalid": "O código utilizado não é válido ou o vendedor não está mais ativo. Solicite um novo link de acesso.",
-    "have_code": "Já tem um código de vendedor?",
+    "title": "Entre com seu recomendador autorizado",
+    "message": "Esta plataforma é exclusiva para clientes indicados pelos nossos recomendadores. Peça ao seu recomendador o link ou QR code de acesso para ver as casas de tango e reservar.",
+    "invalid": "O código utilizado não é válido ou o recomendador não está mais ativo. Solicite um novo link de acesso.",
+    "have_code": "Já tem um código de recomendador?",
     "placeholder": "Digite seu código",
     "enter": "Entrar",
     "checking": "Verificando...",
     "code_invalid": "Código inválido. Verifique se está correto.",
-    "code_inactive": "Esse vendedor não está mais ativo. Solicite um novo código.",
+    "code_inactive": "Esse recomendador não está mais ativo. Solicite um novo código.",
     "code_error": "Não foi possível verificar o código. Tente novamente.",
     "footer": "Tango QR · Buenos Aires"
   },
@@ -95,7 +95,7 @@
       { "title": "O melhor do tango portenho", "desc": "As casas de tango mais emblemáticas de Buenos Aires, selecionadas em um só lugar." }
     ],
     "benefit_cash_only_title": "Reservas 100% seguras",
-    "benefit_cash_only_desc": "Confirmação criptografada em cada reserva. O pagamento em dinheiro é combinado diretamente com seu anfitrião.",
+    "benefit_cash_only_desc": "Confirmação criptografada em cada reserva. O pagamento em dinheiro é combinado diretamente com seu recomendador.",
     "cta": "Reserve sua noite de tango"
   },
   "shows": {
@@ -124,7 +124,7 @@
     "how_to_book_step2": "Verifique a disponibilidade e escolha o dia",
     "how_to_book_step3_card_cash": "Pague com cartão, PIX ou dinheiro",
     "how_to_book_step3_card_only": "Pague com cartão ou PIX",
-    "how_to_book_step3_cash_only": "Pague em dinheiro ao anfitrião",
+    "how_to_book_step3_cash_only": "Pague em dinheiro ao recomendador",
     "how_to_book_note": "Confirmação imediata por e-mail",
     "per_adult": "por adulto",
     "per_adult_short": "adulto",
@@ -155,11 +155,11 @@
     "book_option": "Garanta seus ingressos",
     "check_availability": "Verificar disponibilidade",
     "secure_payment_card": "Pagamento 100% seguro: cartão (crédito, débito ou saldo em conta) em pesos, ou PIX em reais.",
-    "secure_payment_cash_only": "Confirmação instantânea da reserva. O pagamento em dinheiro é combinado com seu anfitrião.",
+    "secure_payment_cash_only": "Confirmação instantânea da reserva. O pagamento em dinheiro é combinado com seu recomendador.",
     "back_to_list": "Voltar à lista",
     "error": "Não foi possível carregar este serviço",
     "currency_notice_card": "Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). Os preços em USD são de referência e convertidos pela taxa de câmbio vigente.",
-    "currency_notice_cash_only": "Os preços em USD são de referência. O valor final em dinheiro é combinado diretamente com seu anfitrião.",
+    "currency_notice_cash_only": "Os preços em USD são de referência. O valor final em dinheiro é combinado diretamente com seu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
@@ -191,10 +191,10 @@
     "pay_with_mp": "Pagar com Cartão",
     "pay_with_pix": "Pagar com PIX",
     "pix_note": "Pague em reais (BRL) escaneando um QR ou copiando a chave PIX do seu banco. A reserva é confirmada assim que o pagamento é compensado.",
-    "pay_with_seller": "Pagar ao vendedor (dinheiro)",
+    "pay_with_seller": "Pagar ao recomendador (dinheiro)",
     "confirm_booking": "Confirmar reserva",
     "processing": "Processando...",
-    "cash_note": "O vendedor coordenará o pagamento no momento do serviço. A reserva fica pendente de confirmação.",
+    "cash_note": "O recomendador coordenará o pagamento no momento do serviço. A reserva fica pendente de confirmação.",
     "mp_redirect_note": "Levamos você ao ambiente de pagamento seguro. Aceitamos cartões, transferência e dinheiro.",
     "checking_availability": "Verificando disponibilidade...",
     "date_full": "Sem vagas para esta data. Escolha outro dia.",
@@ -209,15 +209,15 @@
     "horizon_notice": "No momento vendemos ingressos até {{date}}",
     "capacity_max_reached": "Capacidade máxima atingida para esta data",
     "currency_notice_card": "Os preços são exibidos em dólares (USD) como referência. Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
-    "currency_notice_cash_only": "Os preços são exibidos em dólares (USD) como referência. O valor final em dinheiro é combinado diretamente com seu anfitrião.",
+    "currency_notice_cash_only": "Os preços são exibidos em dólares (USD) como referência. O valor final em dinheiro é combinado diretamente com seu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (estimado pela taxa atual)"
   },
   "return": {
     "success_title": "Reserva confirmada!",
     "success_subtitle": "Enviamos os detalhes por e-mail. Até breve em Buenos Aires!",
     "cash_title": "Reserva registrada!",
-    "cash_subtitle": "Sua reserva foi registrada. O vendedor coordenará o pagamento e os detalhes do serviço.",
-    "cash_method": "Pagamento: dinheiro ao vendedor",
+    "cash_subtitle": "Sua reserva foi registrada. O recomendador coordenará o pagamento e os detalhes do serviço.",
+    "cash_method": "Pagamento: dinheiro ao recomendador",
     "pending_title": "Pagamento em processamento",
     "pending_subtitle": "Seu pagamento está sendo processado. Avisaremos por e-mail assim que for confirmado.",
     "failure_title": "O pagamento não foi concluído",
@@ -240,14 +240,14 @@
   "payment_methods": {
     "secure_note": "Pagamentos 100% seguros",
     "currency_note_card": "Os preços são exibidos em USD como referência. A cobrança é processada em pesos argentinos (ARS) com cartão/Mercado Pago, ou em reais (BRL) com PIX.",
-    "currency_note_cash_only": "Os preços são exibidos em USD como referência. O pagamento em dinheiro é combinado diretamente com seu anfitrião.",
+    "currency_note_cash_only": "Os preços são exibidos em USD como referência. O pagamento em dinheiro é combinado diretamente com seu recomendador.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",
     "mp_wallet": "Saldo em conta",
     "mp_types_short": "Crédito, débito e saldo em conta",
     "card_label": "Cartão",
     "card_brands": "Visa / Mastercard / Amex",
-    "cash_label": "Ao vendedor",
+    "cash_label": "Ao recomendador",
     "cash_short": "Dinheiro",
     "pix_soon": "Em breve",
     "pix_short": "Em reais (BRL)",
@@ -289,15 +289,15 @@
     "rights": "Todos os direitos reservados."
   },
   "ref": {
-    "inactive": "Este vendedor não está disponível no momento"
+    "inactive": "Este recomendador não está disponível no momento"
   },
   "seller_inactive": {
-    "title": "Vendedor indisponível",
-    "message": "Este QR pertence a um vendedor que não está mais ativo. Por favor, entre em contato com quem o compartilhou.",
+    "title": "Recomendador indisponível",
+    "message": "Este QR pertence a um recomendador que não está mais ativo. Por favor, entre em contato com quem o compartilhou.",
     "cta": "Fechar"
   },
   "seller_welcome": {
-    "badge": "Vendedor Verificado",
+    "badge": "Recomendador Verificado",
     "steps_title": "O que você pode fazer?",
     "cta": "Explorar experiências →",
     "kind": {
@@ -317,7 +317,7 @@
       "comercios": "Comércio Parceiro"
     },
     "message": {
-      "default": "Você escaneou o QR de {{name}}, um vendedor registrado e autorizado pela Tango QR. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
+      "default": "Você escaneou o QR de {{name}}, um recomendador registrado e autorizado pela Tango QR. Todas as suas operações são monitoradas e protegidas pela nossa equipe.",
       "recepcion": "Olá! Esta experiência foi recomendada por {{name}}. Reserve seu lugar diretamente com o respaldo e a garantia oficial da Tango QR.",
       "choferes": "Olá! Esta experiência foi recomendada por {{name}} durante a sua viagem.",
       "guias": "Olá! Esta experiência foi selecionada e recomendada pelo seu guia {{name}}.",

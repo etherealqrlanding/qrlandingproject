@@ -14,15 +14,15 @@
   },
   "gate": {
     "badge": "Exclusive access",
-    "title": "Enter with your authorized seller",
-    "message": "This platform is exclusive to customers referred by our sellers. Ask your seller for their access link or QR code to browse the tango houses and book.",
-    "invalid": "The code you used is not valid or the seller is no longer active. Please request a new access link.",
-    "have_code": "Already have a seller code?",
+    "title": "Enter with your authorized recommender",
+    "message": "This platform is exclusive to customers referred by our recommenders. Ask your recommender for their access link or QR code to browse the tango houses and book.",
+    "invalid": "The code you used is not valid or the recommender is no longer active. Please request a new access link.",
+    "have_code": "Already have a recommender code?",
     "placeholder": "Enter your code",
     "enter": "Enter",
     "checking": "Checking...",
     "code_invalid": "Invalid code. Please check the spelling.",
-    "code_inactive": "That seller is no longer active. Please request a new code.",
+    "code_inactive": "That recommender is no longer active. Please request a new code.",
     "code_error": "We couldn't verify the code. Please try again.",
     "footer": "Tango QR · Buenos Aires"
   },
@@ -95,7 +95,7 @@
       { "title": "The best of Buenos Aires tango", "desc": "The city's most iconic tango houses, curated in one place." }
     ],
     "benefit_cash_only_title": "100% secure bookings",
-    "benefit_cash_only_desc": "Encrypted confirmation on every booking. Cash payment is arranged directly with your host.",
+    "benefit_cash_only_desc": "Encrypted confirmation on every booking. Cash payment is arranged directly with your recommender.",
     "cta": "Book your tango night"
   },
   "shows": {
@@ -124,7 +124,7 @@
     "how_to_book_step2": "Check availability and pick a date",
     "how_to_book_step3_card_cash": "Pay by card, PIX or cash",
     "how_to_book_step3_card_only": "Pay by card or PIX",
-    "how_to_book_step3_cash_only": "Pay in cash to your host",
+    "how_to_book_step3_cash_only": "Pay in cash to your recommender",
     "how_to_book_note": "Instant confirmation by email",
     "per_adult": "per adult",
     "per_adult_short": "adult",
@@ -155,11 +155,11 @@
     "book_option": "Get your tickets",
     "check_availability": "Check availability",
     "secure_payment_card": "100% secure payment: card (credit, debit or account balance) in pesos, or PIX in reais.",
-    "secure_payment_cash_only": "Instant booking confirmation. Cash payment is arranged with your host.",
+    "secure_payment_cash_only": "Instant booking confirmation. Cash payment is arranged with your recommender.",
     "back_to_list": "Back to list",
     "error": "We couldn't load this experience",
     "currency_notice_card": "By card (Mercado Pago) charges are processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). USD prices are for reference and are converted at the current exchange rate.",
-    "currency_notice_cash_only": "USD prices are for reference. The final cash amount is arranged directly with your host.",
+    "currency_notice_cash_only": "USD prices are for reference. The final cash amount is arranged directly with your recommender.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
   "checkout": {
@@ -191,10 +191,10 @@
     "pay_with_mp": "Pay with Card",
     "pay_with_pix": "Pay with PIX",
     "pix_note": "Pay in reais (BRL) by scanning a QR or copying the PIX key from your bank. The booking is confirmed as soon as the payment clears.",
-    "pay_with_seller": "Pay to seller (cash)",
+    "pay_with_seller": "Pay to recommender (cash)",
     "confirm_booking": "Confirm booking",
     "processing": "Processing...",
-    "cash_note": "The seller will coordinate payment at the time of the service. Booking is pending confirmation.",
+    "cash_note": "The recommender will coordinate payment at the time of the service. Booking is pending confirmation.",
     "mp_redirect_note": "We take you to our secure payment checkout. Cards, transfers and cash accepted.",
     "checking_availability": "Checking availability...",
     "date_full": "No seats left for this date. Pick another day.",
@@ -209,15 +209,15 @@
     "horizon_notice": "We're currently selling tickets through {{date}}",
     "capacity_max_reached": "Maximum capacity reached for this date",
     "currency_notice_card": "Prices are shown in US dollars (USD) as a reference. By card (Mercado Pago) the charge is processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). The local-currency amount is an estimate until the payment is confirmed.",
-    "currency_notice_cash_only": "Prices are shown in US dollars (USD) as a reference. The final cash amount is arranged directly with your host.",
+    "currency_notice_cash_only": "Prices are shown in US dollars (USD) as a reference. The final cash amount is arranged directly with your recommender.",
     "ars_estimate": "≈ ARS {{amount}} (estimated at current rate)"
   },
   "return": {
     "success_title": "Booking confirmed!",
     "success_subtitle": "We sent the details to your email. See you soon in Buenos Aires!",
     "cash_title": "Booking registered!",
-    "cash_subtitle": "Your booking is saved. The seller will coordinate payment and service details with you.",
-    "cash_method": "Payment: cash to seller",
+    "cash_subtitle": "Your booking is saved. The recommender will coordinate payment and service details with you.",
+    "cash_method": "Payment: cash to recommender",
     "pending_title": "Payment in progress",
     "pending_subtitle": "Your payment is being processed. We'll email you as soon as it's confirmed.",
     "failure_title": "Payment did not complete",
@@ -240,14 +240,14 @@
   "payment_methods": {
     "secure_note": "100% secure payments",
     "currency_note_card": "Prices are shown in USD as a reference. Charges are processed in Argentine pesos (ARS) by card/Mercado Pago, or in Brazilian reais (BRL) with PIX.",
-    "currency_note_cash_only": "Prices are shown in USD as a reference. Cash payment is arranged directly with your host.",
+    "currency_note_cash_only": "Prices are shown in USD as a reference. Cash payment is arranged directly with your recommender.",
     "mp_credit": "Credit",
     "mp_debit": "Debit",
     "mp_wallet": "Account balance",
     "mp_types_short": "Credit, debit and account balance",
     "card_label": "Card",
     "card_brands": "Visa / Mastercard / Amex",
-    "cash_label": "To the seller",
+    "cash_label": "To the recommender",
     "cash_short": "Cash",
     "pix_soon": "Coming soon",
     "pix_short": "In reais (BRL)",
@@ -289,15 +289,15 @@
     "rights": "All rights reserved."
   },
   "ref": {
-    "inactive": "This seller is not currently available"
+    "inactive": "This recommender is not currently available"
   },
   "seller_inactive": {
-    "title": "Seller unavailable",
-    "message": "This QR belongs to a seller who is no longer active. Please contact whoever shared it with you.",
+    "title": "Recommender unavailable",
+    "message": "This QR belongs to a recommender who is no longer active. Please contact whoever shared it with you.",
     "cta": "Close"
   },
   "seller_welcome": {
-    "badge": "Verified Seller",
+    "badge": "Verified Recommender",
     "steps_title": "What can you do?",
     "cta": "Explore experiences →",
     "kind": {
@@ -317,7 +317,7 @@
       "comercios": "Affiliated Business"
     },
     "message": {
-      "default": "You scanned {{name}}'s QR code. They are a registered seller authorized by Tango QR. All your transactions are monitored and protected by our team.",
+      "default": "You scanned {{name}}'s QR code. They are a registered recommender authorized by Tango QR. All your transactions are monitored and protected by our team.",
       "recepcion": "Hi! This experience was recommended by {{name}}. Book your spot directly with the official backing and guarantee of Tango QR.",
       "choferes": "Hi! This experience was recommended by {{name}} during your ride.",
       "guias": "Hi! This experience was selected and recommended by your guide {{name}}.",
