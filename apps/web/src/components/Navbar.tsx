@@ -6,7 +6,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 
 // Rutas agrupadas dentro del submenú "Más" del navbar de escritorio — para
 // resaltar el trigger cuando el cliente está parado en alguna de ellas.
-const MORE_PATHS = ['/preguntas-frecuentes', '/nosotros', '/contacto'];
+const MORE_PATHS = ['/preguntas-frecuentes', '/nosotros', '/terminos-y-condiciones', '/contacto'];
 
 export default function Navbar() {
   const { t } = useTranslation();
@@ -54,6 +54,11 @@ export default function Navbar() {
               <MenuItem>
                 <Link to="/nosotros" className="block px-4 py-2.5 text-sm text-cream/90 data-[focus]:bg-gold/10 data-[focus]:text-gold">
                   {t('nav.about')}
+                </Link>
+              </MenuItem>
+              <MenuItem>
+                <Link to="/terminos-y-condiciones" className="block px-4 py-2.5 text-sm text-cream/90 data-[focus]:bg-gold/10 data-[focus]:text-gold">
+                  {t('nav.terms')}
                 </Link>
               </MenuItem>
               <MenuItem>

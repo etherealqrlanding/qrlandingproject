@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { adminApi, AdminApiError, type AboutContent, type FaqItem, type SellerFaqItem } from '../../lib/adminApi';
+import { adminApi, AdminApiError, type AboutContent, type TermsContent, type FaqItem, type SellerFaqItem } from '../../lib/adminApi';
 import Spinner from '../../components/Spinner';
 
-type Tab = 'about' | 'faq' | 'seller-faq';
+type Tab = 'about' | 'terms' | 'faq' | 'seller-faq';
 
 export default function ContentPage() {
   const [tab, setTab] = useState<Tab>('about');
@@ -14,12 +14,14 @@ export default function ContentPage() {
 
       <div className="mt-6 flex gap-2 flex-wrap">
         <TabButton active={tab === 'about'} onClick={() => setTab('about')}>Nosotros</TabButton>
+        <TabButton active={tab === 'terms'} onClick={() => setTab('terms')}>Términos y Condiciones</TabButton>
         <TabButton active={tab === 'faq'} onClick={() => setTab('faq')}>FAQ Clientes</TabButton>
         <TabButton active={tab === 'seller-faq'} onClick={() => setTab('seller-faq')}>FAQ Recomendadores</TabButton>
       </div>
 
       <div className="mt-6">
         {tab === 'about' && <AboutEditor />}
+        {tab === 'terms' && <TermsEditor />}
         {tab === 'faq' && <FaqEditor />}
         {tab === 'seller-faq' && <SellerFaqEditor />}
       </div>
@@ -100,6 +102,59 @@ function AboutEditor() {
       </Field>
       <Field label="Texto — separá párrafos con una línea en blanco">
         <textarea className="input min-h-[200px]" value={form.body_es} onChange={(e) => setForm({ ...form, body_es: e.target.value })} />
+      </Field>
+
+      <ErrorMsg msg={error} />
+      <div className="flex items-center gap-3">
+        <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
+          {saving ? <Spinner size="sm" /> : 'Guardar'}
+        </button>
+        <Saved msg={saved} />
+      </div>
+    </form>
+  );
+}
+
+// ─── Términos y Condiciones ──────────────────────────────
+function TermsEditor() {
+  const [form, setForm] = useState<Omit<TermsContent, 'updated_at'> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    adminApi.settings.getTerms()
+      .then((d) => setForm({ title_es: d.title_es, title_en: d.title_en, body_es: d.body_es, body_en: d.body_en }))
+      .catch((err) => setError((err as AdminApiError).message));
+  }, []);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form) return;
+    setSaving(true); setError(null); setSaved(null);
+    try {
+      await adminApi.settings.updateTerms(form);
+      setSaved('✓ Guardado.');
+      setTimeout(() => setSaved(null), 3000);
+    } catch (err) {
+      setError((err as AdminApiError).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!form) return error ? <ErrorMsg msg={error} /> : <Spinner />;
+
+  return (
+    <form onSubmit={save} className="space-y-5">
+      <p className="text-sm text-cream/50">
+        Se muestra en <strong className="text-cream/70">/terminos-y-condiciones</strong>. Separá párrafos con una línea en blanco; los títulos de sección (ej. "1. OBJETO") van en su propia línea, sin línea en blanco antes del texto que le sigue.
+      </p>
+      <Field label="Título" hint="El sitio traduce automáticamente al resto de los idiomas">
+        <input className="input" value={form.title_es} onChange={(e) => setForm({ ...form, title_es: e.target.value })} />
+      </Field>
+      <Field label="Texto — separá párrafos con una línea en blanco">
+        <textarea className="input min-h-[500px] font-mono text-sm" value={form.body_es} onChange={(e) => setForm({ ...form, body_es: e.target.value })} />
       </Field>
 
       <ErrorMsg msg={error} />

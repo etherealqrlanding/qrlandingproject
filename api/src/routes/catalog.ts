@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getProductBySlug, listCategories, listProducts } from '../repos/catalog.js';
 import { pool } from '../db.js';
 import { getSameDayCutoff, getExchangeRate, getSupportWhatsapp, getBookingHorizonMonths } from '../services/settings.js';
-import { getAbout, getFaq } from '../services/content.js';
+import { getAbout, getFaq, getTerms } from '../services/content.js';
 
 export const catalogRouter = Router();
 
@@ -150,6 +150,12 @@ catalogRouter.get('/content/about', async (_req, res, next) => {
 catalogRouter.get('/content/faq', async (_req, res, next) => {
   try {
     res.json({ data: await getFaq() });
+  } catch (err) { next(err); }
+});
+
+catalogRouter.get('/content/terms', async (_req, res, next) => {
+  try {
+    res.json({ data: await getTerms() });
   } catch (err) { next(err); }
 });
 

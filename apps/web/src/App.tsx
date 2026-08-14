@@ -14,6 +14,7 @@ import ShowsList from './pages/ShowsList';
 import ProductPage from './pages/ProductPage';
 import About from './pages/About';
 import Faq from './pages/Faq';
+import Terms from './pages/Terms';
 import Contact from './pages/Contact';
 import CheckoutReturn from './pages/CheckoutReturn';
 import PixCheckoutPage from './pages/PixCheckoutPage';
@@ -237,6 +238,7 @@ function PublicApp() {
             <Route path="/shows/:slug" element={<ProductPage />} />
             <Route path="/nosotros" element={<About />} />
             <Route path="/preguntas-frecuentes" element={<Faq />} />
+            <Route path="/terminos-y-condiciones" element={<Terms />} />
             <Route path="/contacto" element={<Contact />} />
             <Route path="/verificar/:publicId" element={<VerifyOrder />} />
             <Route path="/checkout/pix" element={<PixCheckoutPage />} />

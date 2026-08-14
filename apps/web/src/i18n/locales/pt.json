@@ -5,6 +5,8 @@
     "about": "Sobre nós",
     "faq": "Perguntas Frequentes",
     "faq_short": "FAQ",
+    "terms": "Termos e Condições",
+    "terms_short": "Termos",
     "contact": "Contato",
     "book": "Reservar",
     "more": "Mais",
@@ -26,6 +28,11 @@
   },
   "about": {
     "default_title": "Sobre nós",
+    "empty": "Conteúdo em breve.",
+    "error": "Não foi possível carregar esta seção"
+  },
+  "terms": {
+    "default_title": "Termos e Condições",
     "empty": "Conteúdo em breve.",
     "error": "Não foi possível carregar esta seção"
   },

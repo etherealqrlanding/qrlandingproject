@@ -5,6 +5,8 @@
     "about": "About",
     "faq": "FAQ",
     "faq_short": "FAQ",
+    "terms": "Terms and Conditions",
+    "terms_short": "Terms",
     "contact": "Contact",
     "book": "Book now",
     "more": "More",
@@ -26,6 +28,11 @@
   },
   "about": {
     "default_title": "About Us",
+    "empty": "Content coming soon.",
+    "error": "We couldn't load this section"
+  },
+  "terms": {
+    "default_title": "Terms and Conditions",
     "empty": "Content coming soon.",
     "error": "We couldn't load this section"
   },

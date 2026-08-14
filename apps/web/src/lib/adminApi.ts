@@ -535,6 +535,8 @@ export interface AboutContent {
   updated_at: string | null;
 }
 
+export type TermsContent = AboutContent;
+
 export interface FaqItem {
   q_es: string;
   q_en: string;
@@ -952,6 +954,12 @@ export const adminApi = {
     getAbout: () => request<AboutContent>('/api/admin/settings/content/about'),
     updateAbout: (input: Omit<AboutContent, 'updated_at'>) =>
       request<AboutContent>('/api/admin/settings/content/about', {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    getTerms: () => request<TermsContent>('/api/admin/settings/content/terms'),
+    updateTerms: (input: Omit<TermsContent, 'updated_at'>) =>
+      request<TermsContent>('/api/admin/settings/content/terms', {
         method: 'PUT',
         body: JSON.stringify(input),
       }),

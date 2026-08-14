@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { pool } from '../../db.js';
 import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getBookingHorizonMonths, setBookingHorizonMonths, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays, getSupportWhatsapp, setSupportWhatsapp } from '../../services/settings.js';
 import { fetchOficialVentaRate } from '../../services/exchangeRateSync.js';
-import { getAbout, setAbout, getFaq, setFaq, getSellerFaq, setSellerFaq } from '../../services/content.js';
+import { getAbout, setAbout, getFaq, setFaq, getSellerFaq, setSellerFaq, getTerms, setTerms } from '../../services/content.js';
 
 export const adminSettingsRouter = Router();
 
@@ -203,6 +203,28 @@ adminSettingsRouter.put('/content/about', async (req, res, next) => {
     const parsed = aboutSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     res.json({ data: await setAbout(parsed.data) });
+  } catch (err) { next(err); }
+});
+
+// ─── Contenido: Términos y Condiciones ────────────────────
+const termsSchema = z.object({
+  title_es: z.string().max(200),
+  title_en: z.string().max(200),
+  body_es: z.string().max(40000),
+  body_en: z.string().max(40000),
+});
+
+adminSettingsRouter.get('/content/terms', async (_req, res, next) => {
+  try {
+    res.json({ data: await getTerms() });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/content/terms', async (req, res, next) => {
+  try {
+    const parsed = termsSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    res.json({ data: await setTerms(parsed.data) });
   } catch (err) { next(err); }
 });
 

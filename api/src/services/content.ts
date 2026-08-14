@@ -5,6 +5,7 @@ import { pool } from '../db.js';
 
 const ABOUT_KEY = 'about_page';
 const FAQ_KEY = 'faq_page';
+const TERMS_KEY = 'terms_page';
 
 export interface AboutContent {
   title_es: string;
@@ -57,6 +58,20 @@ export async function getAbout(): Promise<AboutContent> {
 export async function setAbout(input: Omit<AboutContent, 'updated_at'>): Promise<AboutContent> {
   const payload = { ...input, updated_at: new Date().toISOString() };
   await writeSetting(ABOUT_KEY, payload, 'Contenido de la página Nosotros (bilingüe).');
+  return payload;
+}
+
+export type TermsContent = AboutContent;
+const EMPTY_TERMS: TermsContent = EMPTY_ABOUT;
+
+export async function getTerms(): Promise<TermsContent> {
+  const value = await readSetting<TermsContent>(TERMS_KEY);
+  return value ? { ...EMPTY_TERMS, ...value } : EMPTY_TERMS;
+}
+
+export async function setTerms(input: Omit<TermsContent, 'updated_at'>): Promise<TermsContent> {
+  const payload = { ...input, updated_at: new Date().toISOString() };
+  await writeSetting(TERMS_KEY, payload, 'Contenido de la página Términos y Condiciones (bilingüe).');
   return payload;
 }
 

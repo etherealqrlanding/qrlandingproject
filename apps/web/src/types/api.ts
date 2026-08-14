@@ -100,6 +100,8 @@ export interface AboutContent {
   updated_at: string | null;
 }
 
+export type TermsContent = AboutContent;
+
 export interface FaqItem {
   q_es: string;
   q_en: string;
