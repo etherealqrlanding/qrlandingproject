@@ -1,6 +1,17 @@
 <!doctype html>
 <html lang="es">
   <head>
+    <script>
+      // Redirect del dominio viejo al nuevo (migración tangosymilongastickets.com -> tangoqr.net).
+      // Va primero en <head>, antes de cargar cualquier otra cosa, para que sea lo más rápido
+      // posible. Preserva path/query/hash: los QR ya impresos con ?ref=CODIGO siguen andando.
+      (function () {
+        var oldHosts = ['tangosymilongastickets.com', 'www.tangosymilongastickets.com'];
+        if (oldHosts.indexOf(window.location.hostname) !== -1) {
+          window.location.replace('https://tangoqr.net' + window.location.pathname + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
