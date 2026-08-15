@@ -464,9 +464,24 @@ function OptionCard({
     if (selected) onPreviewChange({ adults, children, transferQty, date: selectedDate, capacityBlocked: dateBlocked });
   }, [selected, adults, children, transferQty, selectedDate, dateBlocked, onPreviewChange]);
 
+  // Al pasar a OTRO servicio se resetea esta card a sus valores por default — si no,
+  // queda "colgada" con lo último que se marcó acá y confunde: el usuario podría
+  // pensar que esos adultos/menores/fecha siguen aplicando a la opción que ve ahora.
+  useEffect(() => {
+    if (!selected) {
+      setAdults(1);
+      setChildren(0);
+      setTransferQtyOptional(0);
+      setSelectedDate(undefined);
+    }
+  }, [selected]);
+
   const stepperCount = 2 + (showChildPrice ? 1 : 0) + (option.transfer_mode === 'optional' ? 1 : 0);
-  const stepperGridClass = stepperCount === 4 ? 'sm:grid-cols-2 lg:grid-cols-4'
-    : stepperCount === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
+  // Siempre 2 por fila, incluso en mobile (adultos+menores en una fila, traslado+fecha
+  // en la siguiente) — antes cada uno ocupaba su propia fila y el contenedor se hacía
+  // demasiado alto en mobile. En pantallas más anchas se abre a 3/4 si hay lugar.
+  const stepperGridClass = stepperCount === 4 ? 'grid-cols-2 lg:grid-cols-4'
+    : stepperCount === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2';
 
   return (
     <div
@@ -529,7 +544,7 @@ function OptionCard({
         className="mt-3 rounded-lg border border-gold/15 bg-gold/5 p-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`grid grid-cols-1 ${stepperGridClass} gap-2`}>
+        <div className={`grid ${stepperGridClass} gap-2`}>
           <NumberStepper
             bare label={t('checkout.adults')} value={adults} min={1} max={maxAdults} onChange={setAdults}
             cappedMessage={t('checkout.capacity_max_reached')}
