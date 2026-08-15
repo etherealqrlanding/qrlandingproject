@@ -133,7 +133,7 @@ export default function Home() {
         <div className="relative container-narrow pt-4 sm:pt-6 pb-16 md:pb-24 min-h-0 md:min-h-[85vh] flex flex-col items-center justify-center text-center">
           <RefBadge />
           <Logo tagline={false} className="mt-1 sm:mt-2 h-10 sm:h-12 md:h-14 w-auto" />
-          <p className="mt-1.5 sm:mt-3 text-xs uppercase tracking-[0.3em] text-gold-soft">
+          <p className="mt-1.5 sm:mt-3 text-[9px] sm:text-xs uppercase tracking-[0.15em] sm:tracking-[0.3em] text-gold-soft px-4">
             {t('hero.eyebrow')}
           </p>
           <h1 className="mt-1 sm:mt-1.5 font-display text-3xl md:text-4xl leading-[1.05] text-cream max-w-3xl">
