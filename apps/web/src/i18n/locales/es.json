@@ -50,10 +50,10 @@
     "no_booking_cta": "Explorá los shows de tango"
   },
   "hero": {
-    "eyebrow": "Buenos Aires · Casas de Tango",
+    "eyebrow": "Los mejores espectáculos de tango de Buenos Aires",
     "title": "Vivís el tango. No solo lo mirás.",
     "subtitle": "Cenas, shows y experiencias en las 14 casas de tango más emblemáticas de la ciudad. Reservas en minutos, traslado incluido.",
-    "cta_primary": "Ver experiencias",
+    "cta_primary": "Ver servicios",
     "quick_select": {
       "label": "Reservá en un click",
       "subtitle": "Elegí una casa de tango o un servicio y vas directo a la reserva.",

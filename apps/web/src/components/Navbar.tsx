@@ -17,7 +17,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-30 backdrop-blur bg-ink/70 border-b border-gold/10">
       <div className="container-narrow flex items-center justify-between h-16">
         <Link to="/" aria-label="Tango QR" className="flex items-center">
-          <Logo className="h-11 w-auto" />
+          <Logo className="h-14 w-auto" />
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm">
           <Link to="/shows" className="hover:text-gold transition">{t('nav.shows')}</Link>

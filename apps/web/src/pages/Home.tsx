@@ -88,8 +88,15 @@ export default function Home() {
         if (cancelled) return;
         setHouses(rows);
         setFeatured(rows.slice(0, 9));
+        // El slide del hero arranca con Tango Porteño primero (pedido puntual) — el
+        // resto del orden (listado de casas, destacadas) no se toca.
+        const heroOrder = [...rows].sort((a, b) => {
+          if (a.slug === 'tango-porteno') return -1;
+          if (b.slug === 'tango-porteno') return 1;
+          return 0;
+        });
         setHeroImages(
-          rows.map((r) => r.hero_image).filter((u): u is string => !!u).slice(0, 5),
+          heroOrder.map((r) => r.hero_image).filter((u): u is string => !!u).slice(0, 5),
         );
       })
       .catch(() => { /* silencioso en home; lo verán en /shows */ });
@@ -125,7 +132,7 @@ export default function Home() {
         />
         <div className="relative container-narrow pt-4 sm:pt-6 pb-16 md:pb-24 min-h-0 md:min-h-[85vh] flex flex-col items-center justify-center text-center">
           <RefBadge />
-          <Logo className="mt-1 sm:mt-2 h-12 sm:h-14 md:h-16 w-auto" />
+          <Logo tagline={false} className="mt-1 sm:mt-2 h-10 sm:h-12 md:h-14 w-auto" />
           <p className="mt-1.5 sm:mt-3 text-xs uppercase tracking-[0.3em] text-gold-soft">
             {t('hero.eyebrow')}
           </p>

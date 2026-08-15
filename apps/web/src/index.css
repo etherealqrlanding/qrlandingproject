@@ -109,12 +109,25 @@
     animation: sheet-up-in 0.25s ease-out;
   }
 
+  /* Logo: fade suave al aparecer (header, hero, footer, portales — donde sea
+     que se monte). Solo opacity, sin transform: es una imagen sin descendientes,
+     no hay riesgo de romper el scroll de nada anidado (ver animate-page-enter),
+     pero total no hace falta el transform para que se sienta bien. */
+  @keyframes logo-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-logo-fade {
+    animation: logo-fade-in 0.7s ease-out;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .animate-page-enter,
     .animate-modal-backdrop,
     .animate-modal-panel,
     .animate-toast-in,
-    .animate-sheet-up {
+    .animate-sheet-up,
+    .animate-logo-fade {
       animation: none;
     }
   }
