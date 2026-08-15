@@ -350,7 +350,7 @@ const sellerCheckoutSchema = z.object({
     dni: z.string().max(40).optional().nullable(),
   }),
   payment_method: z.enum(['mercadopago', 'cash', 'pix']),
-  transfer_requested: z.boolean().optional(),
+  transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
   // Sub-vendedor (ej. conserje) que cerró esta venta puntual dentro de mi cuenta —
@@ -476,8 +476,16 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
     }
     const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
-    const transferSubtotal = (option.transfer_mode === 'optional' && input.transfer_requested && transferPriceUsd > 0)
-      ? Math.round(transferPriceUsd * (input.adults + input.children) * 100) / 100
+    const pax = input.adults + input.children;
+    // 'included' siempre aplica a todos los pax (ya está en el precio, no se
+    // pregunta); 'optional' depende de la cantidad que haya elegido el recomendador.
+    const transferQty = option.transfer_mode === 'included'
+      ? pax
+      : option.transfer_mode === 'optional'
+        ? Math.max(0, Math.min(input.transfer_qty ?? 0, pax))
+        : 0;
+    const transferSubtotal = option.transfer_mode === 'optional'
+      ? Math.round(transferPriceUsd * transferQty * 100) / 100
       : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
 
@@ -485,12 +493,6 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     const totalArs = convertUsdToArs(subtotalUsd, rate);
 
     // Neto: monto mínimo que el operador debe recibir (para la comisión en efectivo).
-    const pax = input.adults + input.children;
-    // 'included' siempre aplica (ya está en el precio, no se pregunta); 'optional'
-    // depende de lo que haya elegido el recomendador.
-    const transferReq = option.transfer_mode === 'included'
-      ? true
-      : Boolean(option.transfer_mode === 'optional' && input.transfer_requested && transferPriceUsd > 0);
     const netCurrency = option.net_price_currency ?? 'USD';
     let netTotalUsd: number | null = null;
     if (netCurrency === 'USD') {
@@ -501,7 +503,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         netTotalUsd = Math.round((
           input.adults * netAdult
           + input.children * (netChild ?? netAdult)
-          + (option.transfer_mode === 'optional' && transferReq && netTransfer != null ? netTransfer * pax : 0)
+          + (option.transfer_mode === 'optional' && netTransfer != null ? netTransfer * transferQty : 0)
         ) * 100) / 100;
       }
     } else {
@@ -512,7 +514,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         const netTotalArs = Math.round((
           input.adults * netAdultArs
           + input.children * (netChildArs ?? netAdultArs)
-          + (option.transfer_mode === 'optional' && transferReq && netTransferArs != null ? netTransferArs * pax : 0)
+          + (option.transfer_mode === 'optional' && netTransferArs != null ? netTransferArs * transferQty : 0)
         ) * 100) / 100;
         netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
       }
@@ -532,9 +534,9 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         unit_price_adult_usd: priceAdult,
         unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
         subtotal_usd: subtotalUsd,
-        transfer_requested: transferReq,
+        transfer_qty: transferQty,
         transfer_hotel: input.transfer_hotel ?? null,
-        transfer_room: (transferReq && input.transfer_room) ? input.transfer_room : null,
+        transfer_room: (transferQty > 0 && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -1069,7 +1071,7 @@ sellerRouter.post('/me/addons/:addonPublicId/cancel', async (req, res, next) => 
 const sellerReduceSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
-  transfer_requested: z.boolean(),
+  transfer_qty: z.number().int().min(0).max(40),
   notify_customer: z.boolean().optional().default(true),
   reason: z.string().max(500).nullish(),
   // Presentes solo cuando la misma acción también reprogramó la fecha (ver
@@ -1097,7 +1099,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       total_ars: number; exchange_rate_used: number;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
-      subtotal_usd: number; transfer_requested: boolean; transfer_hotel: string | null;
+      subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
       service_date: string | Date;
       net_total_usd: number | null; net_settled_at: string | null;
     }>(
@@ -1106,7 +1108,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
-              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested, oi.transfer_hotel,
+              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty, oi.transfer_hotel,
               oi.service_date,
               a.net_total_usd_snapshot::float AS net_total_usd, a.net_settled_at
          FROM orders o
@@ -1137,7 +1139,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       unitPriceAdultUsd: row.unit_price_adult_usd,
       unitPriceChildUsd: row.unit_price_child_usd,
       subtotalUsd: row.subtotal_usd,
-      transferRequested: row.transfer_requested,
+      transferQty: row.transfer_qty,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
       commissionPercent: null,
@@ -1145,15 +1147,15 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     const calc = computeOrderReduction(snap, {
       adults: parsed.data.adults,
       children: parsed.data.children,
-      transferRequested: parsed.data.transfer_requested,
+      transferQty: parsed.data.transfer_qty,
     });
     if (!calc.ok) return res.status(400).json({ error: calc.error });
 
     const cash = recomputeCashCommission(row.net_total_usd, row.subtotal_usd, calc.newSubtotalUsd);
     const newCommissionArs = Math.round(cash.newCommissionUsd * row.exchange_rate_used * 100) / 100;
 
-    const newTransfer = parsed.data.transfer_requested;
-    const noteLine = `[${new Date().toISOString()}] Reducción efectivo (vendedor): ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${row.transfer_requested && !newTransfer ? ', traslado removido' : ''}. Devolución en efectivo USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
+    const newTransferQty = calc.newTransferQty;
+    const noteLine = `[${new Date().toISOString()}] Reducción efectivo (vendedor): ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${newTransferQty !== row.transfer_qty ? `, traslado ${row.transfer_qty}→${newTransferQty}` : ''}. Devolución en efectivo USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;
     await applyOrderReduction({
       orderId: row.order_id,
       itemId: row.item_id,
@@ -1161,8 +1163,8 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       origChildren: row.children,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
-      newTransferRequested: newTransfer,
-      newTransferHotel: newTransfer ? row.transfer_hotel : null,
+      newTransferQty,
+      newTransferHotel: newTransferQty > 0 ? row.transfer_hotel : null,
       newSubtotalUsd: calc.newSubtotalUsd,
       newTotalArs: calc.newTotalArs,
       refundUsd: calc.refundUsd,

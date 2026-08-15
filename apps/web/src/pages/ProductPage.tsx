@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { api, type SellerPublicInfo, type AvailabilityDay } from '../lib/api';
@@ -10,11 +10,13 @@ import { buildShareUrl } from '../lib/shareLinks';
 import { ApiError } from '../lib/api';
 import Carousel from '../components/Carousel';
 import CheckoutForm from '../components/CheckoutForm';
-import AvailabilityCheckModal from '../components/AvailabilityCheckModal';
 import ShareButton from '../components/ShareButton';
 import Collapse from '../components/Collapse';
 import TransferHotelsInfo from '../components/TransferHotelsInfo';
 import { useExchangeRate } from '../lib/useExchangeRate';
+import NumberStepper from '../components/NumberStepper';
+import { computeBookingTotals } from '../lib/pricing';
+import AvailabilityCalendar from '../components/AvailabilityCalendar';
 
 // Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
 // Devuelve null si no se pudo reconocer el formato (el video simplemente no se muestra).
@@ -33,6 +35,20 @@ function youtubeEmbedUrl(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+// Espejo de la selección (adultos/menores/traslado/fecha) de la card de opción
+// actualmente elegida — compartido entre OptionCard, BookingSummary y los puntos
+// que abren el checkout, para que todos queden sincronizados entre sí.
+interface SelectionPreview {
+  adults: number;
+  children: number;
+  transferQty: number;
+  date?: string;
+  // true si la cantidad de pasajeros elegida ya no entra en el cupo de la fecha
+  // (la propia OptionCard se auto-corrige apenas puede, pero mientras la corrección
+  // está en vuelo — o en el caso límite de cupo 0 — hay que bloquear reservar).
+  capacityBlocked: boolean;
 }
 
 const PixIcon = (
@@ -63,8 +79,12 @@ export default function ProductPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>('mercadopago');
-  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number }>({});
-  const [checkingAvailabilityOptionId, setCheckingAvailabilityOptionId] = useState<number | null>(null);
+  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number; transferQty?: number }>({});
+  // Espejo en vivo de lo que el usuario va marcando en la card de la opción
+  // seleccionada (adultos/menores/traslado/fecha) — lo consume "Tu elección" para
+  // mostrar el mismo preview sincronizado, y los 3 puntos que abren el checkout
+  // (acá, la barra fija mobile) para precargarlo con exactamente lo mismo que se ve.
+  const [selectionPreview, setSelectionPreview] = useState<SelectionPreview>({ adults: 1, children: 0, transferQty: 0, capacityBlocked: false });
   const [sellerInfo, setSellerInfo] = useState<SellerPublicInfo | null>(null);
   // Si la cuenta no tiene tarjeta habilitada (sellers.card_enabled = false), el único
   // medio que le queda es pago manual -- evita abrir el checkout con Mercado Pago
@@ -210,13 +230,13 @@ export default function ProductPage() {
                   isLogo={Boolean(product.logo_url)}
                   selected={opt.id === selectedOptionId}
                   onSelect={() => setSelectedOptionId(opt.id)}
-                  onBook={() => {
+                  onPreviewChange={setSelectionPreview}
+                  onBook={(pax) => {
                     setSelectedOptionId(opt.id);
                     setCheckoutPaymentMethod(defaultPaymentMethod);
-                    setCheckoutPrefill({});
+                    setCheckoutPrefill({ date: pax.date, adults: pax.adults, children: pax.children, transferQty: pax.transferQty });
                     setCheckoutOpen(true);
                   }}
-                  onCheckAvailability={() => setCheckingAvailabilityOptionId(opt.id)}
                   lang={lang}
                 />
               ))}
@@ -247,9 +267,15 @@ export default function ProductPage() {
             product={product}
             option={selectedOption}
             sellerInfo={sellerInfo}
+            preview={selectionPreview}
             onBook={(method) => {
               setCheckoutPaymentMethod(method);
-              setCheckoutPrefill({});
+              setCheckoutPrefill({
+                date: selectionPreview.date,
+                adults: selectionPreview.adults,
+                children: selectionPreview.children,
+                transferQty: selectionPreview.transferQty,
+              });
               setCheckoutOpen(true);
             }}
           />
@@ -266,19 +292,37 @@ export default function ProductPage() {
         >
           <div className="min-w-0">
             <p className="text-xs text-cream/50 truncate">{localized(selectedOption, 'name', lang)}</p>
-            <p className="font-display text-lg text-gold leading-tight">
-              USD {selectedOption.price_adult_usd}
-              {exchangeRate != null && (
-                <span className="ml-1.5 text-xs font-sans text-cream/40">
-                  · ARS {Math.round(selectedOption.price_adult_usd * exchangeRate).toLocaleString('es-AR')}
-                </span>
-              )}
-            </p>
+            {(() => {
+              const { totalUsd } = computeBookingTotals(
+                selectedOption, selectionPreview.adults, selectionPreview.children, selectionPreview.transferQty,
+                product.accepts_children && selectedOption.price_child_usd != null,
+              );
+              return (
+                <p className="font-display text-lg text-gold leading-tight">
+                  USD {totalUsd}
+                  {exchangeRate != null && (
+                    <span className="ml-1.5 text-xs font-sans text-cream/40">
+                      · ARS {Math.round(totalUsd * exchangeRate).toLocaleString('es-AR')}
+                    </span>
+                  )}
+                </p>
+              );
+            })()}
           </div>
           <button
             type="button"
-            onClick={() => { setCheckoutPaymentMethod(defaultPaymentMethod); setCheckoutPrefill({}); setCheckoutOpen(true); }}
-            className="btn-primary shrink-0 px-5 py-2.5 text-sm"
+            disabled={selectionPreview.capacityBlocked}
+            onClick={() => {
+              setCheckoutPaymentMethod(defaultPaymentMethod);
+              setCheckoutPrefill({
+                date: selectionPreview.date,
+                adults: selectionPreview.adults,
+                children: selectionPreview.children,
+                transferQty: selectionPreview.transferQty,
+              });
+              setCheckoutOpen(true);
+            }}
+            className="btn-primary shrink-0 px-5 py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {t('product.book_cta')}
           </button>
@@ -296,30 +340,20 @@ export default function ProductPage() {
           initialDate={checkoutPrefill.date}
           initialAdults={checkoutPrefill.adults}
           initialChildren={checkoutPrefill.children}
-        />
-      )}
-
-      {checkingAvailabilityOptionId != null && (
-        <AvailabilityCheckModal
-          productSlug={product.slug}
-          productName={product.name}
-          initialOptionId={checkingAvailabilityOptionId}
-          onClose={() => setCheckingAvailabilityOptionId(null)}
-          onBookDate={(_bookedProduct, bookedOption, date, pax) => {
-            setCheckingAvailabilityOptionId(null);
-            setSelectedOptionId(bookedOption.id);
-            setCheckoutPaymentMethod(defaultPaymentMethod);
-            setCheckoutPrefill({ date, adults: pax?.adults, children: pax?.children });
-            setCheckoutOpen(true);
-          }}
+          initialTransferQty={checkoutPrefill.transferQty}
         />
       )}
     </article>
   );
 }
 
+function formatShortDate(iso: string): string {
+  const raw = new Date(`${iso}T00:00:00`).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 function OptionCard({
-  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, isLogo, selected, onSelect, onBook, onCheckAvailability, lang,
+  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, isLogo, selected, onSelect, onPreviewChange, onBook, lang,
 }: {
   option: ProductOption;
   productAvailableDays: number[];
@@ -331,8 +365,11 @@ function OptionCard({
   isLogo?: boolean;
   selected: boolean;
   onSelect: () => void;
-  onBook: () => void;
-  onCheckAvailability: () => void;
+  // Reporta la selección de ESTA card (adultos/menores/traslado/fecha) al padre —
+  // pero solo mientras esté seleccionada, para que "Tu elección" y el checkout
+  // reflejen siempre exactamente lo que se ve acá.
+  onPreviewChange: (preview: SelectionPreview) => void;
+  onBook: (pax: { adults: number; children: number; transferQty: number; date?: string }) => void;
   lang: string | undefined;
 }) {
   const { t } = useTranslation();
@@ -344,11 +381,92 @@ function OptionCard({
   const dinner = localized(option, 'dinner_time', lang);
   const show = localized(option, 'show_time', lang);
   const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
-  const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
-  const priceChildArs = (exchangeRate != null && showChildPrice)
-    ? Math.round(option.price_child_usd! * exchangeRate) : null;
   const hasTimes = Boolean(pickup || dinner || show);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Preview de gasto: el usuario ajusta acá mismo cantidad de adultos/menores/traslado
+  // y ve el precio total recalcularse en vivo, sin tener que abrir el checkout.
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
+  const [transferQtyOptional, setTransferQtyOptional] = useState(0);
+  const totalPax = adults + children;
+  // No puede haber más pax con traslado que pax totales — se recorta solo.
+  useEffect(() => {
+    setTransferQtyOptional((v) => Math.min(v, totalPax));
+  }, [totalPax]);
+  const transferQty = option.transfer_mode === 'included' ? totalPax
+    : option.transfer_mode === 'optional' ? transferQtyOptional
+    : 0;
+  const { totalUsd } = useMemo(
+    () => computeBookingTotals(option, adults, children, transferQty, showChildPrice),
+    [option, adults, children, transferQty, showChildPrice],
+  );
+  const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
+
+  // Selector de fecha + disponibilidad en vivo, directo en la card (reemplaza al viejo
+  // botón "Verificar disponibilidad" que abría un modal aparte): se abre un popover con
+  // el mismo calendario del checkout, y al elegir un día habilitado (el propio calendario
+  // ya deshabilita los sin cupo) se cierra solo y el trigger queda mostrando la fecha con
+  // el semáforo de disponibilidad en verde/ámbar.
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const dateFieldRef = useRef<HTMLDivElement>(null);
+  // Sin fecha elegida, validamos contra HOY por default (mismo criterio que el
+  // checkout) — así el tope de adultos/menores nunca queda "suelto" en 20.
+  const effectiveDate = selectedDate ?? today;
+
+  useEffect(() => {
+    if (!dateOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dateFieldRef.current && !dateFieldRef.current.contains(e.target as Node)) setDateOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dateOpen]);
+
+  // Cupo REAL de esta opción para effectiveDate — se re-verifica cada vez que cambia
+  // la fecha (elegida acá o el default de hoy), así nunca queda desactualizado. Si al
+  // llegar la respuesta la cantidad ya cargada de pasajeros no entra, se recorta sola
+  // (mismo criterio que CheckoutForm) en vez de dejar pasar un pedido imposible.
+  const [dateCapacity, setDateCapacity] = useState<{ remaining: number; status: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setDateCapacity(null);
+    api.availability.remainingForDate(option.id, effectiveDate)
+      .then((d) => {
+        if (cancelled) return;
+        setDateCapacity({ remaining: d.remaining, status: d.status });
+        const total = adults + children;
+        if (d.remaining < total) {
+          const newAdults = Math.max(1, Math.min(adults, d.remaining));
+          setAdults(newAdults);
+          setChildren(Math.max(0, d.remaining - newAdults));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [option.id, effectiveDate]);
+
+  const remaining = dateCapacity?.remaining ?? null;
+  const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - children)) : 20;
+  const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - adults)) : 20;
+  // Caso límite: cupo 0 pero el mínimo de 1 adulto no se puede bajar más — no hay
+  // forma de que este pedido entre en esta fecha, hay que avisar y no dejar reservar.
+  const dateOverCapacity = remaining != null && remaining < totalPax;
+  const dateBlocked = dateOverCapacity || dateCapacity?.status === 'full' || dateCapacity?.status === 'closed';
+
+  // Mientras esta card esté seleccionada, cualquier cambio acá (steppers o fecha) se
+  // refleja en vivo en "Tu elección" y queda listo para precargar el checkout —
+  // incluida la primera vez que se selecciona, para que arranque ya sincronizada.
+  useEffect(() => {
+    if (selected) onPreviewChange({ adults, children, transferQty, date: selectedDate, capacityBlocked: dateBlocked });
+  }, [selected, adults, children, transferQty, selectedDate, dateBlocked, onPreviewChange]);
+
+  const stepperCount = 2 + (showChildPrice ? 1 : 0) + (option.transfer_mode === 'optional' ? 1 : 0);
+  const stepperGridClass = stepperCount === 4 ? 'sm:grid-cols-2 lg:grid-cols-4'
+    : stepperCount === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2';
 
   return (
     <div
@@ -364,11 +482,6 @@ function OptionCard({
           : 'border-gold/10 bg-ink-soft hover:border-gold/30'
       }`}
     >
-      {/* flex-wrap: en mobile el box de precio no entra al lado de imagen+título
-          y pasa solo (por el w-full) a su propia fila completa, en vez de quedar
-          apretado y desalineado debajo del título como antes. En desktop
-          (sm:w-auto) vuelve a compartir fila, empujado a la derecha por el
-          flex-1 del bloque de título. */}
       <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
         {imageUrl && (
           isLogo ? (
@@ -385,8 +498,8 @@ function OptionCard({
           )
         )}
         <div className="min-w-0 flex-1">
-          <h3 className="font-display text-xl text-cream">{name}</h3>
-          {description && <p className="mt-1 text-sm text-cream/70">{description}</p>}
+          <h3 className="font-display text-2xl text-cream">{name}</h3>
+          {description && <p className="mt-1 text-xs text-cream/70">{description}</p>}
           {(option.has_dinner || option.transfer_mode !== 'none') && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {option.has_dinner && (
@@ -407,22 +520,89 @@ function OptionCard({
             </div>
           )}
         </div>
-        <div className="w-full sm:w-auto self-start shrink-0 rounded-lg border border-gold/15 bg-gold/5 px-4 py-3 flex items-center justify-between gap-3 sm:block sm:text-right">
-          <div>
-            <p className="text-xl font-display text-gold leading-tight">USD {option.price_adult_usd}</p>
-            {priceArs != null && (
-              <p className="text-sm font-display text-gold/80">ARS {priceArs.toLocaleString('es-AR')}</p>
+      </div>
+
+      {/* Preview de gasto: ancho completo debajo del header (no al costado de la
+          imagen) para que los steppers tengan lugar de sobra en mobile — cada uno
+          en su propia fila angosta en vez de comprimirse en columnas rotas. */}
+      <div
+        className="mt-3 rounded-lg border border-gold/15 bg-gold/5 p-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={`grid grid-cols-1 ${stepperGridClass} gap-2`}>
+          <NumberStepper
+            bare label={t('checkout.adults')} value={adults} min={1} max={maxAdults} onChange={setAdults}
+            cappedMessage={t('checkout.capacity_max_reached')}
+            decrementLabel="menos" incrementLabel="más"
+          />
+          {showChildPrice && (
+            <NumberStepper
+              bare
+              label={`${t('product.children')}${productChildrenAgeLabel ? ` (${productChildrenAgeLabel})` : ''}`}
+              value={children} min={0} max={maxChildren} onChange={setChildren}
+              cappedMessage={t('checkout.capacity_max_reached')}
+              decrementLabel="menos" incrementLabel="más"
+            />
+          )}
+          {option.transfer_mode === 'optional' && (
+            <NumberStepper
+              bare label={t('checkout.transfer')} value={transferQtyOptional} min={0} max={totalPax} onChange={setTransferQtyOptional}
+              decrementLabel="menos" incrementLabel="más"
+            />
+          )}
+
+          <div className="relative" ref={dateFieldRef}>
+            <span className="block text-xs text-cream/80 mb-1">{t('checkout.service_date')}</span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setDateOpen((v) => !v); }}
+              className={`w-full flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm transition ${
+                dateBlocked
+                  ? 'border-bordeaux-light/50 bg-bordeaux-deep/10 text-bordeaux-light'
+                  : selectedDate && remaining != null
+                    ? 'border-emerald-500/40 bg-emerald-500/5 text-emerald-400'
+                    : 'border-gold/25 bg-ink/40 text-cream hover:border-gold/50'
+              }`}
+            >
+              <span aria-hidden>{dateBlocked ? '⚠' : '📅'}</span>
+              <span className="flex-1 text-left truncate">
+                {selectedDate ? formatShortDate(selectedDate) : t('product.pick_date')}
+              </span>
+              {!dateBlocked && selectedDate && remaining != null && <span aria-hidden>✓</span>}
+            </button>
+            {dateBlocked && (
+              <p className="mt-1 text-[11px] text-bordeaux-light">
+                {dateOverCapacity ? t('product.no_capacity_for_pax') : t('checkout.capacity_max_reached')}
+              </p>
+            )}
+
+            {dateOpen && (
+              <div
+                className="absolute z-20 mt-1 w-72 max-w-[80vw] rounded-lg bg-ink-soft shadow-xl shadow-black/40"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <AvailabilityCalendar
+                  optionId={option.id}
+                  value={selectedDate ?? today}
+                  currentDate={today}
+                  onChange={(d) => { setSelectedDate(d); setDateOpen(false); }}
+                  pax={totalPax}
+                  compact
+                />
+              </div>
             )}
           </div>
-          <div>
-            <p className="text-xs text-cream/50">{t('product.per_adult')}</p>
-            {showChildPrice && (
-              <p className="mt-1.5 pt-1.5 border-t border-gold/10 text-xs text-cream/60">
-                {t('product.children')}{productChildrenAgeLabel ? ` (${productChildrenAgeLabel})` : ''}: <span className="text-cream/85">USD {option.price_child_usd}</span>
-                {priceChildArs != null && (
-                  <span className="text-cream/40"> · ARS {priceChildArs.toLocaleString('es-AR')}</span>
-                )}
-              </p>
+        </div>
+
+        <div className="mt-2.5 pt-2 border-t border-gold/10 flex items-end justify-between gap-3">
+          <p className="text-[11px] text-cream/50">
+            USD {option.price_adult_usd} {t('product.per_adult_short')}
+            {showChildPrice && <> · USD {option.price_child_usd} {t('product.children').toLowerCase()}</>}
+          </p>
+          <div className="text-right shrink-0">
+            <p className="text-3xl font-display text-gold leading-tight">USD {totalUsd}</p>
+            {totalArs != null && (
+              <p className="text-xs text-cream/40">ARS {totalArs.toLocaleString('es-AR')}</p>
             )}
           </div>
         </div>
@@ -490,18 +670,12 @@ function OptionCard({
         </div>
       )}
 
-      <div className="mt-4 flex flex-col sm:flex-row gap-2">
+      <div className="mt-4">
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); onCheckAvailability(); }}
-          className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 rounded-md border border-gold/25 bg-gold/5 px-4 py-2.5 text-sm text-gold-soft hover:bg-gold/15 transition"
-        >
-          <span aria-hidden>🗓</span> {t('product.check_availability')}
-        </button>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onBook(); }}
-          className="w-full btn-primary text-sm py-2.5"
+          disabled={dateBlocked}
+          onClick={(e) => { e.stopPropagation(); onBook({ adults, children, transferQty, date: selectedDate }); }}
+          className="w-full btn-primary text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {t('product.book_option')}
         </button>
@@ -548,6 +722,7 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
   const { t } = useTranslation();
   const schedule = localized(product, 'schedule_summary', lang);
   const neighborhood = localized(product, 'neighborhood', lang);
+  const address = localized(product, 'address', lang);
   const anyDinner = product.options.some((o) => o.has_dinner);
   // Esta sección es "Servicios incluidos" — un traslado opcional (con costo) no
   // cuenta acá, solo el que ya viene incluido en el precio sin cargo extra.
@@ -558,7 +733,7 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
   const anyTransferAvailable = product.options.some((o) => o.transfer_mode !== 'none');
   const hasDays = product.available_days.length > 0;
 
-  if (!hasDays && !schedule && !neighborhood && !anyDinner && !anyTransfer && !anyTransferAvailable) return null;
+  if (!hasDays && !schedule && !neighborhood && !address && !anyDinner && !anyTransfer && !anyTransferAvailable) return null;
 
   return (
     <div className="rounded-lg border border-gold/10 bg-ink-soft/40 p-5">
@@ -588,10 +763,16 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
           </div>
         )}
 
-        {neighborhood && (
+        {(neighborhood || address) && (
           <div className="py-4 first:pt-0 last:pb-0">
             <p className="text-xs text-cream/40 mb-1.5">📍 {t('product.location')}</p>
-            <p className="text-sm text-cream/70">{neighborhood}</p>
+            {neighborhood && <p className="text-sm text-cream/70">{neighborhood}</p>}
+            {address && (
+              <p className="mt-1 text-sm text-cream/50 flex items-start gap-1.5">
+                <span aria-hidden>📍</span>
+                <span>{address}</span>
+              </p>
+            )}
           </div>
         )}
 
@@ -626,11 +807,13 @@ function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: stri
 }
 
 function BookingSummary({
-  product, option, sellerInfo, onBook,
+  product, option, sellerInfo, preview, onBook,
 }: {
   product: ProductDetail;
   option: ProductOption | null;
   sellerInfo: SellerPublicInfo | null;
+  // Espejo en vivo de la card de opción seleccionada — ver SelectionPreview.
+  preview: SelectionPreview;
   onBook: (method: 'mercadopago' | 'cash' | 'pix') => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -666,12 +849,15 @@ function BookingSummary({
   const showCash = sellerInfo?.is_permanent === true;
   const showCard = sellerInfo?.card_enabled !== false;
   const showChildPrice = product.accepts_children && option.price_child_usd != null;
-  const priceArs = exchangeRate != null ? Math.round(option.price_adult_usd * exchangeRate) : null;
-  const priceChildArs = (exchangeRate != null && showChildPrice)
-    ? Math.round(option.price_child_usd! * exchangeRate) : null;
+  const showTransferRow = option.transfer_mode !== 'none';
   const urgentDayLabel = urgentDay
     ? new Date(`${urgentDay.date}T00:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
     : null;
+
+  // Mismo cálculo que la card de opciones — lo que se ve acá es exactamente lo que
+  // se va a cobrar si se confirma con estos botones.
+  const { totalUsd } = computeBookingTotals(option, preview.adults, preview.children, preview.transferQty, showChildPrice);
+  const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
 
   return (
     <div className="rounded-lg border border-gold/20 bg-ink-soft/80 p-4">
@@ -681,14 +867,6 @@ function BookingSummary({
       </h3>
       <p className="text-sm text-cream/60">{product.venue_name}</p>
 
-      <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="text-xl font-display text-gold">USD {option.price_adult_usd}</span>
-        {priceArs != null && (
-          <span className="text-xl font-display text-gold/90">ARS {priceArs.toLocaleString('es-AR')}</span>
-        )}
-        <span className="text-sm text-cream/50">/ {t('product.per_adult_short')}</span>
-      </div>
-
       {urgentDayLabel && (
         <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gold/30 bg-gold/10 px-3 py-1 text-xs text-gold-soft">
           ⚡ Pocos lugares el {urgentDayLabel}
@@ -696,18 +874,48 @@ function BookingSummary({
         </p>
       )}
 
-      {showChildPrice && (
-        <p className="mt-2 text-sm text-cream/60">
-          {t('product.children')}{product.children_age_label ? ` (${product.children_age_label})` : ''}:{' '}
-          <span className="text-cream/85">USD {option.price_child_usd}</span>
-          {priceChildArs != null && (
-            <>
-              <span className="text-cream/30 mx-1">·</span>
-              <span className="text-cream/85">ARS {priceChildArs.toLocaleString('es-AR')}</span>
-            </>
-          )}
-        </p>
+      {/* Preview sincronizado con la card de la opción: cambia acá apenas se toca
+          un stepper o se elige fecha allá, sin que haya que hacer nada más. */}
+      <div className="mt-3 divide-y divide-gold/10 text-sm">
+        <div className="flex items-center justify-between py-1.5">
+          <span className="text-cream/50">{t('checkout.adults')}</span>
+          <span className="text-cream/90 font-medium">{preview.adults}</span>
+        </div>
+        {showChildPrice && (
+          <div className="flex items-center justify-between py-1.5">
+            <span className="text-cream/50">
+              {t('product.children')}{product.children_age_label ? ` (${product.children_age_label})` : ''}
+            </span>
+            <span className="text-cream/90 font-medium">{preview.children}</span>
+          </div>
+        )}
+        {showTransferRow && (
+          <div className="flex items-center justify-between py-1.5">
+            <span className="text-cream/50">{t('checkout.transfer')}</span>
+            <span className="text-cream/90 font-medium">
+              {option.transfer_mode === 'included' ? t('product.transfer_included') : preview.transferQty}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-between py-1.5">
+          <span className="text-cream/50">{t('checkout.service_date')}</span>
+          <span className={preview.capacityBlocked ? 'text-bordeaux-light font-medium' : preview.date ? 'text-emerald-400 font-medium' : 'text-cream/40'}>
+            {preview.date ? formatShortDate(preview.date) : t('product.no_date')}
+          </span>
+        </div>
+      </div>
+
+      {preview.capacityBlocked && (
+        <p className="mt-2 text-xs text-bordeaux-light">⚠ {t('product.no_capacity_for_pax')}</p>
       )}
+
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <span className="text-sm text-cream/50">{t('checkout.total')}</span>
+        <div className="text-right">
+          <p className="text-2xl font-display text-gold leading-tight">USD {totalUsd}</p>
+          {totalArs != null && <p className="text-xs text-cream/40">ARS {totalArs.toLocaleString('es-AR')}</p>}
+        </div>
+      </div>
 
       <div className="mt-3 rounded-lg bg-gold/5 border border-gold/15 px-2.5 py-2 flex gap-2 items-start">
         <span className="text-gold-soft text-sm shrink-0 leading-none mt-0.5">💱</span>
@@ -718,8 +926,9 @@ function BookingSummary({
         {showCard && (
           <button
             type="button"
+            disabled={preview.capacityBlocked}
             onClick={() => onBook('mercadopago')}
-            className="btn-primary w-full gap-2 py-2.5"
+            className="btn-primary w-full gap-2 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {CreditCardIcon}
             {showCash ? t('checkout.pay_with_mp') : t('product.book_cta')}
@@ -728,8 +937,9 @@ function BookingSummary({
         {showCard && (
           <button
             type="button"
+            disabled={preview.capacityBlocked}
             onClick={() => onBook('pix')}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-2.5 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-md border border-[#32BCAD]/40 bg-[#32BCAD]/10 px-6 py-2.5 text-sm font-medium text-[#5fd9cb] hover:bg-[#32BCAD]/20 transition disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {PixIcon}
             {t('checkout.pay_with_pix')}
@@ -738,8 +948,9 @@ function BookingSummary({
         {showCash && (
           <button
             type="button"
+            disabled={preview.capacityBlocked}
             onClick={() => onBook('cash')}
-            className={showCard ? 'btn-ghost w-full py-2.5' : 'btn-primary w-full py-2.5'}
+            className={`disabled:opacity-40 disabled:cursor-not-allowed ${showCard ? 'btn-ghost w-full py-2.5' : 'btn-primary w-full py-2.5'}`}
           >
             {t('checkout.pay_with_seller')}
           </button>

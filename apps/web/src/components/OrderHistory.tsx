@@ -80,7 +80,7 @@ function detailRescheduled(payload: Record<string, unknown>): string {
 function detailModified(payload: Record<string, unknown>): string | null {
   const parts: string[] = [];
   if (payload.new_adults != null) parts.push(paxLabel(payload.new_adults, payload.new_children));
-  if (payload.new_transfer === false) parts.push('sin traslado');
+  if (payload.new_transfer_qty === 0) parts.push('sin traslado');
   if (payload.refund_ars != null) parts.push(`devuelto ${fmtArs(payload.refund_ars)}`);
   const actor = actorSuffix(payload);
   if (parts.length > 0) return `${parts.join(' · ')}${actor}`;

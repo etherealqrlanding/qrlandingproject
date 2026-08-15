@@ -162,7 +162,7 @@ export async function applyAddonPayment(
       order_id: number; status: string; exchange_rate_used: number; payment_method: string;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
-      subtotal_usd: number; transfer_requested: boolean;
+      subtotal_usd: number; transfer_qty: number;
       commission_percent: number | null; seller_id: number | null; net_total_usd: number | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status,
@@ -170,7 +170,7 @@ export async function applyAddonPayment(
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
-              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
+              oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty,
               a.commission_percent_snapshot::float AS commission_percent,
               a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd
          FROM orders o
@@ -212,7 +212,7 @@ export async function applyAddonPayment(
       unitPriceAdultUsd: cur.unit_price_adult_usd,
       unitPriceChildUsd: cur.unit_price_child_usd,
       subtotalUsd: cur.subtotal_usd,
-      transferRequested: cur.transfer_requested,
+      transferQty: cur.transfer_qty,
       exchangeRateUsed: cur.exchange_rate_used,
     };
     const newAdults = cur.adults + addon.extra_adults;

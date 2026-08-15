@@ -1,23 +1,28 @@
 import { useMemo, useRef, useState } from 'react';
 import { HOTELS_BY_NEIGHBORHOOD, ALL_HOTELS } from '../lib/hotels';
 import Collapse from './Collapse';
+import NumberStepper from './NumberStepper';
 
 interface Props {
-  wantsTransfer: boolean;
+  qty: number;
+  // Cantidad total de pasajeros (adultos + menores) — tope del selector: no puede
+  // haber más pax con traslado que pax totales en la reserva.
+  maxQty: number;
   hotel: string;
   room: string;
-  onToggle: (v: boolean) => void;
+  onChange: (qty: number) => void;
   onHotelChange: (v: string) => void;
   onRoomChange: (v: string) => void;
   pickupWindow?: string | null;
   lang?: 'es' | 'en';
   // El traslado ya está incluido en el precio del servicio (sin costo extra): no se
-  // pregunta sí/no, va siempre — solo se pide el hotel/habitación para coordinar el pickup.
+  // pregunta cantidad, va para todos los pax — solo se pide el hotel/habitación para
+  // coordinar el pickup.
   included?: boolean;
 }
 
 export default function TransferSection({
-  wantsTransfer, hotel, room, onToggle, onHotelChange, onRoomChange, pickupWindow, lang = 'es', included = false,
+  qty, maxQty, hotel, room, onChange, onHotelChange, onRoomChange, pickupWindow, lang = 'es', included = false,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -64,7 +69,7 @@ export default function TransferSection({
           <p className="text-sm font-medium text-cream/90">
             {included
               ? (isEs ? '✓ Tu traslado está incluido' : '✓ Your transfer is included')
-              : (isEs ? '¿Querés traslado?' : 'Do you want a transfer?')}
+              : (isEs ? '¿Cuántos van con traslado?' : 'How many need a transfer?')}
           </p>
           <p className="text-xs text-cream/50 mt-0.5">
             {included
@@ -80,34 +85,26 @@ export default function TransferSection({
           )}
         </div>
         {!included && (
-          <div className="flex gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => onToggle(true)}
-              className={`px-3 py-1.5 rounded-md text-sm border transition ${
-                wantsTransfer
-                  ? 'border-gold bg-gold/10 text-cream'
-                  : 'border-gold/20 text-cream/50 hover:border-gold/40'
-              }`}
-            >
-              {isEs ? 'Sí' : 'Yes'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { onToggle(false); onHotelChange(''); setQuery(''); }}
-              className={`px-3 py-1.5 rounded-md text-sm border transition ${
-                !wantsTransfer
-                  ? 'border-gold bg-gold/10 text-cream'
-                  : 'border-gold/20 text-cream/50 hover:border-gold/40'
-              }`}
-            >
-              {isEs ? 'No' : 'No'}
-            </button>
+          <div className="shrink-0">
+            <NumberStepper
+              value={qty}
+              min={0}
+              max={maxQty}
+              onChange={(v) => {
+                onChange(v);
+                if (v === 0) { onHotelChange(''); setQuery(''); }
+              }}
+              decrementLabel={isEs ? 'menos' : 'decrement'}
+              incrementLabel={isEs ? 'más' : 'increment'}
+            />
+            <p className="mt-1 text-[11px] text-cream/40 text-right">
+              {isEs ? `de ${maxQty} pasajero${maxQty !== 1 ? 's' : ''}` : `of ${maxQty} passenger${maxQty !== 1 ? 's' : ''}`}
+            </p>
           </div>
         )}
       </div>
 
-      {(included || wantsTransfer) && (
+      {(included || qty > 0) && (
         <Collapse className="space-y-2">
           <p className="text-xs text-cream/60">
             {isEs

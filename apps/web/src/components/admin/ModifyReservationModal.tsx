@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import Checkbox from '../Checkbox';
+import NumberStepper from '../NumberStepper';
 import type { SellerMember } from '../../lib/sellerApi';
 import MemberPinGate, { isMemberPinMissing } from '../seller/MemberPinGate';
 
 type MemberFields = { seller_member_id?: number; seller_member_pin?: string; admin_pin?: string };
 type ReduceBody = MemberFields & {
-  adults: number; children: number; transfer_requested: boolean; reason?: string; notify_customer?: boolean;
+  adults: number; children: number; transfer_qty: number; reason?: string; notify_customer?: boolean;
   // Presente solo cuando la misma acción también reprograma la fecha: así el backend
   // manda un único email combinado en vez de uno por la reducción y otro por la fecha.
   reschedule_from?: string; reschedule_to?: string;
@@ -41,6 +42,7 @@ interface Props {
     unit_price_adult_usd: string;
     unit_price_child_usd: string | null;
     subtotal_usd: string;
+    transfer_qty: number;
     service_date: string;
     option_id: number;
     option_name_snapshot: string;
@@ -75,15 +77,16 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const unitChild = item.unit_price_child_usd != null ? Number(item.unit_price_child_usd) : null;
   const subtotal = Number(item.subtotal_usd);
 
-  // Porción de traslado inferida (lo que se cobró por encima de las entradas).
+  const origTransferQty = item.transfer_qty;
+  // Porción de traslado = lo que se cobró por encima de las entradas, prorrateada
+  // por la cantidad REAL de pax que llevaban traslado (no por el total de pax).
   const ticketsPortion = round2(origAdults * unitAdult + origChildren * (unitChild ?? 0));
   const transferPortion = Math.max(0, round2(subtotal - ticketsPortion));
-  const origHasTransfer = transferPortion > 0.005;
-  const transferPerPax = origHasTransfer ? transferPortion / (origAdults + origChildren) : 0;
+  const transferPerPax = origTransferQty > 0 ? transferPortion / origTransferQty : 0;
 
   const [adults, setAdults] = useState(origAdults);
   const [children, setChildren] = useState(origChildren);
-  const [keepTransfer, setKeepTransfer] = useState(origHasTransfer);
+  const [transferQty, setTransferQty] = useState(origTransferQty);
   const [newDate, setNewDate] = useState(item.service_date);
   const [reason, setReason] = useState('');
   const [notify, setNotify] = useState(true);
@@ -120,12 +123,19 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const newPax = adults + children;
   const isIncreasing = newPax > origAdults + origChildren;
   const hasDateChange = newDate !== item.service_date;
-  // Al AGREGAR pax, el traslado queda como estaba (no se puede togglear en la misma operación).
-  const effectiveTransfer = isIncreasing ? origHasTransfer : keepTransfer;
+  // Al AGREGAR pax, el traslado queda como estaba (no se puede togglear en la misma
+  // operación — los pax nuevos no lo heredan). Al REDUCIR, no puede quedar por encima
+  // del nuevo total de pax.
+  const effectiveTransferQty = isIncreasing ? origTransferQty : Math.min(transferQty, newPax);
+
+  // No puede haber más pax con traslado que pax totales — se recorta solo.
+  useEffect(() => {
+    setTransferQty((v) => Math.min(v, newPax));
+  }, [newPax]);
 
   const preview = useMemo(() => {
     const newTickets = round2(adults * unitAdult + children * (unitChild ?? 0));
-    const newTransfer = effectiveTransfer ? round2(transferPerPax * newPax) : 0;
+    const newTransfer = round2(transferPerPax * effectiveTransferQty);
     const newSubtotal = round2(newTickets + newTransfer);
     const delta = round2(newSubtotal - subtotal);
     const deltaArs = subtotal > 0 ? Math.round((Math.abs(delta) / subtotal) * order.total_ars) : 0;
@@ -134,7 +144,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     if (delta < -0.005) direction = 'reduce';
     else if (delta > 0.005) direction = 'increase';
     return { newSubtotal, newSubtotalArs, delta, deltaArs, direction };
-  }, [adults, children, effectiveTransfer, newPax, unitAdult, unitChild, transferPerPax, subtotal, order.total_ars]);
+  }, [adults, children, effectiveTransferQty, unitAdult, unitChild, transferPerPax, subtotal, order.total_ars]);
 
   const isMp = order.payment_method === 'mercadopago';
   const phoneDigits = (order.customer_phone ?? '').replace(/\D/g, '');
@@ -173,7 +183,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
       }
       if (preview.direction === 'reduce') {
         const body: ReduceBody = {
-          adults, children, transfer_requested: effectiveTransfer, reason: reason.trim() || undefined, notify_customer: notify,
+          adults, children, transfer_qty: effectiveTransferQty, reason: reason.trim() || undefined, notify_customer: notify,
           ...(combiningWithReduce ? { reschedule_from: item.service_date, reschedule_to: newDate } : {}),
           ...memberFields,
         };
@@ -253,7 +263,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Modificar reserva</p>
           <h2 className="mt-2 font-display text-2xl text-cream">{item.option_name_snapshot}</h2>
           <p className="mt-1 text-sm text-cream/50">
-            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origHasTransfer ? ' · c/traslado' : ''} — {fmtArs(order.total_ars)}
+            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origTransferQty > 0 ? ` · traslado ${origTransferQty}/${origAdults + origChildren}` : ''} — {fmtArs(order.total_ars)}
           </p>
         </header>
 
@@ -275,17 +285,25 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Stepper label="Adultos" value={adults} min={1} max={20} onChange={setAdults} />
+            <NumberStepper label="Adultos" value={adults} min={1} max={20} onChange={setAdults} decrementLabel="menos" incrementLabel="más" />
             {(origChildren > 0 || unitChild != null) && (
-              <Stepper label="Menores" value={children} min={0} max={20} onChange={setChildren} />
+              <NumberStepper label="Menores" value={children} min={0} max={20} onChange={setChildren} decrementLabel="menos" incrementLabel="más" />
             )}
           </div>
 
-          {origHasTransfer && (
-            <label className={`flex items-center gap-2 text-sm ${isIncreasing ? 'opacity-40' : ''}`}>
-              <Checkbox checked={effectiveTransfer} disabled={isIncreasing} onChange={setKeepTransfer} />
-              <span className="text-cream/80">Mantener traslado {isIncreasing && '(no se puede quitar al agregar pax)'}</span>
-            </label>
+          {origTransferQty > 0 && (
+            <div className={isIncreasing ? 'opacity-40 pointer-events-none' : ''}>
+              <NumberStepper
+                label={`Traslado (de ${newPax} pasajero${newPax !== 1 ? 's' : ''})`}
+                value={effectiveTransferQty}
+                min={0}
+                max={Math.min(origTransferQty, newPax)}
+                onChange={setTransferQty}
+                decrementLabel="menos"
+                incrementLabel="más"
+              />
+              {isIncreasing && <p className="mt-1 text-xs text-cream/40">No se puede modificar el traslado al agregar pax.</p>}
+            </div>
           )}
 
           {/* Preview del delta */}
@@ -393,19 +411,6 @@ function Overlay({ children }: { children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 bg-ink/85 backdrop-blur-sm animate-modal-backdrop">
       {children}
-    </div>
-  );
-}
-
-function Stepper({ label, value, min, max, onChange }: { label: string; value: number; min: number; max?: number; onChange: (v: number) => void }) {
-  return (
-    <div>
-      <span className="block text-sm text-cream/80 mb-1.5">{label}</span>
-      <div className="flex items-center rounded-md border border-gold/20 bg-ink/40 overflow-hidden">
-        <button type="button" onClick={() => onChange(Math.max(min, value - 1))} className="px-3 py-2 text-cream hover:bg-gold/10 transition" aria-label="menos">−</button>
-        <span className="flex-1 text-center text-cream tabular-nums">{value}</span>
-        <button type="button" onClick={() => onChange(max != null ? Math.min(max, value + 1) : value + 1)} className="px-3 py-2 text-cream hover:bg-gold/10 transition" aria-label="más">+</button>
-      </div>
     </div>
   );
 }

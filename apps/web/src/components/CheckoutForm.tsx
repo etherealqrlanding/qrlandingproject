@@ -9,6 +9,8 @@ import { useExchangeRate } from '../lib/useExchangeRate';
 import Spinner from './Spinner';
 import AvailabilityCalendar from './AvailabilityCalendar';
 import Checkbox from './Checkbox';
+import NumberStepper from './NumberStepper';
+import { computeBookingTotals } from '../lib/pricing';
 
 interface Props {
   product: ProductDetail;
@@ -21,10 +23,12 @@ interface Props {
   // Tarjeta (Mercado Pago + Pix) habilitada para esta cuenta -- lo decide solo el
   // admin de la plataforma (sellers.card_enabled). Si es false, solo queda pago manual.
   showCard: boolean;
-  // Precarga fecha/pasajeros (ej. vienen de "Verificar disponibilidad"). Siguen editables.
+  // Precarga fecha/pasajeros/traslado (ej. vienen de la card de opciones o de
+  // "Verificar disponibilidad"). Siguen editables.
   initialDate?: string;
   initialAdults?: number;
   initialChildren?: number;
+  initialTransferQty?: number;
 }
 
 const PixIcon = (
@@ -47,7 +51,7 @@ const NATIONALITIES = [
   'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
 ];
 
-export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren }: Props) {
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren, initialTransferQty }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
@@ -59,7 +63,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [wantsTransfer, setWantsTransfer] = useState(option.transfer_mode !== 'none');
+  // Solo relevante para transfer_mode === 'optional' (el resto de los casos deriva
+  // transferQty más abajo: 'included' = todos los pax, 'none' = 0).
+  const [transferQtyOptional, setTransferQtyOptional] = useState(() => Math.max(0, initialTransferQty ?? 0));
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -156,21 +162,21 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 
-  const ticketsUsd = useMemo(() => {
-    const adult = option.price_adult_usd * form.adults;
-    const child = supportsChildren ? (option.price_child_usd ?? 0) * form.children : 0;
-    return Math.round((adult + child) * 100) / 100;
-  }, [option, form.adults, form.children, supportsChildren]);
+  const totalPax = form.adults + form.children;
+  // No puede haber más pax con traslado que pax totales: se recorta solo si adultos
+  // o menores bajan por debajo de lo que ya estaba seleccionado.
+  useEffect(() => {
+    setTransferQtyOptional((v) => Math.min(v, totalPax));
+  }, [totalPax]);
 
-  // El traslado incluido no suma costo (ya está en el precio del tier) — solo el
-  // opcional, y solo si el pasajero lo pidió.
-  const transferApplies = option.transfer_mode === 'included' || (option.transfer_mode === 'optional' && wantsTransfer);
-  const transferUsd = useMemo(() => {
-    if (option.transfer_mode !== 'optional' || !wantsTransfer || !option.transfer_price_usd) return 0;
-    return Math.round(option.transfer_price_usd * (form.adults + form.children) * 100) / 100;
-  }, [option, wantsTransfer, form.adults, form.children]);
+  const transferQty = option.transfer_mode === 'included' ? totalPax
+    : option.transfer_mode === 'optional' ? transferQtyOptional
+    : 0;
 
-  const totalUsd = Math.round((ticketsUsd + transferUsd) * 100) / 100;
+  const { ticketsUsd, transferUsd, totalUsd } = useMemo(
+    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren),
+    [option, form.adults, form.children, transferQty, supportsChildren],
+  );
 
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
 
@@ -196,9 +202,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
       nationality: form.nationality || null,
     },
     ref_code: storedRef,
-    transfer_requested: transferApplies,
-    transfer_hotel: transferApplies ? (transferHotel || null) : null,
-    transfer_room: transferApplies ? (transferRoom.trim() || null) : null,
+    transfer_qty: transferQty,
+    transfer_hotel: transferQty > 0 ? (transferHotel || null) : null,
+    transfer_room: transferQty > 0 ? (transferRoom.trim() || null) : null,
     terms_accepted: termsAccepted,
   };
 
@@ -424,7 +430,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                   <span className="text-cream/80">USD {ticketsUsd}</span>
                 </div>
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-cream/60">{t('checkout.transfer')} ({form.adults + form.children} pax)</span>
+                  <span className="text-cream/60">{t('checkout.transfer')} ({transferQty} pax)</span>
                   <span className="text-cream/80">+ USD {transferUsd}</span>
                 </div>
               </div>
@@ -449,10 +455,11 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
           {/* Traslado — solo si la option lo tiene (opcional u incluido) */}
           {option.transfer_mode !== 'none' && (
             <TransferSection
-              wantsTransfer={wantsTransfer}
+              qty={transferQtyOptional}
+              maxQty={totalPax}
               hotel={transferHotel}
               room={transferRoom}
-              onToggle={setWantsTransfer}
+              onChange={setTransferQtyOptional}
               onHotelChange={setTransferHotel}
               onRoomChange={setTransferRoom}
               pickupWindow={lang === 'en' ? option.pickup_window_en : option.pickup_window_es}
@@ -568,43 +575,5 @@ function Field({ label, required, hint, children }: { label: string; required?: 
       {children}
       {hint && <p className="mt-1 text-xs text-cream/40">{hint}</p>}
     </label>
-  );
-}
-
-function NumberStepper({
-  value, min, max, onChange, cappedMessage,
-}: { value: number; min: number; max: number; onChange: (v: number) => void; cappedMessage?: string }) {
-  const [showCapped, setShowCapped] = useState(false);
-
-  const handleIncrement = () => {
-    if (value >= max) {
-      setShowCapped(true);
-      setTimeout(() => setShowCapped(false), 2500);
-      return;
-    }
-    onChange(Math.min(max, value + 1));
-  };
-
-  return (
-    <div>
-      <div className="flex items-center rounded-md border border-gold/20 bg-ink/40 overflow-hidden">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(min, value - 1))}
-          className="px-3 py-2 text-cream hover:bg-gold/10 transition"
-          aria-label="decrement"
-        >−</button>
-        <span className="flex-1 text-center text-cream tabular-nums">{value}</span>
-        <button
-          type="button"
-          onClick={handleIncrement}
-          className="px-3 py-2 text-cream hover:bg-gold/10 transition"
-          aria-label="increment"
-        >+</button>
-      </div>
-      {showCapped && cappedMessage && (
-        <p className="mt-1 text-xs text-gold-soft">{cappedMessage}</p>
-      )}
-    </div>
   );
 }

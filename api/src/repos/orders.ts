@@ -22,7 +22,7 @@ export interface CreateOrderInput {
     unit_price_adult_usd: number;
     unit_price_child_usd: number | null;
     subtotal_usd: number;
-    transfer_requested?: boolean;
+    transfer_qty?: number;
     transfer_hotel?: string | null;
     transfer_room?: string | null;
     // Net prices snapshot (optional: only set when option has them configured)
@@ -77,14 +77,14 @@ async function insertOrderItemAndAttribution(
        order_id, product_id, option_id,
        product_name_snapshot, option_name_snapshot, service_date,
        adults, children, unit_price_adult_usd, unit_price_child_usd, subtotal_usd,
-       transfer_requested, transfer_hotel, transfer_room
+       transfer_qty, transfer_hotel, transfer_room
      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     [
       orderId, item.product_id, item.option_id,
       item.product_name_snapshot, item.option_name_snapshot, item.service_date,
       item.adults, item.children,
       item.unit_price_adult_usd, item.unit_price_child_usd, item.subtotal_usd,
-      item.transfer_requested ?? false,
+      item.transfer_qty ?? 0,
       item.transfer_hotel ?? null,
       item.transfer_room ?? null,
     ],
@@ -365,7 +365,7 @@ export interface OrderReductionInput {
   origChildren: number;
   newAdults: number;
   newChildren: number;
-  newTransferRequested: boolean;
+  newTransferQty: number;
   newTransferHotel: string | null;
   newSubtotalUsd: number;
   newTotalArs: number;
@@ -409,11 +409,11 @@ export async function applyOrderReduction(input: OrderReductionInput, externalCl
       `UPDATE order_items
           SET adults = $1, children = $2,
               subtotal_usd = $3,
-              transfer_requested = $4,
+              transfer_qty = $4,
               transfer_hotel = $5
         WHERE id = $6 AND adults = $7 AND children = $8`,
       [input.newAdults, input.newChildren, input.newSubtotalUsd,
-       input.newTransferRequested, input.newTransferHotel, input.itemId,
+       input.newTransferQty, input.newTransferHotel, input.itemId,
        input.origAdults, input.origChildren],
     );
     if (!rowCount) throw new ConcurrentModificationError();
@@ -448,7 +448,7 @@ export async function applyOrderReduction(input: OrderReductionInput, externalCl
       [input.orderId, JSON.stringify({
         orig_adults: input.origAdults, orig_children: input.origChildren,
         new_adults: input.newAdults, new_children: input.newChildren,
-        new_transfer: input.newTransferRequested,
+        new_transfer_qty: input.newTransferQty,
         refund_usd: input.refundUsd, refund_ars: input.refundArs,
         actor: input.actor ?? null,
         seller_member_id: input.actorMemberId ?? null,
@@ -840,7 +840,7 @@ export interface OrderVerificationInfo {
   service_date: string;
   adults: number;
   children: number;
-  transfer_requested: boolean;
+  transfer_qty: number;
   updated_at: string;
 }
 
@@ -854,7 +854,7 @@ export async function getOrderVerificationInfo(publicId: string): Promise<OrderV
             oi.product_name_snapshot AS product_name,
             oi.option_name_snapshot AS option_name,
             to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-            oi.adults, oi.children, oi.transfer_requested,
+            oi.adults, oi.children, oi.transfer_qty,
             o.updated_at
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id

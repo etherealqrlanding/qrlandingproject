@@ -148,7 +148,7 @@ export interface OrderEmailData {
   customer_nationality?: string | null;
   unit_price_adult_usd?: number | null;
   unit_price_child_usd?: number | null;
-  transfer_requested?: boolean | null;
+  transfer_qty?: number | null;
   transfer_hotel?: string | null;
   pickup_window?: string | null;
   dinner_time?: string | null;
@@ -297,8 +297,10 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   if (d.pickup_window) rows.push(emailRow('Horario de traslado', escapeHtml(d.pickup_window)));
   if (d.dinner_time) rows.push(emailRow('Cena', escapeHtml(d.dinner_time)));
   if (d.show_time) rows.push(emailRow('Show', escapeHtml(d.show_time)));
-  if (d.transfer_requested) {
-    rows.push(emailRow('Traslado', `Incluido${d.transfer_hotel ? ` — retiro en ${escapeHtml(d.transfer_hotel)}` : ''}`));
+  if (d.transfer_qty != null && d.transfer_qty > 0) {
+    const totalPax = d.adults + d.children;
+    const qtyLabel = d.transfer_qty >= totalPax ? 'Incluido' : `${d.transfer_qty} de ${totalPax} pasajeros`;
+    rows.push(emailRow('Traslado', `${qtyLabel}${d.transfer_hotel ? ` — retiro en ${escapeHtml(d.transfer_hotel)}` : ''}`));
   }
 
   if (showAmounts) {
@@ -425,7 +427,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
     ${emailRow('Experiencia', escapeHtml(data.option_name))}
     ${emailRow('Fecha', data.service_date)}
     ${emailRow('Pasajeros', `${data.adults} adulto(s)${data.children > 0 ? ` · ${data.children} menor(es)` : ''}`)}
-    ${data.transfer_requested ? emailRow('Traslado', `Incluido${data.transfer_hotel ? ` — retiro en ${escapeHtml(data.transfer_hotel)}` : ''}`) : ''}
+    ${data.transfer_qty != null && data.transfer_qty > 0 ? emailRow('Traslado', `${data.transfer_qty >= data.adults + data.children ? 'Incluido' : `${data.transfer_qty} de ${data.adults + data.children} pasajeros`}${data.transfer_hotel ? ` — retiro en ${escapeHtml(data.transfer_hotel)}` : ''}`) : ''}
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
   <p>Vamos a procesar el pago de tu incentivo por recomendación junto con los del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
@@ -452,7 +454,7 @@ export const ORDER_EMAIL_SELECT = `
        oi.adults, oi.children,
        oi.unit_price_adult_usd::float AS unit_price_adult_usd,
        oi.unit_price_child_usd::float AS unit_price_child_usd,
-       oi.transfer_requested, oi.transfer_hotel,
+       oi.transfer_qty, oi.transfer_hotel,
        opt.pickup_window_es, opt.dinner_time_es, opt.show_time_es, opt.includes_es,
        p.address_es,
        s.id AS seller_id, s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
@@ -489,7 +491,7 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
     customer_nationality: (data.customer_nationality as string) ?? null,
     unit_price_adult_usd: (data.unit_price_adult_usd as number) ?? null,
     unit_price_child_usd: (data.unit_price_child_usd as number) ?? null,
-    transfer_requested: (data.transfer_requested as boolean) ?? null,
+    transfer_qty: (data.transfer_qty as number) ?? null,
     transfer_hotel: (data.transfer_hotel as string) ?? null,
     pickup_window: (data.pickup_window_es as string) ?? null,
     dinner_time: (data.dinner_time_es as string) ?? null,
@@ -1073,7 +1075,7 @@ export async function sendOrderModifiedNotifications(
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.transfer_requested ? ' · c/traslado' : ''}</strong></div>
+    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.transfer_qty != null && orderData.transfer_qty > 0 ? ` · traslado ${orderData.transfer_qty}/${orderData.adults + orderData.children}` : ''}</strong></div>
     ${dateChange ? `<div style="${baseStyles.row}"><span>Fecha reprogramada</span><strong>${dateChange.prevDate} → ${dateChange.newDate}</strong></div>` : ''}
     <div style="${baseStyles.row}"><span>Reintegrado</span><strong style="color:#c8a85a">ARS ${arsStr}</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>

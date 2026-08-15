@@ -41,7 +41,7 @@ export async function createAddonForOrder(params: {
     option_name: string; product_slug: string; product_name: string;
     adults: number; children: number;
     unit_price_adult_usd: number; unit_price_child_usd: number | null;
-    subtotal_usd: number; transfer_requested: boolean;
+    subtotal_usd: number; transfer_qty: number;
     seller_id: number | null; seller_code: string | null;
   }>(
     `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
@@ -54,7 +54,7 @@ export async function createAddonForOrder(params: {
             oi.adults, oi.children,
             oi.unit_price_adult_usd::float AS unit_price_adult_usd,
             oi.unit_price_child_usd::float AS unit_price_child_usd,
-            oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
+            oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty,
             a.seller_id, s.code AS seller_code
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
@@ -85,7 +85,7 @@ export async function createAddonForOrder(params: {
     unitPriceAdultUsd: row.unit_price_adult_usd,
     unitPriceChildUsd: row.unit_price_child_usd,
     subtotalUsd: row.subtotal_usd,
-    transferRequested: row.transfer_requested,
+    transferQty: row.transfer_qty,
     exchangeRateUsed: row.exchange_rate_used,
   };
   const calc = computeOrderIncrease(snap, { adults: params.adults, children: params.children });
@@ -183,7 +183,7 @@ export async function createCashAddonForOrder(params: {
     item_id: number; option_id: number; service_date: string; default_capacity_per_day: number;
     adults: number; children: number;
     unit_price_adult_usd: number; unit_price_child_usd: number | null;
-    subtotal_usd: number; transfer_requested: boolean;
+    subtotal_usd: number; transfer_qty: number;
     seller_id: number | null; net_settled_at: string | null;
     customer_name: string; option_name: string;
   }>(
@@ -196,7 +196,7 @@ export async function createCashAddonForOrder(params: {
             oi.adults, oi.children,
             oi.unit_price_adult_usd::float AS unit_price_adult_usd,
             oi.unit_price_child_usd::float AS unit_price_child_usd,
-            oi.subtotal_usd::float AS subtotal_usd, oi.transfer_requested,
+            oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty,
             a.seller_id, a.net_settled_at
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
@@ -229,7 +229,7 @@ export async function createCashAddonForOrder(params: {
     unitPriceAdultUsd: row.unit_price_adult_usd,
     unitPriceChildUsd: row.unit_price_child_usd,
     subtotalUsd: row.subtotal_usd,
-    transferRequested: row.transfer_requested,
+    transferQty: row.transfer_qty,
     exchangeRateUsed: row.exchange_rate_used,
   };
   const calc = computeOrderIncrease(snap, { adults: params.adults, children: params.children });

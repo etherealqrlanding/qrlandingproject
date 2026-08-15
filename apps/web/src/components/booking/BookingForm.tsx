@@ -5,6 +5,8 @@ import type { ProductOption } from '../../types/api';
 import TransferSection from '../TransferSection';
 import Spinner from '../Spinner';
 import AvailabilityCalendar from '../AvailabilityCalendar';
+import NumberStepper from '../NumberStepper';
+import { computeBookingTotals } from '../../lib/pricing';
 
 // Núcleo del formulario de reserva manual: datos del pasajero, disponibilidad en vivo,
 // cálculo de precios, traslado y método de pago. Lo comparten el portal de vendedores
@@ -53,7 +55,9 @@ export default function BookingForm({
   );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [wantsTransfer, setWantsTransfer] = useState(option.transfer_mode !== 'none');
+  // Solo relevante para transfer_mode === 'optional' ('included' = todos los pax,
+  // 'none' = 0, derivados más abajo).
+  const [transferQtyOptional, setTransferQtyOptional] = useState(0);
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   // Monto que se le cobra al pasajero en efectivo. Es SOLO referencia visual para el
@@ -133,21 +137,21 @@ export default function BookingForm({
   const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 
-  const ticketsUsd = useMemo(() => {
-    const adult = option.price_adult_usd * form.adults;
-    const child = supportsChildren ? (option.price_child_usd ?? 0) * form.children : 0;
-    return Math.round((adult + child) * 100) / 100;
-  }, [option, form.adults, form.children, supportsChildren]);
+  const totalPax = form.adults + form.children;
+  // No puede haber más pax con traslado que pax totales: se recorta solo si adultos
+  // o menores bajan por debajo de lo que ya estaba seleccionado.
+  useEffect(() => {
+    setTransferQtyOptional((v) => Math.min(v, totalPax));
+  }, [totalPax]);
 
-  // El traslado incluido no suma costo (ya está en el precio del tier) — solo el
-  // opcional, y solo si se lo pidió.
-  const transferApplies = option.transfer_mode === 'included' || (option.transfer_mode === 'optional' && wantsTransfer);
-  const transferUsd = useMemo(() => {
-    if (option.transfer_mode !== 'optional' || !wantsTransfer || !option.transfer_price_usd) return 0;
-    return Math.round(option.transfer_price_usd * (form.adults + form.children) * 100) / 100;
-  }, [option, wantsTransfer, form.adults, form.children]);
+  const transferQty = option.transfer_mode === 'included' ? totalPax
+    : option.transfer_mode === 'optional' ? transferQtyOptional
+    : 0;
 
-  const totalUsd = Math.round((ticketsUsd + transferUsd) * 100) / 100;
+  const { ticketsUsd, transferUsd, totalUsd } = useMemo(
+    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren),
+    [option, form.adults, form.children, transferQty, supportsChildren],
+  );
 
   const updateField = <K extends keyof typeof form>(field: K, value: typeof form[K]) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -213,9 +217,9 @@ export default function BookingForm({
         nationality: form.nationality || null,
       },
       payment_method: paymentMethod,
-      transfer_requested: transferApplies,
-      transfer_hotel: transferApplies ? (transferHotel || null) : null,
-      transfer_room: transferApplies ? (transferRoom.trim() || null) : null,
+      transfer_qty: transferQty,
+      transfer_hotel: transferQty > 0 ? (transferHotel || null) : null,
+      transfer_room: transferQty > 0 ? (transferRoom.trim() || null) : null,
     }, { ticketsUsd, transferUsd, totalUsd });
   };
 
@@ -385,10 +389,11 @@ export default function BookingForm({
         {/* Traslado */}
         {option.transfer_mode !== 'none' && (
           <TransferSection
-            wantsTransfer={wantsTransfer}
+            qty={transferQtyOptional}
+            maxQty={totalPax}
             hotel={transferHotel}
             room={transferRoom}
-            onToggle={setWantsTransfer}
+            onChange={setTransferQtyOptional}
             onHotelChange={setTransferHotel}
             onRoomChange={setTransferRoom}
             pickupWindow={option.pickup_window_es}
@@ -506,35 +511,5 @@ function Field({ label, required, hint, children }: { label: string; required?: 
       {children}
       {hint && <p className="mt-1 text-xs text-cream/40">{hint}</p>}
     </label>
-  );
-}
-
-function NumberStepper({ value, min, max, onChange, cappedMessage }: {
-  value: number; min: number; max: number; onChange: (v: number) => void; cappedMessage?: string;
-}) {
-  const [showCapped, setShowCapped] = useState(false);
-
-  const handleIncrement = () => {
-    if (value >= max) {
-      setShowCapped(true);
-      setTimeout(() => setShowCapped(false), 2500);
-      return;
-    }
-    onChange(Math.min(max, value + 1));
-  };
-
-  return (
-    <div>
-      <div className="flex items-center rounded-md border border-gold/20 bg-ink/40 overflow-hidden">
-        <button type="button" onClick={() => onChange(Math.max(min, value - 1))}
-          className="px-3 py-2 text-cream hover:bg-gold/10 transition" aria-label="decrement">−</button>
-        <span className="flex-1 text-center text-cream tabular-nums">{value}</span>
-        <button type="button" onClick={handleIncrement}
-          className="px-3 py-2 text-cream hover:bg-gold/10 transition" aria-label="increment">+</button>
-      </div>
-      {showCapped && cappedMessage && (
-        <p className="mt-1 text-xs text-gold-soft">{cappedMessage}</p>
-      )}
-    </div>
   );
 }

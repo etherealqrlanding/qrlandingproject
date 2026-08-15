@@ -1,7 +1,8 @@
 // Cálculo puro de un AUMENTO de reserva (más pasajeros). Igual que la reducción,
 // trabaja con precios CONGELADOS: el pasajero que se suma paga lo mismo que los
-// originales, y el traslado (si la reserva ya lo tenía) se prorratea por pax.
-// No permite togglear el traslado acá: agregar/quitar traslado se maneja aparte.
+// originales. El traslado NO escala con el aumento (transfer_qty se mantiene igual
+// que en la orden original): los pasajeros nuevos no llevan traslado a menos que se
+// coordine aparte. No permite togglear el traslado acá.
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -11,7 +12,7 @@ export interface OrderIncreaseSnapshot {
   unitPriceAdultUsd: number;
   unitPriceChildUsd: number | null;
   subtotalUsd: number;
-  transferRequested: boolean;
+  transferQty: number;
   exchangeRateUsed: number;
 }
 
@@ -60,16 +61,13 @@ export function computeOrderIncrease(
   const unitAdult = snap.unitPriceAdultUsd;
   const unitChild = snap.unitPriceChildUsd ?? 0;
 
-  // Porción de traslado congelada, prorrateada por pax (misma lógica que la reducción).
+  // Porción de traslado congelada — no escala con el aumento (transfer_qty se
+  // mantiene igual que en la orden original, los pax nuevos no lo heredan).
   const ticketsPortion = round2(snap.origAdults * unitAdult + snap.origChildren * unitChild);
   const transferPortion = Math.max(0, round2(snap.subtotalUsd - ticketsPortion));
-  const origPax = snap.origAdults + snap.origChildren;
-  const transferPerPax = (snap.transferRequested && origPax > 0) ? transferPortion / origPax : 0;
 
-  const newPax = target.adults + target.children;
   const newTickets = round2(target.adults * unitAdult + target.children * unitChild);
-  const newTransferPortion = snap.transferRequested ? round2(transferPerPax * newPax) : 0;
-  const newSubtotalUsd = round2(newTickets + newTransferPortion);
+  const newSubtotalUsd = round2(newTickets + transferPortion);
 
   const chargeUsd = round2(newSubtotalUsd - snap.subtotalUsd);
   if (chargeUsd <= 0) return fail('El aumento no genera ningún cobro adicional.');

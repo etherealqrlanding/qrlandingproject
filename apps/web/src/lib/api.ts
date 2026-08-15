@@ -47,7 +47,7 @@ export interface CheckoutInput {
   };
   ref_code?: string | null;
   utm?: { source?: string; medium?: string; campaign?: string };
-  transfer_requested?: boolean;
+  transfer_qty?: number;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
   terms_accepted: boolean;
@@ -114,7 +114,7 @@ export interface OrderVerification {
   service_date: string;
   adults: number;
   children: number;
-  transfer_requested: boolean;
+  transfer_qty: number;
   updated_at: string;
 }
 

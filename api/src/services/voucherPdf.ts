@@ -75,8 +75,10 @@ export async function generateVoucherPdf(orderId: number): Promise<Buffer | null
   let pax = `${order.adults} adulto(s)`;
   if (order.children > 0) pax += ` · ${order.children} menor(es)`;
   row(doc, 'Pasajeros', pax);
-  if (order.transfer_requested) {
-    row(doc, 'Traslado', `Incluido${order.transfer_hotel ? ` — retiro en ${order.transfer_hotel}` : ''}`);
+  if (order.transfer_qty != null && order.transfer_qty > 0) {
+    const totalPax = order.adults + order.children;
+    const qtyLabel = order.transfer_qty >= totalPax ? 'Incluido' : `${order.transfer_qty} de ${totalPax} pasajeros`;
+    row(doc, 'Traslado', `${qtyLabel}${order.transfer_hotel ? ` — retiro en ${order.transfer_hotel}` : ''}`);
   }
   row(doc, 'Pasajero', order.customer_name);
   row(doc, 'Estado', 'Pagado');

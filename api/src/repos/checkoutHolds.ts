@@ -179,7 +179,7 @@ export interface AdminHoldRow {
   customer_dni: string | null;
   adults: number;
   children: number;
-  transfer_requested: boolean;
+  transfer_qty: number;
   transfer_hotel: string | null;
   transfer_room: string | null;
   total_usd: number;
@@ -229,7 +229,16 @@ export async function listActiveHoldsForAdmin(filters?: {
        h.payload->'customer'->>'dni' AS customer_dni,
        (h.payload->'item'->>'adults')::int AS adults,
        (h.payload->'item'->>'children')::int AS children,
-       COALESCE((h.payload->'item'->>'transfer_requested')::boolean, false) AS transfer_requested,
+       -- Compat temporal: holds creados antes del cambio a transfer_qty todavía
+       -- pueden traer el campo booleano viejo en su payload JSONB (holds son de
+       -- corta vida, la ventana de transición se cierra sola en minutos).
+       COALESCE(
+         (h.payload->'item'->>'transfer_qty')::int,
+         CASE WHEN (h.payload->'item'->>'transfer_requested')::boolean
+              THEN (h.payload->'item'->>'adults')::int + (h.payload->'item'->>'children')::int
+              ELSE 0 END,
+         0
+       ) AS transfer_qty,
        h.payload->'item'->>'transfer_hotel' AS transfer_hotel,
        h.payload->'item'->>'transfer_room' AS transfer_room,
        (h.payload->>'total_usd')::float AS total_usd,

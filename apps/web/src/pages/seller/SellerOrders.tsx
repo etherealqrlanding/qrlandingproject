@@ -563,6 +563,7 @@ export default function SellerOrders() {
           unit_price_adult_usd: String(modifyOrder.unit_price_adult_usd),
           unit_price_child_usd: modifyOrder.unit_price_child_usd != null ? String(modifyOrder.unit_price_child_usd) : null,
           subtotal_usd: String(modifyOrder.subtotal_usd),
+          transfer_qty: modifyOrder.transfer_qty,
           service_date: modifyOrder.service_date,
           option_id: modifyOrder.option_id,
           option_name_snapshot: modifyOrder.option_name,

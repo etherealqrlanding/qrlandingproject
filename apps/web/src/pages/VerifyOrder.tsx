@@ -66,7 +66,13 @@ export default function VerifyOrder() {
                   {order.adults} adulto{order.adults !== 1 ? 's' : ''}
                   {order.children > 0 ? ` · ${order.children} menor${order.children !== 1 ? 'es' : ''}` : ''}
                 </Row>
-                {order.transfer_requested && <Row label="Traslado">Incluido</Row>}
+                {order.transfer_qty > 0 && (
+                  <Row label="Traslado">
+                    {order.transfer_qty >= order.adults + order.children
+                      ? 'Incluido'
+                      : `${order.transfer_qty} de ${order.adults + order.children} pasajeros`}
+                  </Row>
+                )}
                 <Row label="Referencia"><span className="font-mono text-xs">{order.public_id}</span></Row>
               </div>
             </>

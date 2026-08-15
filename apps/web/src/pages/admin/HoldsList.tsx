@@ -37,8 +37,11 @@ function HoldExtraDetails({ h, twoColumns }: Readonly<{ h: AdminHoldRow; twoColu
       {h.customer_nationality && <DetailRow label="Nacionalidad">{h.customer_nationality}</DetailRow>}
       {h.customer_dni && <DetailRow label="DNI/Pasaporte">{h.customer_dni}</DetailRow>}
       <DetailRow label="Pasajeros">{h.adults} ad.{h.children ? ` · ${h.children} men.` : ''}</DetailRow>
-      {h.transfer_requested && (
-        <DetailRow label="Traslado">{h.transfer_hotel ?? '—'}{h.transfer_room ? ` · Hab. ${h.transfer_room}` : ''}</DetailRow>
+      {h.transfer_qty > 0 && (
+        <DetailRow label="Traslado">
+          {h.transfer_qty >= h.adults + h.children ? 'Todos' : `${h.transfer_qty} de ${h.adults + h.children}`}
+          {h.transfer_hotel ? ` · ${h.transfer_hotel}` : ''}{h.transfer_room ? ` · Hab. ${h.transfer_room}` : ''}
+        </DetailRow>
       )}
       <DetailRow label="Tasa de cambio">{h.exchange_rate_used}</DetailRow>
       {h.ref_code && <DetailRow label="Recomendador">{h.ref_code}</DetailRow>}

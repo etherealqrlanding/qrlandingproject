@@ -71,7 +71,7 @@ const createCheckoutSchema = z.object({
     medium: z.string().max(80).optional().nullable(),
     campaign: z.string().max(80).optional().nullable(),
   }).optional(),
-  transfer_requested: z.boolean().optional(),
+  transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
   // El check "Acepto los Términos y Condiciones" del checkout es obligatorio — z.literal(true)
@@ -189,12 +189,16 @@ async function prepareCheckoutHold(
   // 'optional' = con costo, el cliente elige sumarlo. 'included' = ya está en el
   // precio del servicio, siempre aplica y no se cobra aparte.
   const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
-  const transferRequested = option.transfer_mode === 'included'
-    ? true
-    : (option.transfer_mode === 'optional' && input.transfer_requested === true && transferPriceUsd > 0);
   const pax = input.adults + input.children;
-  const transferSubtotal = (option.transfer_mode === 'optional' && transferRequested)
-    ? Math.round(transferPriceUsd * pax * 100) / 100
+  // 'optional' = con costo, el cliente elige cuántos pasajeros lo llevan (0..pax).
+  // 'included' = ya está en el precio del servicio, siempre para todos los pax, sin costo aparte.
+  const transferQty = option.transfer_mode === 'included'
+    ? pax
+    : option.transfer_mode === 'optional'
+      ? Math.max(0, Math.min(input.transfer_qty ?? 0, pax))
+      : 0;
+  const transferSubtotal = option.transfer_mode === 'optional'
+    ? Math.round(transferPriceUsd * transferQty * 100) / 100
     : 0;
   const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
 
@@ -212,7 +216,7 @@ async function prepareCheckoutHold(
     if (netAdult != null) {
       netTotalUsd = Math.round((
         input.adults * netAdult + input.children * (netChild ?? netAdult)
-        + (option.transfer_mode === 'optional' && transferRequested && netTransfer != null ? netTransfer * pax : 0)
+        + (option.transfer_mode === 'optional' && netTransfer != null ? netTransfer * transferQty : 0)
       ) * 100) / 100;
     }
   } else {
@@ -222,7 +226,7 @@ async function prepareCheckoutHold(
     if (netAdultArs != null && rate > 0) {
       const netTotalArs = Math.round((
         input.adults * netAdultArs + input.children * (netChildArs ?? netAdultArs)
-        + (option.transfer_mode === 'optional' && transferRequested && netTransferArs != null ? netTransferArs * pax : 0)
+        + (option.transfer_mode === 'optional' && netTransferArs != null ? netTransferArs * transferQty : 0)
       ) * 100) / 100;
       netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
     }
@@ -249,9 +253,9 @@ async function prepareCheckoutHold(
         unit_price_adult_usd: priceAdult,
         unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
         subtotal_usd: subtotalUsd,
-        transfer_requested: transferRequested,
+        transfer_qty: transferQty,
         transfer_hotel: input.transfer_hotel ?? null,
-        transfer_room: (transferRequested && input.transfer_room) ? input.transfer_room : null,
+        transfer_room: (transferQty > 0 && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -655,12 +659,14 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       return res.status(400).json({ error: 'This option does not allow children pricing' });
     }
     const transferPriceUsdCash = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
-    const transferRequestedCash = option.transfer_mode === 'included'
-      ? true
-      : (option.transfer_mode === 'optional' && input.transfer_requested === true && transferPriceUsdCash > 0);
     const paxCash = input.adults + input.children;
-    const transferSubtotalCash = (option.transfer_mode === 'optional' && transferRequestedCash)
-      ? Math.round(transferPriceUsdCash * paxCash * 100) / 100
+    const transferQtyCash = option.transfer_mode === 'included'
+      ? paxCash
+      : option.transfer_mode === 'optional'
+        ? Math.max(0, Math.min(input.transfer_qty ?? 0, paxCash))
+        : 0;
+    const transferSubtotalCash = option.transfer_mode === 'optional'
+      ? Math.round(transferPriceUsdCash * transferQtyCash * 100) / 100
       : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash;
 
@@ -678,7 +684,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         netTotalUsdCash = Math.round((
           input.adults * netAdultCash
           + input.children * (netChildCash ?? netAdultCash)
-          + (option.transfer_mode === 'optional' && transferRequestedCash && netTransferCash != null ? netTransferCash * paxCash : 0)
+          + (option.transfer_mode === 'optional' && netTransferCash != null ? netTransferCash * transferQtyCash : 0)
         ) * 100) / 100;
       }
     } else {
@@ -689,7 +695,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         const netTotalArs = Math.round((
           input.adults * netAdultArsCash
           + input.children * (netChildArsCash ?? netAdultArsCash)
-          + (option.transfer_mode === 'optional' && transferRequestedCash && netTransferArsCash != null ? netTransferArsCash * paxCash : 0)
+          + (option.transfer_mode === 'optional' && netTransferArsCash != null ? netTransferArsCash * transferQtyCash : 0)
         ) * 100) / 100;
         netTotalUsdCash = Math.round((netTotalArs / rate) * 100) / 100;
       }
@@ -721,9 +727,9 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         unit_price_adult_usd: priceAdult,
         unit_price_child_usd: option.price_child_usd != null ? priceChild : null,
         subtotal_usd: subtotalUsd,
-        transfer_requested: transferRequestedCash,
+        transfer_qty: transferQtyCash,
         transfer_hotel: input.transfer_hotel ?? null,
-        transfer_room: (transferRequestedCash && input.transfer_room) ? input.transfer_room : null,
+        transfer_room: (transferQtyCash > 0 && input.transfer_room) ? input.transfer_room : null,
         net_total_usd: netTotalUsdCash,
       },
       total_usd: subtotalUsd,

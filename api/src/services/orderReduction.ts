@@ -10,7 +10,7 @@ export interface OrderReductionSnapshot {
   unitPriceAdultUsd: number;
   unitPriceChildUsd: number | null;
   subtotalUsd: number;         // total congelado del item (entradas + traslado)
-  transferRequested: boolean;
+  transferQty: number;         // cuántos de los orig pax tenían traslado
   totalArs: number;            // ARS realmente cobrado por la orden
   exchangeRateUsed: number;
   commissionPercent: number | null; // % del vendedor (null si no hay atribución)
@@ -19,7 +19,7 @@ export interface OrderReductionSnapshot {
 export interface ReductionTarget {
   adults: number;
   children: number;
-  transferRequested: boolean;
+  transferQty: number;
 }
 
 export interface ReductionResult {
@@ -31,12 +31,15 @@ export interface ReductionResult {
   refundArs: number;
   newCommissionUsd: number | null;
   newCommissionArs: number | null;
+  // Puede venir recortado respecto a target.transferQty si la nueva cantidad de
+  // pax quedó por debajo — el caller debe persistir ESTE valor, no target.transferQty.
+  newTransferQty: number;
 }
 
 const fail = (error: string): ReductionResult => ({
   ok: false, error,
   newSubtotalUsd: 0, newTotalArs: 0, refundUsd: 0, refundArs: 0,
-  newCommissionUsd: null, newCommissionArs: null,
+  newCommissionUsd: null, newCommissionArs: null, newTransferQty: 0,
 });
 
 /**
@@ -49,15 +52,15 @@ export function computeOrderReduction(
   snap: OrderReductionSnapshot,
   target: ReductionTarget,
 ): ReductionResult {
-  if (!Number.isInteger(target.adults) || !Number.isInteger(target.children)) {
+  if (!Number.isInteger(target.adults) || !Number.isInteger(target.children) || !Number.isInteger(target.transferQty)) {
     return fail('Cantidades inválidas.');
   }
   if (target.adults < 1) return fail('La reserva debe conservar al menos 1 adulto.');
   if (target.adults > snap.origAdults || target.children > snap.origChildren) {
     return fail('No se puede aumentar la reserva. Para agregar pasajeros, cancelá y creá una nueva.');
   }
-  if (target.transferRequested && !snap.transferRequested) {
-    return fail('No se puede agregar traslado. Para sumarlo, cancelá y creá una nueva reserva.');
+  if (target.transferQty > snap.transferQty) {
+    return fail('No se puede aumentar el traslado. Para sumarlo, cancelá y creá una nueva reserva.');
   }
 
   const unitAdult = snap.unitPriceAdultUsd;
@@ -66,12 +69,15 @@ export function computeOrderReduction(
   // Porción de traslado = lo que se cobró de más por encima de las entradas.
   const ticketsPortion = round2(snap.origAdults * unitAdult + snap.origChildren * unitChild);
   const transferPortion = Math.max(0, round2(snap.subtotalUsd - ticketsPortion));
-  const origPax = snap.origAdults + snap.origChildren;
-  const transferPerPax = (snap.transferRequested && origPax > 0) ? transferPortion / origPax : 0;
+  const transferPerPax = snap.transferQty > 0 ? transferPortion / snap.transferQty : 0;
 
   const newPax = target.adults + target.children;
+  // Recorte defensivo: si la nueva cantidad de pax queda por debajo del traslado
+  // pedido, el traslado se ajusta solo al nuevo total (no puede haber más pax con
+  // traslado que pax totales).
+  const clampedTransferQty = Math.min(target.transferQty, newPax);
   const newTickets = round2(target.adults * unitAdult + target.children * unitChild);
-  const newTransferPortion = target.transferRequested ? round2(transferPerPax * newPax) : 0;
+  const newTransferPortion = round2(transferPerPax * clampedTransferQty);
   const newSubtotalUsd = round2(newTickets + newTransferPortion);
 
   const refundUsd = round2(snap.subtotalUsd - newSubtotalUsd);
@@ -100,5 +106,6 @@ export function computeOrderReduction(
     refundArs,
     newCommissionUsd,
     newCommissionArs,
+    newTransferQty: clampedTransferQty,
   };
 }

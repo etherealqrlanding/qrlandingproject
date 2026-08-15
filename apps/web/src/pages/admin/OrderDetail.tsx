@@ -61,7 +61,7 @@ interface OrderFull {
     unit_price_adult_usd: string;
     unit_price_child_usd: string | null;
     subtotal_usd: string;
-    transfer_requested: boolean;
+    transfer_qty: number;
     transfer_hotel: string | null;
     transfer_room: string | null;
   }>;
@@ -387,9 +387,13 @@ export default function OrderDetail() {
                 <Row label="Menores">{item.children} × USD {item.unit_price_child_usd ?? 0}</Row>
               )}
               <Row label="Subtotal" highlight full>USD {item.subtotal_usd}</Row>
-              {item.transfer_requested && (
+              {item.transfer_qty > 0 && (
                 <>
-                  <Row label="Traslado">Sí</Row>
+                  <Row label="Traslado">
+                    {item.transfer_qty >= item.adults + item.children
+                      ? 'Todos'
+                      : `${item.transfer_qty} de ${item.adults + item.children} pasajeros`}
+                  </Row>
                   {item.transfer_hotel && <Row label="Hotel">{item.transfer_hotel}</Row>}
                   {item.transfer_room && <Row label="Habitación">{item.transfer_room}</Row>}
                 </>
