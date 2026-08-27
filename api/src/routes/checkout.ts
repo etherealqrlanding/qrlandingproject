@@ -74,6 +74,9 @@ const createCheckoutSchema = z.object({
   transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  // Infantes (bebés): nunca pagan tarifa de entrada, no cuentan para el cupo del
+  // día. Solo pueden generar cargo de traslado (ver infant_transfer_chargeable).
+  infants: z.number().int().min(0).max(20).optional(),
   // El check "Acepto los Términos y Condiciones" del checkout es obligatorio — z.literal(true)
   // rechaza cualquier otro valor (false, ausente, etc.), no solo lo marca opcional.
   terms_accepted: z.literal(true, {
@@ -119,6 +122,7 @@ async function prepareCheckoutHold(
     net_price_adult_usd: string | null; net_price_child_usd: string | null;
     transfer_mode: 'none' | 'optional' | 'included';
     transfer_price_usd: string; net_transfer_price_usd: string | null;
+    infant_transfer_chargeable: boolean;
     net_price_currency: string;
     net_price_adult_ars: string | null; net_price_child_ars: string | null;
     net_transfer_price_ars: string | null;
@@ -136,6 +140,7 @@ async function prepareCheckoutHold(
             o.transfer_mode,
             o.transfer_price_usd::text       AS transfer_price_usd,
             o.net_transfer_price_usd::text   AS net_transfer_price_usd,
+            o.infant_transfer_chargeable,
             o.net_price_currency,
             o.net_price_adult_ars::text      AS net_price_adult_ars,
             o.net_price_child_ars::text      AS net_price_child_ars,
@@ -200,7 +205,13 @@ async function prepareCheckoutHold(
   const transferSubtotal = option.transfer_mode === 'optional'
     ? Math.round(transferPriceUsd * transferQty * 100) / 100
     : 0;
-  const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
+  // Infantes: nunca pagan tarifa de entrada. Solo generan cargo de traslado si el
+  // tier lo tiene habilitado Y la familia está usando traslado en esta reserva
+  // (transferQty > 0) — automático, no hay selección manual de "cuántos infantes".
+  const infants = input.infants ?? 0;
+  const infantTransferApplies = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQty > 0;
+  const infantTransferUsd = infantTransferApplies ? Math.round(transferPriceUsd * infants * 100) / 100 : 0;
+  const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal + infantTransferUsd;
 
   // 4) Tipo de cambio (para totales en ARS y netos en ARS)
   const rate = await getExchangeRate();
@@ -217,6 +228,7 @@ async function prepareCheckoutHold(
       netTotalUsd = Math.round((
         input.adults * netAdult + input.children * (netChild ?? netAdult)
         + (option.transfer_mode === 'optional' && netTransfer != null ? netTransfer * transferQty : 0)
+        + (infantTransferApplies && netTransfer != null ? netTransfer * infants : 0)
       ) * 100) / 100;
     }
   } else {
@@ -227,6 +239,7 @@ async function prepareCheckoutHold(
       const netTotalArs = Math.round((
         input.adults * netAdultArs + input.children * (netChildArs ?? netAdultArs)
         + (option.transfer_mode === 'optional' && netTransferArs != null ? netTransferArs * transferQty : 0)
+        + (infantTransferApplies && netTransferArs != null ? netTransferArs * infants : 0)
       ) * 100) / 100;
       netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
     }
@@ -256,6 +269,8 @@ async function prepareCheckoutHold(
         transfer_qty: transferQty,
         transfer_hotel: input.transfer_hotel ?? null,
         transfer_room: (transferQty > 0 && input.transfer_room) ? input.transfer_room : null,
+        infants,
+        infant_transfer_usd: infantTransferUsd,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -586,6 +601,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
       transfer_price_usd: string; net_transfer_price_usd: string | null;
+      infant_transfer_chargeable: boolean;
       net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
       net_transfer_price_ars: string | null;
@@ -603,6 +619,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
               o.transfer_mode,
               o.transfer_price_usd::text     AS transfer_price_usd,
               o.net_transfer_price_usd::text AS net_transfer_price_usd,
+              o.infant_transfer_chargeable,
               o.net_price_currency,
               o.net_price_adult_ars::text    AS net_price_adult_ars,
               o.net_price_child_ars::text    AS net_price_child_ars,
@@ -668,7 +685,10 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
     const transferSubtotalCash = option.transfer_mode === 'optional'
       ? Math.round(transferPriceUsdCash * transferQtyCash * 100) / 100
       : 0;
-    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash;
+    const infantsCash = input.infants ?? 0;
+    const infantTransferAppliesCash = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQtyCash > 0;
+    const infantTransferUsdCash = infantTransferAppliesCash ? Math.round(transferPriceUsdCash * infantsCash * 100) / 100 : 0;
+    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash + infantTransferUsdCash;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
@@ -685,6 +705,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
           input.adults * netAdultCash
           + input.children * (netChildCash ?? netAdultCash)
           + (option.transfer_mode === 'optional' && netTransferCash != null ? netTransferCash * transferQtyCash : 0)
+          + (infantTransferAppliesCash && netTransferCash != null ? netTransferCash * infantsCash : 0)
         ) * 100) / 100;
       }
     } else {
@@ -696,6 +717,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
           input.adults * netAdultArsCash
           + input.children * (netChildArsCash ?? netAdultArsCash)
           + (option.transfer_mode === 'optional' && netTransferArsCash != null ? netTransferArsCash * transferQtyCash : 0)
+          + (infantTransferAppliesCash && netTransferArsCash != null ? netTransferArsCash * infantsCash : 0)
         ) * 100) / 100;
         netTotalUsdCash = Math.round((netTotalArs / rate) * 100) / 100;
       }
@@ -730,6 +752,8 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
         transfer_qty: transferQtyCash,
         transfer_hotel: input.transfer_hotel ?? null,
         transfer_room: (transferQtyCash > 0 && input.transfer_room) ? input.transfer_room : null,
+        infants: infantsCash,
+        infant_transfer_usd: infantTransferUsdCash,
         net_total_usd: netTotalUsdCash,
       },
       total_usd: subtotalUsd,

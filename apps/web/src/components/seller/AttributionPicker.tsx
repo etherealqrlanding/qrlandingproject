@@ -31,13 +31,14 @@ interface Props {
 }
 
 // Fila editable "¿quién de mi equipo cerró esta venta?" dentro del detalle de una
-// orden — permite tag-ear (o corregir) después de creada. Quién autoriza depende
-// del medio de pago: en efectivo, la persona que toma la orden entra su PROPIO PIN
-// (igual que al cobrar); en Mercado Pago/PIX — o al limpiar la atribución, sea cual
-// sea el medio — nadie se identificó en persona, así que lo autoriza el PIN de
-// administrador del vendedor.
+// orden — permite tag-ear (o corregir) después de creada. La reasignación directa
+// (este select) es inmediata, sin aprobación de nadie más, así que solo la autoriza
+// el PIN de ADMINISTRADOR del vendedor — nunca el PIN propio de un sub-vendedor, ni
+// siquiera en efectivo. (El auto-reclamo "¿es tuya?" de más abajo es distinto: un
+// sub-vendedor SÍ puede pedirlo con su propio PIN, pero queda pendiente hasta que el
+// administrador lo apruebe — ver requestOrderAttribution.)
 export default function AttributionPicker({
-  publicId, currentName, members, paymentMethod, unlockedMember, onMemberValidated, unlockedAdminPin, onAdminValidated, onSaved,
+  publicId, currentName, members, paymentMethod: _paymentMethod, unlockedMember: _unlockedMember, onMemberValidated: _onMemberValidated, unlockedAdminPin, onAdminValidated, onSaved,
   pendingRequestMemberName, onClaimed, pinRequired = true,
 }: Props) {
   const [editing, setEditing] = useState(false);
@@ -50,16 +51,11 @@ export default function AttributionPicker({
   const [pin, setPin] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // En efectivo, por defecto es un auto-tag (la persona elegida entra su propio PIN).
-  // El admin puede forzar el PIN de administrador en su lugar — por ejemplo para
-  // corregir una venta que no cerró la persona que quedó marcada — y esa corrección
-  // queda anotada en el historial de la orden como hecha por el administrador.
-  const [useAdminOverride, setUseAdminOverride] = useState(false);
 
-  const isCash = paymentMethod === 'cash';
-  // Ya identificado para esta orden de una forma que alcanza para esta acción: en
-  // efectivo, el auto-tag propio también cuenta; si no, solo sirve el de admin.
-  const alreadyIdentified = unlockedAdminPin != null || (isCash && unlockedMember != null);
+  // Ya identificado para esta orden de una forma que alcanza para reasignar: solo el
+  // PIN de administrador cuenta acá (a diferencia de otras acciones de la orden, que
+  // sí aceptan la identificación de un sub-vendedor).
+  const alreadyIdentified = unlockedAdminPin != null;
 
   if (members.length === 0 && !currentName) return null;
 
@@ -86,16 +82,14 @@ export default function AttributionPicker({
     }
   };
 
-  const needsAdminPin = paymentMethod !== 'cash' || memberId === '' || useAdminOverride;
-  const canSkipMemberPin = !needsAdminPin && unlockedMember != null && memberId === unlockedMember.memberId;
-  const canSkipAdminPin = needsAdminPin && unlockedAdminPin != null;
-  const canSkipPin = canSkipMemberPin || canSkipAdminPin;
+  // Reasignar es siempre admin-only (ver comentario de arriba) — el único atajo
+  // posible es si ya se identificó como admin antes en esta misma orden.
+  const canSkipPin = unlockedAdminPin != null;
 
   const resetForm = () => {
     setEditing(false);
     setPin('');
     setMemberId('');
-    setUseAdminOverride(false);
     setError(null);
   };
 
@@ -115,16 +109,15 @@ export default function AttributionPicker({
       }
       return;
     }
-    const effectivePin = canSkipMemberPin ? unlockedMember!.pin : canSkipAdminPin ? unlockedAdminPin! : pin;
+    const effectivePin = canSkipPin ? unlockedAdminPin! : pin;
     if (!/^\d{4,6}$/.test(effectivePin)) {
-      setError(needsAdminPin ? 'Ingresá el PIN de administrador (4-6 dígitos).' : 'Ingresá tu PIN (4-6 dígitos).');
+      setError('Ingresá el PIN de administrador (4-6 dígitos).');
       return;
     }
     setSaving(true);
     try {
-      await sellerApi.setOrderAttribution(publicId, memberId === '' ? null : memberId, effectivePin, needsAdminPin ? 'admin' : 'member');
-      if (!needsAdminPin && !canSkipMemberPin) onMemberValidated?.(memberId, effectivePin);
-      if (needsAdminPin && !canSkipAdminPin) onAdminValidated?.(effectivePin);
+      await sellerApi.setOrderAttribution(publicId, memberId === '' ? null : memberId, effectivePin);
+      if (!canSkipPin) onAdminValidated?.(effectivePin);
       resetForm();
       onSaved();
     } catch (err) {
@@ -223,9 +216,7 @@ export default function AttributionPicker({
       <span className="text-xs text-cream/50">Atendido por</span>
       {pinRequired && !canSkipPin && (
         <span className="text-[10px] text-cream/30">
-          {needsAdminPin
-            ? 'Esta venta no tuvo a nadie identificándose en el momento, así que la asigna quien tiene el PIN de administrador.'
-            : 'Confirmá con tu propio PIN — no es una contraseña, solo queda registrado quién cerró la venta.'}
+          Reasignar requiere el PIN de administrador.
         </span>
       )}
       <div className="flex flex-wrap items-center gap-1.5">
@@ -243,7 +234,7 @@ export default function AttributionPicker({
           <input
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder={needsAdminPin ? 'PIN de administrador' : 'Tu PIN'}
+            placeholder="PIN de administrador"
             inputMode="numeric"
             className="w-28 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs font-mono text-cream placeholder:text-cream/25 focus:outline-none focus:border-gold/40"
           />
@@ -264,15 +255,6 @@ export default function AttributionPicker({
           ✕
         </button>
       </div>
-      {pinRequired && paymentMethod === 'cash' && memberId !== '' && !canSkipPin && (
-        <button
-          type="button"
-          onClick={() => setUseAdminOverride((v) => !v)}
-          className="self-start text-[10px] text-cream/40 hover:text-cream/70 transition underline underline-offset-2"
-        >
-          {useAdminOverride ? 'usar el PIN de esa persona' : '¿sos admin y esa persona no está? usar PIN de administrador'}
-        </button>
-      )}
       {error && <p className="text-[10px] text-bordeaux-light">⚠ {error}</p>}
     </div>
   );

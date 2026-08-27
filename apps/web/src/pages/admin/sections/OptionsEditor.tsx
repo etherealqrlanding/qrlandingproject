@@ -29,6 +29,7 @@ const blankOption: Partial<AdminOption> = {
   net_price_adult_usd: null, net_price_child_usd: null, net_transfer_price_usd: null,
   net_price_adult_ars: null, net_price_child_ars: null, net_transfer_price_ars: null,
   has_dinner: false, transfer_mode: 'none', transfer_price_usd: 0,
+  infant_transfer_chargeable: false,
   available_days: [1, 2, 3, 4, 5, 6, 7],
   pickup_window_es: '', pickup_window_en: '',
   dinner_time_es: '', dinner_time_en: '',
@@ -531,6 +532,15 @@ function OptionFormFields({ option, onChange, productAcceptsChildren }: {
                 onChange={(e) => update('transfer_price_usd', Number(e.target.value))}
                 className="input w-28 text-sm"
               />
+            </label>
+          )}
+          {option.transfer_mode === 'optional' && (
+            <label className="flex items-center gap-2 pt-1">
+              <Checkbox
+                checked={option.infant_transfer_chargeable ?? false}
+                onChange={(checked) => update('infant_transfer_chargeable', checked)}
+              />
+              <span className="text-sm text-cream/80">Cobrar traslado a infantes</span>
             </label>
           )}
         </div>

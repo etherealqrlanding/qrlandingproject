@@ -182,6 +182,8 @@ export interface AdminHoldRow {
   transfer_qty: number;
   transfer_hotel: string | null;
   transfer_room: string | null;
+  infants: number;
+  infant_transfer_usd: number;
   total_usd: number;
   total_ars: number;
   exchange_rate_used: number;
@@ -241,6 +243,8 @@ export async function listActiveHoldsForAdmin(filters?: {
        ) AS transfer_qty,
        h.payload->'item'->>'transfer_hotel' AS transfer_hotel,
        h.payload->'item'->>'transfer_room' AS transfer_room,
+       COALESCE((h.payload->'item'->>'infants')::int, 0) AS infants,
+       COALESCE((h.payload->'item'->>'infant_transfer_usd')::float, 0) AS infant_transfer_usd,
        (h.payload->>'total_usd')::float AS total_usd,
        (h.payload->>'total_ars')::float AS total_ars,
        (h.payload->>'exchange_rate_used')::float AS exchange_rate_used,

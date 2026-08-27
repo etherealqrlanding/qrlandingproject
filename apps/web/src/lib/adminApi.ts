@@ -206,6 +206,7 @@ export interface AdminOption {
   has_dinner: boolean;
   transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
+  infant_transfer_chargeable: boolean;
   net_transfer_price_usd: number | string | null;
   net_price_currency: 'USD' | 'ARS' | null;
   net_price_adult_ars: number | string | null;
@@ -430,6 +431,7 @@ export interface AdminBookingInput {
   service_date: string;
   adults: number;
   children: number;
+  infants?: number;
   customer: {
     name: string;
     email: string;
@@ -852,12 +854,12 @@ export const adminApi = {
       ),
     // Modificar reserva — reducir (reintegro MP o devolución en efectivo) / agregar
     // (cobro en efectivo o link incremental de MP).
-    modifyMp: (publicId: string, body: { adults: number; children: number; transfer_qty: number; reason?: string; notify_customer?: boolean; reschedule_from?: string; reschedule_to?: string }) =>
+    modifyMp: (publicId: string, body: { adults: number; children: number; transfer_qty: number; infants: number; reason?: string; notify_customer?: boolean; reschedule_from?: string; reschedule_to?: string }) =>
       request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
         `/api/admin/orders/${encodeURIComponent(publicId)}/modify`,
         { method: 'POST', body: JSON.stringify(body) },
       ),
-    reduceCash: (publicId: string, body: { adults: number; children: number; transfer_qty: number; reason?: string; notify_customer?: boolean; reschedule_from?: string; reschedule_to?: string }) =>
+    reduceCash: (publicId: string, body: { adults: number; children: number; transfer_qty: number; infants: number; reason?: string; notify_customer?: boolean; reschedule_from?: string; reschedule_to?: string }) =>
       request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
         `/api/admin/orders/${encodeURIComponent(publicId)}/reduce-cash`,
         { method: 'POST', body: JSON.stringify(body) },

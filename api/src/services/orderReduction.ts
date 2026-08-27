@@ -9,8 +9,10 @@ export interface OrderReductionSnapshot {
   origChildren: number;
   unitPriceAdultUsd: number;
   unitPriceChildUsd: number | null;
-  subtotalUsd: number;         // total congelado del item (entradas + traslado)
+  subtotalUsd: number;         // total congelado del item (entradas + traslado + traslado de infantes)
   transferQty: number;         // cuántos de los orig pax tenían traslado
+  origInfants: number;
+  infantTransferUsd: number;   // monto congelado (no por-unidad) del traslado de infantes
   totalArs: number;            // ARS realmente cobrado por la orden
   exchangeRateUsed: number;
   commissionPercent: number | null; // % del vendedor (null si no hay atribución)
@@ -20,6 +22,7 @@ export interface ReductionTarget {
   adults: number;
   children: number;
   transferQty: number;
+  infants: number;
 }
 
 export interface ReductionResult {
@@ -34,12 +37,18 @@ export interface ReductionResult {
   // Puede venir recortado respecto a target.transferQty si la nueva cantidad de
   // pax quedó por debajo — el caller debe persistir ESTE valor, no target.transferQty.
   newTransferQty: number;
+  // Infantes son reduce-only, sin recorte automático (no dependen del total de pax) —
+  // el caller persiste target.infants tal cual, pero se expone acá igual para que
+  // ningún caller tenga que asumirlo por su cuenta.
+  newInfants: number;
+  newInfantTransferUsd: number;
 }
 
 const fail = (error: string): ReductionResult => ({
   ok: false, error,
   newSubtotalUsd: 0, newTotalArs: 0, refundUsd: 0, refundArs: 0,
   newCommissionUsd: null, newCommissionArs: null, newTransferQty: 0,
+  newInfants: 0, newInfantTransferUsd: 0,
 });
 
 /**
@@ -52,7 +61,10 @@ export function computeOrderReduction(
   snap: OrderReductionSnapshot,
   target: ReductionTarget,
 ): ReductionResult {
-  if (!Number.isInteger(target.adults) || !Number.isInteger(target.children) || !Number.isInteger(target.transferQty)) {
+  if (
+    !Number.isInteger(target.adults) || !Number.isInteger(target.children)
+    || !Number.isInteger(target.transferQty) || !Number.isInteger(target.infants)
+  ) {
     return fail('Cantidades inválidas.');
   }
   if (target.adults < 1) return fail('La reserva debe conservar al menos 1 adulto.');
@@ -62,23 +74,30 @@ export function computeOrderReduction(
   if (target.transferQty > snap.transferQty) {
     return fail('No se puede aumentar el traslado. Para sumarlo, cancelá y creá una nueva reserva.');
   }
+  if (target.infants > snap.origInfants) {
+    return fail('No se pueden aumentar los infantes. Para sumarlos, cancelá y creá una nueva reserva.');
+  }
 
   const unitAdult = snap.unitPriceAdultUsd;
   const unitChild = snap.unitPriceChildUsd ?? 0;
 
-  // Porción de traslado = lo que se cobró de más por encima de las entradas.
+  // Porción de traslado = lo que se cobró de más por encima de las entradas, MENOS
+  // la porción de infantes (que se prorratea aparte, no comparte pool con transferQty).
   const ticketsPortion = round2(snap.origAdults * unitAdult + snap.origChildren * unitChild);
-  const transferPortion = Math.max(0, round2(snap.subtotalUsd - ticketsPortion));
+  const transferAndInfantPortion = Math.max(0, round2(snap.subtotalUsd - ticketsPortion));
+  const transferPortion = Math.max(0, round2(transferAndInfantPortion - snap.infantTransferUsd));
   const transferPerPax = snap.transferQty > 0 ? transferPortion / snap.transferQty : 0;
+  const infantTransferPerInfant = snap.origInfants > 0 ? snap.infantTransferUsd / snap.origInfants : 0;
 
   const newPax = target.adults + target.children;
   // Recorte defensivo: si la nueva cantidad de pax queda por debajo del traslado
   // pedido, el traslado se ajusta solo al nuevo total (no puede haber más pax con
-  // traslado que pax totales).
+  // traslado que pax totales). Infantes no depende del total de pax, no se recorta acá.
   const clampedTransferQty = Math.min(target.transferQty, newPax);
   const newTickets = round2(target.adults * unitAdult + target.children * unitChild);
   const newTransferPortion = round2(transferPerPax * clampedTransferQty);
-  const newSubtotalUsd = round2(newTickets + newTransferPortion);
+  const newInfantTransferUsd = round2(infantTransferPerInfant * target.infants);
+  const newSubtotalUsd = round2(newTickets + newTransferPortion + newInfantTransferUsd);
 
   const refundUsd = round2(snap.subtotalUsd - newSubtotalUsd);
   if (refundUsd <= 0) {
@@ -107,5 +126,7 @@ export function computeOrderReduction(
     newCommissionUsd,
     newCommissionArs,
     newTransferQty: clampedTransferQty,
+    newInfants: target.infants,
+    newInfantTransferUsd,
   };
 }

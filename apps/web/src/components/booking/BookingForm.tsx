@@ -16,6 +16,7 @@ import { computeBookingTotals } from '../../lib/pricing';
 export interface BookingFormTotals {
   ticketsUsd: number;
   transferUsd: number;
+  infantTransferUsd: number;
   totalUsd: number;
 }
 
@@ -87,6 +88,7 @@ export default function BookingForm({
     // Si la casa no acepta menores, arranca en 0 sin importar lo que venga precargado —
     // el campo queda oculto y no tendría cómo editarse.
     children: productAcceptsChildren ? (initialChildren ?? 0) : 0,
+    infants: 0,
   });
   // Solo para validar que no haya un typo en el mail del pasajero — no se envía al backend.
   const [emailConfirm, setEmailConfirm] = useState('');
@@ -148,9 +150,9 @@ export default function BookingForm({
     : option.transfer_mode === 'optional' ? transferQtyOptional
     : 0;
 
-  const { ticketsUsd, transferUsd, totalUsd } = useMemo(
-    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren),
-    [option, form.adults, form.children, transferQty, supportsChildren],
+  const { ticketsUsd, transferUsd, infantTransferUsd, totalUsd } = useMemo(
+    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren, form.infants),
+    [option, form.adults, form.children, transferQty, supportsChildren, form.infants],
   );
 
   const updateField = <K extends keyof typeof form>(field: K, value: typeof form[K]) =>
@@ -210,6 +212,7 @@ export default function BookingForm({
       service_date: form.service_date,
       adults: form.adults,
       children: form.children,
+      infants: form.infants,
       customer: {
         name: form.name.trim(),
         email: form.email.trim().toLowerCase(),
@@ -220,7 +223,7 @@ export default function BookingForm({
       transfer_qty: transferQty,
       transfer_hotel: transferQty > 0 ? (transferHotel || null) : null,
       transfer_room: transferQty > 0 ? (transferRoom.trim() || null) : null,
-    }, { ticketsUsd, transferUsd, totalUsd });
+    }, { ticketsUsd, transferUsd, infantTransferUsd, totalUsd });
   };
 
   const error = localError ?? externalError ?? null;
@@ -317,7 +320,7 @@ export default function BookingForm({
               </p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={`grid gap-3 ${supportsChildren ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
             <Field label="Adultos" required>
               <NumberStepper
                 value={form.adults} min={1} max={maxAdults}
@@ -334,6 +337,12 @@ export default function BookingForm({
                 />
               </Field>
             )}
+            <Field label="Infantes">
+              <NumberStepper
+                value={form.infants} min={0} max={20}
+                onChange={(v) => updateField('infants', v)}
+              />
+            </Field>
           </div>
         </div>
 
@@ -349,6 +358,12 @@ export default function BookingForm({
                 <span className="text-cream/60">Traslado ({form.adults + form.children} pax)</span>
                 <span className="text-cream/80">+USD {transferUsd}</span>
               </div>
+              {infantTransferUsd > 0 && (
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-cream/60">Traslado (infantes)</span>
+                  <span className="text-cream/80">+USD {infantTransferUsd}</span>
+                </div>
+              )}
             </div>
           )}
           <div className="flex items-baseline justify-between">

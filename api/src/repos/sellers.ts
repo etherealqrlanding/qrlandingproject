@@ -306,6 +306,7 @@ export async function listSellerOrders(
        oi.unit_price_child_usd::float AS unit_price_child_usd,
        oi.subtotal_usd::float AS subtotal_usd,
        oi.transfer_qty,
+       oi.infants, oi.infant_transfer_usd::float AS infant_transfer_usd,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
        oi.option_id,
        oi.product_name_snapshot AS product_name,

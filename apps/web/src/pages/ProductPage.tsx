@@ -44,6 +44,7 @@ interface SelectionPreview {
   adults: number;
   children: number;
   transferQty: number;
+  infants: number;
   date?: string;
   // true si la cantidad de pasajeros elegida ya no entra en el cupo de la fecha
   // (la propia OptionCard se auto-corrige apenas puede, pero mientras la corrección
@@ -79,12 +80,12 @@ export default function ProductPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>('mercadopago');
-  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number; transferQty?: number }>({});
+  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number; transferQty?: number; infants?: number }>({});
   // Espejo en vivo de lo que el usuario va marcando en la card de la opción
   // seleccionada (adultos/menores/traslado/fecha) — lo consume "Tu elección" para
   // mostrar el mismo preview sincronizado, y los 3 puntos que abren el checkout
   // (acá, la barra fija mobile) para precargarlo con exactamente lo mismo que se ve.
-  const [selectionPreview, setSelectionPreview] = useState<SelectionPreview>({ adults: 1, children: 0, transferQty: 0, capacityBlocked: false });
+  const [selectionPreview, setSelectionPreview] = useState<SelectionPreview>({ adults: 1, children: 0, transferQty: 0, infants: 0, capacityBlocked: false });
   const [sellerInfo, setSellerInfo] = useState<SellerPublicInfo | null>(null);
   // Si la cuenta no tiene tarjeta habilitada (sellers.card_enabled = false), el único
   // medio que le queda es pago manual -- evita abrir el checkout con Mercado Pago
@@ -234,7 +235,7 @@ export default function ProductPage() {
                   onBook={(pax) => {
                     setSelectedOptionId(opt.id);
                     setCheckoutPaymentMethod(defaultPaymentMethod);
-                    setCheckoutPrefill({ date: pax.date, adults: pax.adults, children: pax.children, transferQty: pax.transferQty });
+                    setCheckoutPrefill({ date: pax.date, adults: pax.adults, children: pax.children, transferQty: pax.transferQty, infants: pax.infants });
                     setCheckoutOpen(true);
                   }}
                   lang={lang}
@@ -275,6 +276,7 @@ export default function ProductPage() {
                 adults: selectionPreview.adults,
                 children: selectionPreview.children,
                 transferQty: selectionPreview.transferQty,
+                infants: selectionPreview.infants,
               });
               setCheckoutOpen(true);
             }}
@@ -296,6 +298,7 @@ export default function ProductPage() {
               const { totalUsd } = computeBookingTotals(
                 selectedOption, selectionPreview.adults, selectionPreview.children, selectionPreview.transferQty,
                 product.accepts_children && selectedOption.price_child_usd != null,
+                selectionPreview.infants,
               );
               return (
                 <p className="font-display text-lg text-gold leading-tight">
@@ -319,6 +322,7 @@ export default function ProductPage() {
                 adults: selectionPreview.adults,
                 children: selectionPreview.children,
                 transferQty: selectionPreview.transferQty,
+                infants: selectionPreview.infants,
               });
               setCheckoutOpen(true);
             }}
@@ -341,6 +345,7 @@ export default function ProductPage() {
           initialAdults={checkoutPrefill.adults}
           initialChildren={checkoutPrefill.children}
           initialTransferQty={checkoutPrefill.transferQty}
+          initialInfants={checkoutPrefill.infants}
         />
       )}
     </article>
@@ -369,7 +374,7 @@ function OptionCard({
   // pero solo mientras esté seleccionada, para que "Tu elección" y el checkout
   // reflejen siempre exactamente lo que se ve acá.
   onPreviewChange: (preview: SelectionPreview) => void;
-  onBook: (pax: { adults: number; children: number; transferQty: number; date?: string }) => void;
+  onBook: (pax: { adults: number; children: number; transferQty: number; infants: number; date?: string }) => void;
   lang: string | undefined;
 }) {
   const { t } = useTranslation();
@@ -388,6 +393,7 @@ function OptionCard({
   // y ve el precio total recalcularse en vivo, sin tener que abrir el checkout.
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
+  const [infants, setInfants] = useState(0);
   const [transferQtyOptional, setTransferQtyOptional] = useState(0);
   const totalPax = adults + children;
   // No puede haber más pax con traslado que pax totales — se recorta solo.
@@ -398,8 +404,8 @@ function OptionCard({
     : option.transfer_mode === 'optional' ? transferQtyOptional
     : 0;
   const { totalUsd } = useMemo(
-    () => computeBookingTotals(option, adults, children, transferQty, showChildPrice),
-    [option, adults, children, transferQty, showChildPrice],
+    () => computeBookingTotals(option, adults, children, transferQty, showChildPrice, infants),
+    [option, adults, children, transferQty, showChildPrice, infants],
   );
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
 
@@ -461,8 +467,8 @@ function OptionCard({
   // refleja en vivo en "Tu elección" y queda listo para precargar el checkout —
   // incluida la primera vez que se selecciona, para que arranque ya sincronizada.
   useEffect(() => {
-    if (selected) onPreviewChange({ adults, children, transferQty, date: selectedDate, capacityBlocked: dateBlocked });
-  }, [selected, adults, children, transferQty, selectedDate, dateBlocked, onPreviewChange]);
+    if (selected) onPreviewChange({ adults, children, transferQty, infants, date: selectedDate, capacityBlocked: dateBlocked });
+  }, [selected, adults, children, transferQty, infants, selectedDate, dateBlocked, onPreviewChange]);
 
   // Al pasar a OTRO servicio se resetea esta card a sus valores por default — si no,
   // queda "colgada" con lo último que se marcó acá y confunde: el usuario podría
@@ -471,16 +477,18 @@ function OptionCard({
     if (!selected) {
       setAdults(1);
       setChildren(0);
+      setInfants(0);
       setTransferQtyOptional(0);
       setSelectedDate(undefined);
     }
   }, [selected]);
 
-  const stepperCount = 2 + (showChildPrice ? 1 : 0) + (option.transfer_mode === 'optional' ? 1 : 0);
+  const stepperCount = 3 + (showChildPrice ? 1 : 0) + (option.transfer_mode === 'optional' ? 1 : 0);
   // Siempre 2 por fila, incluso en mobile (adultos+menores en una fila, traslado+fecha
   // en la siguiente) — antes cada uno ocupaba su propia fila y el contenedor se hacía
   // demasiado alto en mobile. En pantallas más anchas se abre a 3/4 si hay lugar.
-  const stepperGridClass = stepperCount === 4 ? 'grid-cols-2 lg:grid-cols-4'
+  const stepperGridClass = stepperCount === 5 ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
+    : stepperCount === 4 ? 'grid-cols-2 lg:grid-cols-4'
     : stepperCount === 3 ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2';
 
   return (
@@ -559,6 +567,10 @@ function OptionCard({
               decrementLabel="menos" incrementLabel="más"
             />
           )}
+          <NumberStepper
+            bare label={t('checkout.infants')} value={infants} min={0} max={20} onChange={setInfants}
+            decrementLabel="menos" incrementLabel="más"
+          />
           {option.transfer_mode === 'optional' && (
             <NumberStepper
               bare label={t('checkout.transfer')} value={transferQtyOptional} min={0} max={totalPax} onChange={setTransferQtyOptional}
@@ -689,7 +701,7 @@ function OptionCard({
         <button
           type="button"
           disabled={dateBlocked}
-          onClick={(e) => { e.stopPropagation(); onBook({ adults, children, transferQty, date: selectedDate }); }}
+          onClick={(e) => { e.stopPropagation(); onBook({ adults, children, transferQty, infants, date: selectedDate }); }}
           className="w-full btn-primary text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {t('product.book_option')}
@@ -871,7 +883,7 @@ function BookingSummary({
 
   // Mismo cálculo que la card de opciones — lo que se ve acá es exactamente lo que
   // se va a cobrar si se confirma con estos botones.
-  const { totalUsd } = computeBookingTotals(option, preview.adults, preview.children, preview.transferQty, showChildPrice);
+  const { totalUsd } = computeBookingTotals(option, preview.adults, preview.children, preview.transferQty, showChildPrice, preview.infants);
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
 
   return (
@@ -904,6 +916,10 @@ function BookingSummary({
             <span className="text-cream/90 font-medium">{preview.children}</span>
           </div>
         )}
+        <div className="flex items-center justify-between py-1.5">
+          <span className="text-cream/50">{t('checkout.infants')}</span>
+          <span className="text-cream/90 font-medium">{preview.infants}</span>
+        </div>
         {showTransferRow && (
           <div className="flex items-center justify-between py-1.5">
             <span className="text-cream/50">{t('checkout.transfer')}</span>

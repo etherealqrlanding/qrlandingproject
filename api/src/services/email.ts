@@ -149,6 +149,7 @@ export interface OrderEmailData {
   unit_price_adult_usd?: number | null;
   unit_price_child_usd?: number | null;
   transfer_qty?: number | null;
+  infants?: number | null;
   transfer_hotel?: string | null;
   pickup_window?: string | null;
   dinner_time?: string | null;
@@ -292,6 +293,9 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
     let ch = `${d.children} menor(es)`;
     if (showAmounts && d.unit_price_child_usd != null) ch += ` · ${perPaxStr(d.unit_price_child_usd, d)} c/u`;
     rows.push(emailRow('Menores', ch));
+  }
+  if (d.infants != null && d.infants > 0) {
+    rows.push(emailRow('Infantes', `${d.infants} (sin cargo de entrada)`));
   }
 
   if (d.pickup_window) rows.push(emailRow('Horario de traslado', escapeHtml(d.pickup_window)));
@@ -454,7 +458,7 @@ export const ORDER_EMAIL_SELECT = `
        oi.adults, oi.children,
        oi.unit_price_adult_usd::float AS unit_price_adult_usd,
        oi.unit_price_child_usd::float AS unit_price_child_usd,
-       oi.transfer_qty, oi.transfer_hotel,
+       oi.transfer_qty, oi.transfer_hotel, oi.infants,
        opt.pickup_window_es, opt.dinner_time_es, opt.show_time_es, opt.includes_es,
        p.address_es,
        s.id AS seller_id, s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
@@ -492,6 +496,7 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
     unit_price_adult_usd: (data.unit_price_adult_usd as number) ?? null,
     unit_price_child_usd: (data.unit_price_child_usd as number) ?? null,
     transfer_qty: (data.transfer_qty as number) ?? null,
+    infants: (data.infants as number) ?? null,
     transfer_hotel: (data.transfer_hotel as string) ?? null,
     pickup_window: (data.pickup_window_es as string) ?? null,
     dinner_time: (data.dinner_time_es as string) ?? null,
@@ -1075,7 +1080,7 @@ export async function sendOrderModifiedNotifications(
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
-    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.transfer_qty != null && orderData.transfer_qty > 0 ? ` · traslado ${orderData.transfer_qty}/${orderData.adults + orderData.children}` : ''}</strong></div>
+    <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.infants != null && orderData.infants > 0 ? ` · ${orderData.infants} inf` : ''}${orderData.transfer_qty != null && orderData.transfer_qty > 0 ? ` · traslado ${orderData.transfer_qty}/${orderData.adults + orderData.children}` : ''}</strong></div>
     ${dateChange ? `<div style="${baseStyles.row}"><span>Fecha reprogramada</span><strong>${dateChange.prevDate} → ${dateChange.newDate}</strong></div>` : ''}
     <div style="${baseStyles.row}"><span>Reintegrado</span><strong style="color:#c8a85a">ARS ${arsStr}</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>

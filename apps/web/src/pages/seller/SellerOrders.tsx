@@ -157,9 +157,10 @@ function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function paxLabel(adults: number, children: number) {
+function paxLabel(adults: number, children: number, infants = 0) {
   const parts = [`${adults} adulto${adults !== 1 ? 's' : ''}`];
   if (children > 0) parts.push(`${children} menor${children !== 1 ? 'es' : ''}`);
+  if (infants > 0) parts.push(`${infants} infante${infants !== 1 ? 's' : ''}`);
   return parts.join(' · ');
 }
 
@@ -564,6 +565,8 @@ export default function SellerOrders() {
           unit_price_child_usd: modifyOrder.unit_price_child_usd != null ? String(modifyOrder.unit_price_child_usd) : null,
           subtotal_usd: String(modifyOrder.subtotal_usd),
           transfer_qty: modifyOrder.transfer_qty,
+          infants: modifyOrder.infants,
+          infant_transfer_usd: String(modifyOrder.infant_transfer_usd),
           service_date: modifyOrder.service_date,
           option_id: modifyOrder.option_id,
           option_name_snapshot: modifyOrder.option_name,
@@ -905,7 +908,7 @@ export default function SellerOrders() {
                       <div className="flex items-center gap-2 mt-1.5 text-xs text-cream/40">
                         <span>Serv. {fmtDate(o.service_date || o.created_at)}</span>
                         <span>·</span>
-                        <span>{paxLabel(o.adults ?? 0, o.children ?? 0)}</span>
+                        <span>{paxLabel(o.adults ?? 0, o.children ?? 0, o.infants ?? 0)}</span>
                         {o.payment_method === 'cash' && <span className="text-cream/30">· Efectivo</span>}
                         {members.length > 0 && o.seller_member_name && <span className="text-gold-soft/70">· {o.seller_member_name}</span>}
                       </div>
@@ -1128,7 +1131,7 @@ export default function SellerOrders() {
                           <p className="text-cream text-[11px]">{o.product_name}</p>
                           <p className="text-[10px] text-cream/50">{o.option_name}</p>
                         </td>
-                        <td className="px-3 py-2 text-cream/70 text-[11px] whitespace-nowrap">{paxLabel(o.adults ?? 0, o.children ?? 0)}</td>
+                        <td className="px-3 py-2 text-cream/70 text-[11px] whitespace-nowrap">{paxLabel(o.adults ?? 0, o.children ?? 0, o.infants ?? 0)}</td>
                         <td className="px-3 py-2">
                           <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] whitespace-nowrap ${derivedStatus(o).cls}`}>

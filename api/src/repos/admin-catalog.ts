@@ -213,6 +213,7 @@ export interface AdminOptionInput {
   has_dinner?: boolean;
   transfer_mode?: 'none' | 'optional' | 'included';
   transfer_price_usd?: number;
+  infant_transfer_chargeable?: boolean;
   net_transfer_price_usd?: number | null;
   net_price_currency?: 'USD' | 'ARS' | null;
   net_price_adult_ars?: number | null;
@@ -242,8 +243,8 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
        pickup_window_es, pickup_window_en,
        dinner_time_es, dinner_time_en,
        show_time_es, show_time_en,
-       default_capacity_per_day, display_order, is_active
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+       default_capacity_per_day, display_order, is_active, infant_transfer_chargeable
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
      RETURNING id`,
     [
       productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
@@ -261,6 +262,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
       input.show_time_es ?? null, input.show_time_en ?? null,
       input.default_capacity_per_day ?? 80,
       input.display_order ?? 0, input.is_active ?? true,
+      input.infant_transfer_chargeable ?? false,
     ],
   );
   return rows[0].id;

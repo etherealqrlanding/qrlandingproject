@@ -43,6 +43,10 @@ export interface ProductOption {
   // (transfer_price_usd). 'included' = ya incluido en el precio, sin costo extra.
   transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
+  // Solo tiene efecto real cuando transfer_mode === 'optional' (ahí es donde
+  // transfer_price_usd tiene un valor editable para reusar). Los infantes nunca
+  // pagan tarifa de entrada; esto solo decide si además pagan el traslado.
+  infant_transfer_chargeable: boolean;
   available_days: number[];
   pickup_window_es: string | null;
   pickup_window_en: string | null;

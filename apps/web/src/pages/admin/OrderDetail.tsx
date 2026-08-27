@@ -64,6 +64,8 @@ interface OrderFull {
     transfer_qty: number;
     transfer_hotel: string | null;
     transfer_room: string | null;
+    infants: number;
+    infant_transfer_usd: string;
   }>;
   events: Array<{
     id: number;
@@ -385,6 +387,11 @@ export default function OrderDetail() {
               <Row label="Adultos">{item.adults} × USD {item.unit_price_adult_usd}</Row>
               {item.children > 0 && (
                 <Row label="Menores">{item.children} × USD {item.unit_price_child_usd ?? 0}</Row>
+              )}
+              {item.infants > 0 && (
+                <Row label="Infantes">
+                  {item.infants}{Number(item.infant_transfer_usd) > 0 ? ` (traslado USD ${item.infant_transfer_usd})` : ' (sin cargo)'}
+                </Row>
               )}
               <Row label="Subtotal" highlight full>USD {item.subtotal_usd}</Row>
               {item.transfer_qty > 0 && (

@@ -7,7 +7,7 @@ import MemberPinGate, { isMemberPinMissing } from '../seller/MemberPinGate';
 
 type MemberFields = { seller_member_id?: number; seller_member_pin?: string; admin_pin?: string };
 type ReduceBody = MemberFields & {
-  adults: number; children: number; transfer_qty: number; reason?: string; notify_customer?: boolean;
+  adults: number; children: number; transfer_qty: number; infants: number; reason?: string; notify_customer?: boolean;
   // Presente solo cuando la misma acción también reprograma la fecha: así el backend
   // manda un único email combinado en vez de uno por la reducción y otro por la fecha.
   reschedule_from?: string; reschedule_to?: string;
@@ -43,6 +43,8 @@ interface Props {
     unit_price_child_usd: string | null;
     subtotal_usd: string;
     transfer_qty: number;
+    infants: number;
+    infant_transfer_usd: string;
     service_date: string;
     option_id: number;
     option_name_snapshot: string;
@@ -78,14 +80,22 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const subtotal = Number(item.subtotal_usd);
 
   const origTransferQty = item.transfer_qty;
+  const origInfants = item.infants;
+  const infantTransferUsd = Number(item.infant_transfer_usd);
   // Porción de traslado = lo que se cobró por encima de las entradas, prorrateada
   // por la cantidad REAL de pax que llevaban traslado (no por el total de pax).
+  // El cargo de traslado de infantes se guarda congelado aparte (infant_transfer_usd)
+  // y se resta ANTES de prorratear el traslado de adultos/menores — mismo split que
+  // hace el backend en orderReduction.ts, así el preview coincide centavo a centavo.
   const ticketsPortion = round2(origAdults * unitAdult + origChildren * (unitChild ?? 0));
-  const transferPortion = Math.max(0, round2(subtotal - ticketsPortion));
+  const transferAndInfantPortion = Math.max(0, round2(subtotal - ticketsPortion));
+  const transferPortion = Math.max(0, round2(transferAndInfantPortion - infantTransferUsd));
   const transferPerPax = origTransferQty > 0 ? transferPortion / origTransferQty : 0;
+  const infantTransferPerInfant = origInfants > 0 ? infantTransferUsd / origInfants : 0;
 
   const [adults, setAdults] = useState(origAdults);
   const [children, setChildren] = useState(origChildren);
+  const [infants, setInfants] = useState(origInfants);
   const [transferQty, setTransferQty] = useState(origTransferQty);
   const [newDate, setNewDate] = useState(item.service_date);
   const [reason, setReason] = useState('');
@@ -127,6 +137,9 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   // operación — los pax nuevos no lo heredan). Al REDUCIR, no puede quedar por encima
   // del nuevo total de pax.
   const effectiveTransferQty = isIncreasing ? origTransferQty : Math.min(transferQty, newPax);
+  // Mismo candado que el traslado: al AGREGAR pax los infantes quedan como estaban
+  // (reduce-only, nunca se amplían desde acá).
+  const effectiveInfants = isIncreasing ? origInfants : Math.min(infants, origInfants);
 
   // No puede haber más pax con traslado que pax totales — se recorta solo.
   useEffect(() => {
@@ -136,7 +149,8 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const preview = useMemo(() => {
     const newTickets = round2(adults * unitAdult + children * (unitChild ?? 0));
     const newTransfer = round2(transferPerPax * effectiveTransferQty);
-    const newSubtotal = round2(newTickets + newTransfer);
+    const newInfantTransfer = round2(infantTransferPerInfant * effectiveInfants);
+    const newSubtotal = round2(newTickets + newTransfer + newInfantTransfer);
     const delta = round2(newSubtotal - subtotal);
     const deltaArs = subtotal > 0 ? Math.round((Math.abs(delta) / subtotal) * order.total_ars) : 0;
     const newSubtotalArs = subtotal > 0 ? Math.round((newSubtotal / subtotal) * order.total_ars) : 0;
@@ -144,7 +158,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     if (delta < -0.005) direction = 'reduce';
     else if (delta > 0.005) direction = 'increase';
     return { newSubtotal, newSubtotalArs, delta, deltaArs, direction };
-  }, [adults, children, effectiveTransferQty, unitAdult, unitChild, transferPerPax, subtotal, order.total_ars]);
+  }, [adults, children, effectiveTransferQty, effectiveInfants, unitAdult, unitChild, transferPerPax, infantTransferPerInfant, subtotal, order.total_ars]);
 
   const isMp = order.payment_method === 'mercadopago';
   const phoneDigits = (order.customer_phone ?? '').replace(/\D/g, '');
@@ -183,7 +197,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
       }
       if (preview.direction === 'reduce') {
         const body: ReduceBody = {
-          adults, children, transfer_qty: effectiveTransferQty, reason: reason.trim() || undefined, notify_customer: notify,
+          adults, children, transfer_qty: effectiveTransferQty, infants: effectiveInfants, reason: reason.trim() || undefined, notify_customer: notify,
           ...(combiningWithReduce ? { reschedule_from: item.service_date, reschedule_to: newDate } : {}),
           ...memberFields,
         };
@@ -263,7 +277,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Modificar reserva</p>
           <h2 className="mt-2 font-display text-2xl text-cream">{item.option_name_snapshot}</h2>
           <p className="mt-1 text-sm text-cream/50">
-            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origTransferQty > 0 ? ` · traslado ${origTransferQty}/${origAdults + origChildren}` : ''} — {fmtArs(order.total_ars)}
+            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origInfants > 0 ? ` · ${origInfants} inf` : ''}{origTransferQty > 0 ? ` · traslado ${origTransferQty}/${origAdults + origChildren}` : ''} — {fmtArs(order.total_ars)}
           </p>
         </header>
 
@@ -290,6 +304,21 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
               <NumberStepper label="Menores" value={children} min={0} max={20} onChange={setChildren} decrementLabel="menos" incrementLabel="más" />
             )}
           </div>
+
+          {origInfants > 0 && (
+            <div className={isIncreasing ? 'opacity-40 pointer-events-none' : ''}>
+              <NumberStepper
+                label="Infantes"
+                value={effectiveInfants}
+                min={0}
+                max={origInfants}
+                onChange={setInfants}
+                decrementLabel="menos"
+                incrementLabel="más"
+              />
+              {isIncreasing && <p className="mt-1 text-xs text-cream/40">No se puede modificar infantes al agregar pax.</p>}
+            </div>
+          )}
 
           {origTransferQty > 0 && (
             <div className={isIncreasing ? 'opacity-40 pointer-events-none' : ''}>

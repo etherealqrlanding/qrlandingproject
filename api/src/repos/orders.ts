@@ -25,6 +25,10 @@ export interface CreateOrderInput {
     transfer_qty?: number;
     transfer_hotel?: string | null;
     transfer_room?: string | null;
+    // Infantes: nunca pagan entrada, solo eventualmente traslado (infant_transfer_usd
+    // ya viene calculado y congelado desde el caller, no se deriva acá).
+    infants?: number;
+    infant_transfer_usd?: number;
     // Net prices snapshot (optional: only set when option has them configured)
     net_total_usd?: number | null;
   };
@@ -77,8 +81,8 @@ async function insertOrderItemAndAttribution(
        order_id, product_id, option_id,
        product_name_snapshot, option_name_snapshot, service_date,
        adults, children, unit_price_adult_usd, unit_price_child_usd, subtotal_usd,
-       transfer_qty, transfer_hotel, transfer_room
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+       transfer_qty, transfer_hotel, transfer_room, infants, infant_transfer_usd
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
     [
       orderId, item.product_id, item.option_id,
       item.product_name_snapshot, item.option_name_snapshot, item.service_date,
@@ -87,6 +91,8 @@ async function insertOrderItemAndAttribution(
       item.transfer_qty ?? 0,
       item.transfer_hotel ?? null,
       item.transfer_room ?? null,
+      item.infants ?? 0,
+      item.infant_transfer_usd ?? 0,
     ],
   );
 
@@ -363,9 +369,12 @@ export interface OrderReductionInput {
   itemId: number;
   origAdults: number;
   origChildren: number;
+  origInfants: number;
   newAdults: number;
   newChildren: number;
   newTransferQty: number;
+  newInfants: number;
+  newInfantTransferUsd: number;
   newTransferHotel: string | null;
   newSubtotalUsd: number;
   newTotalArs: number;
@@ -410,11 +419,13 @@ export async function applyOrderReduction(input: OrderReductionInput, externalCl
           SET adults = $1, children = $2,
               subtotal_usd = $3,
               transfer_qty = $4,
-              transfer_hotel = $5
-        WHERE id = $6 AND adults = $7 AND children = $8`,
+              transfer_hotel = $5,
+              infants = $6,
+              infant_transfer_usd = $7
+        WHERE id = $8 AND adults = $9 AND children = $10 AND infants = $11`,
       [input.newAdults, input.newChildren, input.newSubtotalUsd,
-       input.newTransferQty, input.newTransferHotel, input.itemId,
-       input.origAdults, input.origChildren],
+       input.newTransferQty, input.newTransferHotel, input.newInfants, input.newInfantTransferUsd,
+       input.itemId, input.origAdults, input.origChildren, input.origInfants],
     );
     if (!rowCount) throw new ConcurrentModificationError();
 
@@ -447,8 +458,10 @@ export async function applyOrderReduction(input: OrderReductionInput, externalCl
        VALUES ($1, 'order_modified', $2::jsonb)`,
       [input.orderId, JSON.stringify({
         orig_adults: input.origAdults, orig_children: input.origChildren,
+        orig_infants: input.origInfants,
         new_adults: input.newAdults, new_children: input.newChildren,
         new_transfer_qty: input.newTransferQty,
+        new_infants: input.newInfants, new_infant_transfer_usd: input.newInfantTransferUsd,
         refund_usd: input.refundUsd, refund_ars: input.refundArs,
         actor: input.actor ?? null,
         seller_member_id: input.actorMemberId ?? null,
@@ -841,6 +854,7 @@ export interface OrderVerificationInfo {
   adults: number;
   children: number;
   transfer_qty: number;
+  infants: number;
   updated_at: string;
 }
 
@@ -854,7 +868,7 @@ export async function getOrderVerificationInfo(publicId: string): Promise<OrderV
             oi.product_name_snapshot AS product_name,
             oi.option_name_snapshot AS option_name,
             to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-            oi.adults, oi.children, oi.transfer_qty,
+            oi.adults, oi.children, oi.transfer_qty, oi.infants,
             o.updated_at
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id

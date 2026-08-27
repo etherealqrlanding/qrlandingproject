@@ -58,6 +58,7 @@ const adminCreateOrderSchema = z.object({
   transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  infants: z.number().int().min(0).max(20).optional(),
 });
 
 adminOrdersRouter.post('/', async (req, res, next) => {
@@ -96,6 +97,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
       price_adult_usd: string; price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
       transfer_price_usd: string;
+      infant_transfer_chargeable: boolean;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       net_transfer_price_usd: string | null; net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
@@ -112,6 +114,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
          o.price_child_usd::text  AS price_child_usd,
          o.transfer_mode,
          o.transfer_price_usd::text AS transfer_price_usd,
+         o.infant_transfer_chargeable,
          o.net_price_adult_usd::text    AS net_price_adult_usd,
          o.net_price_child_usd::text    AS net_price_child_usd,
          o.net_transfer_price_usd::text AS net_transfer_price_usd,
@@ -164,7 +167,10 @@ adminOrdersRouter.post('/', async (req, res, next) => {
     const transferSubtotal = option.transfer_mode === 'optional'
       ? Math.round(transferPriceUsd * transferQty * 100) / 100
       : 0;
-    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
+    const infants = input.infants ?? 0;
+    const infantTransferApplies = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQty > 0;
+    const infantTransferUsd = infantTransferApplies ? Math.round(transferPriceUsd * infants * 100) / 100 : 0;
+    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal + infantTransferUsd;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
@@ -180,6 +186,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
           input.adults * netAdult
           + input.children * (netChild ?? netAdult)
           + (option.transfer_mode === 'optional' && netTransfer != null ? netTransfer * transferQty : 0)
+          + (infantTransferApplies && netTransfer != null ? netTransfer * infants : 0)
         ) * 100) / 100;
       }
     } else {
@@ -191,6 +198,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
           input.adults * netAdultArs
           + input.children * (netChildArs ?? netAdultArs)
           + (option.transfer_mode === 'optional' && netTransferArs != null ? netTransferArs * transferQty : 0)
+          + (infantTransferApplies && netTransferArs != null ? netTransferArs * infants : 0)
         ) * 100) / 100;
         netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
       }
@@ -212,6 +220,8 @@ adminOrdersRouter.post('/', async (req, res, next) => {
         transfer_qty: transferQty,
         transfer_hotel: input.transfer_hotel ?? null,
         transfer_room: (transferQty > 0 && input.transfer_room) ? input.transfer_room : null,
+        infants,
+        infant_transfer_usd: infantTransferUsd,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -700,6 +710,7 @@ const modifySchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
   transfer_qty: z.number().int().min(0).max(40),
+  infants: z.number().int().min(0).max(20),
   reason: z.string().max(500).nullish(),
   notify_customer: z.boolean().optional().default(true),
   // Presentes solo cuando la misma acción también reprogramó la fecha (ver
@@ -732,6 +743,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
+      infants: number; infant_transfer_usd: number;
       service_date: string | Date;
       commission_percent: number | null;
     }>(
@@ -743,6 +755,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd,
               oi.transfer_qty, oi.transfer_hotel,
+              oi.infants, oi.infant_transfer_usd::float AS infant_transfer_usd,
               oi.service_date,
               a.commission_percent_snapshot::float AS commission_percent
          FROM orders o
@@ -781,6 +794,8 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       unitPriceChildUsd: row.unit_price_child_usd,
       subtotalUsd: row.subtotal_usd,
       transferQty: row.transfer_qty,
+      origInfants: row.infants,
+      infantTransferUsd: row.infant_transfer_usd,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
       commissionPercent: row.commission_percent,
@@ -789,6 +804,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       adults: parsed.data.adults,
       children: parsed.data.children,
       transferQty: parsed.data.transfer_qty,
+      infants: parsed.data.infants,
     });
     if (!calc.ok) throw new RouteValidationError(400, calc.error ?? 'No se pudo calcular la reducción.');
 
@@ -818,9 +834,12 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       itemId: row.item_id,
       origAdults: row.adults,
       origChildren: row.children,
+      origInfants: row.infants,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
       newTransferQty,
+      newInfants: calc.newInfants,
+      newInfantTransferUsd: calc.newInfantTransferUsd,
       newTransferHotel: newTransferQty > 0 ? row.transfer_hotel : null,
       newSubtotalUsd: calc.newSubtotalUsd,
       newTotalArs: calc.newTotalArs,
@@ -948,6 +967,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
+      infants: number; infant_transfer_usd: number;
       service_date: string | Date; service_date_fmt: string;
       seller_id: number | null; net_total_usd: number | null; net_settled_at: string | null;
       customer_name: string; option_name: string;
@@ -959,6 +979,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty, oi.transfer_hotel,
+              oi.infants, oi.infant_transfer_usd::float AS infant_transfer_usd,
               oi.service_date, to_char(oi.service_date, 'YYYY-MM-DD') AS service_date_fmt,
               oi.option_name_snapshot AS option_name,
               a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd,
@@ -992,6 +1013,8 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       unitPriceChildUsd: row.unit_price_child_usd,
       subtotalUsd: row.subtotal_usd,
       transferQty: row.transfer_qty,
+      origInfants: row.infants,
+      infantTransferUsd: row.infant_transfer_usd,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
       commissionPercent: null, // efectivo: la comisión no es por % sino total − neto
@@ -1000,6 +1023,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       adults: parsed.data.adults,
       children: parsed.data.children,
       transferQty: parsed.data.transfer_qty,
+      infants: parsed.data.infants,
     });
     if (!calc.ok) return res.status(400).json({ error: calc.error });
 
@@ -1018,9 +1042,12 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       itemId: row.item_id,
       origAdults: row.adults,
       origChildren: row.children,
+      origInfants: row.infants,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
       newTransferQty,
+      newInfants: calc.newInfants,
+      newInfantTransferUsd: calc.newInfantTransferUsd,
       newTransferHotel: newTransferQty > 0 ? row.transfer_hotel : null,
       newSubtotalUsd: calc.newSubtotalUsd,
       newTotalArs: calc.newTotalArs,

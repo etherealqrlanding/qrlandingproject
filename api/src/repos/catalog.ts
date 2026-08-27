@@ -147,6 +147,7 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
          price_child_usd::float AS price_child_usd,
          has_dinner, transfer_mode,
          transfer_price_usd::float AS transfer_price_usd,
+         infant_transfer_chargeable,
          available_days,
          pickup_window_es, pickup_window_en,
          dinner_time_es, dinner_time_en,

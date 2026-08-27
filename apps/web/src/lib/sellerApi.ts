@@ -169,6 +169,8 @@ export interface SellerOrder {
   unit_price_child_usd: number | null;
   subtotal_usd: number;
   transfer_qty: number;
+  infants: number;
+  infant_transfer_usd: number;
   service_date: string;
   option_id: number;
   product_name: string;
@@ -243,6 +245,7 @@ export interface SellerBookingInput {
   service_date: string;
   adults: number;
   children: number;
+  infants?: number;
   customer: {
     name: string;
     email: string;
@@ -405,13 +408,13 @@ export const sellerApi = {
       method: 'POST',
       body: JSON.stringify({ admin_pin: pin }),
     }),
-  setOrderAttribution: (publicId: string, sellerMemberId: number | null, pin: string, pinType: 'admin' | 'member') =>
+  // Reasignación directa — solo la autoriza el PIN de administrador (nunca el de un
+  // sub-vendedor, ni siquiera para auto-identificarse): ver el comentario del handler
+  // en api/src/routes/seller/index.ts.
+  setOrderAttribution: (publicId: string, sellerMemberId: number | null, adminPin: string) =>
     request<{ ok: true }>(`/api/seller/me/orders/${encodeURIComponent(publicId)}/attribution`, {
       method: 'PATCH',
-      body: JSON.stringify({
-        seller_member_id: sellerMemberId,
-        ...(pinType === 'admin' ? { admin_pin: pin } : { seller_member_pin: pin }),
-      }),
+      body: JSON.stringify({ seller_member_id: sellerMemberId, admin_pin: adminPin }),
     }),
   // Modo abierto (team_pin_required=false): asigna directo, sin ningún PIN.
   setOrderAttributionOpen: (publicId: string, sellerMemberId: number | null) =>
@@ -473,7 +476,7 @@ export const sellerApi = {
         method: 'POST', body: JSON.stringify({ new_pin: newPin }),
       }),
   },
-  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_qty: number; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
+  reduceCash: (publicId: string, body: { adults: number; children: number; transfer_qty: number; infants: number; notify_customer?: boolean; reason?: string; reschedule_from?: string; reschedule_to?: string; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true; refund_usd: number; refund_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reduce-cash`,
       { method: 'POST', body: JSON.stringify(body) },

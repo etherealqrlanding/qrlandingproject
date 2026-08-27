@@ -342,6 +342,7 @@ const sellerCheckoutSchema = z.object({
   service_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'service_date must be YYYY-MM-DD'),
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  infants: z.number().int().min(0).max(20).optional(),
   customer: z.object({
     name: z.string().min(2).max(120),
     email: z.string().email().max(160),
@@ -416,6 +417,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       price_adult_usd: string; price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
       transfer_price_usd: string;
+      infant_transfer_chargeable: boolean;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       net_transfer_price_usd: string | null; net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
@@ -432,6 +434,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
          o.price_child_usd::text  AS price_child_usd,
          o.transfer_mode,
          o.transfer_price_usd::text AS transfer_price_usd,
+         o.infant_transfer_chargeable,
          o.net_price_adult_usd::text    AS net_price_adult_usd,
          o.net_price_child_usd::text    AS net_price_child_usd,
          o.net_transfer_price_usd::text AS net_transfer_price_usd,
@@ -487,7 +490,10 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     const transferSubtotal = option.transfer_mode === 'optional'
       ? Math.round(transferPriceUsd * transferQty * 100) / 100
       : 0;
-    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal;
+    const infants = input.infants ?? 0;
+    const infantTransferApplies = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQty > 0;
+    const infantTransferUsd = infantTransferApplies ? Math.round(transferPriceUsd * infants * 100) / 100 : 0;
+    const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal + infantTransferUsd;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
@@ -504,6 +510,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
           input.adults * netAdult
           + input.children * (netChild ?? netAdult)
           + (option.transfer_mode === 'optional' && netTransfer != null ? netTransfer * transferQty : 0)
+          + (infantTransferApplies && netTransfer != null ? netTransfer * infants : 0)
         ) * 100) / 100;
       }
     } else {
@@ -515,6 +522,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
           input.adults * netAdultArs
           + input.children * (netChildArs ?? netAdultArs)
           + (option.transfer_mode === 'optional' && netTransferArs != null ? netTransferArs * transferQty : 0)
+          + (infantTransferApplies && netTransferArs != null ? netTransferArs * infants : 0)
         ) * 100) / 100;
         netTotalUsd = Math.round((netTotalArs / rate) * 100) / 100;
       }
@@ -537,6 +545,8 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
         transfer_qty: transferQty,
         transfer_hotel: input.transfer_hotel ?? null,
         transfer_room: (transferQty > 0 && input.transfer_room) ? input.transfer_room : null,
+        infants,
+        infant_transfer_usd: infantTransferUsd,
         net_total_usd: netTotalUsd,
       },
       total_usd: subtotalUsd,
@@ -815,7 +825,6 @@ sellerRouter.post('/me/verify-admin-pin', async (req, res, next) => {
 const attributionSchema = z.object({
   seller_member_id: z.number().int().positive().nullable(),
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
-  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
 });
 
 // PATCH /api/seller/me/orders/:publicId/attribution — marca (o corrige) qué persona de
@@ -823,19 +832,17 @@ const attributionSchema = z.object({
 // crearse (ej. el pasajero pagó por Mercado Pago solo desde la habitación) y el hotel
 // se entera después de quién la asistió. Mandar seller_member_id: null la limpia.
 //
-// Dos formas de autorizar, según qué PIN mande el cliente: en efectivo, la persona
-// que toma la orden puede identificarse con su PROPIO PIN — igual que al cobrar
-// (manda seller_member_pin). Si no lo manda (Mercado Pago/PIX, limpiar la
-// atribución, o el administrador corrigiendo una venta en efectivo que no cerró él)
-// lo autoriza el PIN de ADMINISTRADOR del vendedor — y esa corrección queda anotada
-// en el historial de la orden como hecha por el administrador, distinto de cuando el
-// propio sub-vendedor se identifica.
+// A diferencia del auto-reclamo ("¿es tuya?", ver requestOrderAttribution — cualquier
+// sub-vendedor puede pedirlo con su propio PIN, pero queda pendiente hasta que el
+// administrador lo apruebe), ESTA reasignación es directa e inmediata: por eso solo la
+// autoriza el PIN de ADMINISTRADOR del vendedor, nunca el PIN de un sub-vendedor —
+// ni siquiera para auto-identificarse en una venta en efectivo.
 sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) => {
   try {
     const publicId = req.params.publicId;
     const parsed = attributionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
-    const { seller_member_id, admin_pin, seller_member_pin } = parsed.data;
+    const { seller_member_id, admin_pin } = parsed.data;
 
     const { rows } = await pool.query<{ id: number; payment_method: string }>(
       `SELECT o.id, o.payment_method
@@ -863,11 +870,6 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
         sellerMemberId = member.id;
         sellerMemberName = member.name;
       }
-    } else if (order.payment_method === 'cash' && seller_member_id != null && seller_member_pin) {
-      const resolved = await resolveSellerMember(req.seller!.sellerId, seller_member_id, seller_member_pin);
-      if (!resolved.ok) return res.status(resolved.httpStatus).json({ error: resolved.error });
-      sellerMemberId = resolved.memberId;
-      sellerMemberName = resolved.memberName;
     } else {
       const adminCheck = await requireAdminPin(req.seller!.sellerId, admin_pin);
       if (!adminCheck.ok) return res.status(adminCheck.httpStatus).json({ error: adminCheck.error });
@@ -892,14 +894,6 @@ sellerRouter.patch('/me/orders/:publicId/attribution', async (req, res, next) =>
       });
     } else if (assignedByAdmin) {
       await logPaymentEvent(order.id, 'attribution_set_by_admin', null, {
-        seller_member_id: sellerMemberId,
-        seller_member_name: sellerMemberName,
-      });
-    } else if (sellerMemberId != null) {
-      // Auto-tag: la propia persona se identificó con su PIN — a diferencia del
-      // camino de admin, esto no necesitaba corrección, pero igual queda anotado
-      // para la trazabilidad completa del historial.
-      await logPaymentEvent(order.id, 'attribution_set_by_member', null, {
         seller_member_id: sellerMemberId,
         seller_member_name: sellerMemberName,
       });
@@ -1072,6 +1066,7 @@ const sellerReduceSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
   transfer_qty: z.number().int().min(0).max(40),
+  infants: z.number().int().min(0).max(20),
   notify_customer: z.boolean().optional().default(true),
   reason: z.string().max(500).nullish(),
   // Presentes solo cuando la misma acción también reprogramó la fecha (ver
@@ -1100,6 +1095,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
+      infants: number; infant_transfer_usd: number;
       service_date: string | Date;
       net_total_usd: number | null; net_settled_at: string | null;
     }>(
@@ -1109,6 +1105,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty, oi.transfer_hotel,
+              oi.infants, oi.infant_transfer_usd::float AS infant_transfer_usd,
               oi.service_date,
               a.net_total_usd_snapshot::float AS net_total_usd, a.net_settled_at
          FROM orders o
@@ -1140,6 +1137,8 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       unitPriceChildUsd: row.unit_price_child_usd,
       subtotalUsd: row.subtotal_usd,
       transferQty: row.transfer_qty,
+      origInfants: row.infants,
+      infantTransferUsd: row.infant_transfer_usd,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
       commissionPercent: null,
@@ -1148,6 +1147,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       adults: parsed.data.adults,
       children: parsed.data.children,
       transferQty: parsed.data.transfer_qty,
+      infants: parsed.data.infants,
     });
     if (!calc.ok) return res.status(400).json({ error: calc.error });
 
@@ -1161,9 +1161,12 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       itemId: row.item_id,
       origAdults: row.adults,
       origChildren: row.children,
+      origInfants: row.infants,
       newAdults: parsed.data.adults,
       newChildren: parsed.data.children,
       newTransferQty,
+      newInfants: calc.newInfants,
+      newInfantTransferUsd: calc.newInfantTransferUsd,
       newTransferHotel: newTransferQty > 0 ? row.transfer_hotel : null,
       newSubtotalUsd: calc.newSubtotalUsd,
       newTotalArs: calc.newTotalArs,

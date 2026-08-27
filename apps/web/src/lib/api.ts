@@ -38,6 +38,7 @@ export interface CheckoutInput {
   service_date: string;          // YYYY-MM-DD
   adults: number;
   children: number;
+  infants?: number;
   customer: {
     name: string;
     email: string;
@@ -115,6 +116,7 @@ export interface OrderVerification {
   adults: number;
   children: number;
   transfer_qty: number;
+  infants: number;
   updated_at: string;
 }
 

@@ -29,6 +29,7 @@ interface Props {
   initialAdults?: number;
   initialChildren?: number;
   initialTransferQty?: number;
+  initialInfants?: number;
 }
 
 const PixIcon = (
@@ -51,7 +52,7 @@ const NATIONALITIES = [
   'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
 ];
 
-export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren, initialTransferQty }: Props) {
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren, initialTransferQty, initialInfants }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
@@ -105,6 +106,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     // Si la casa no acepta menores, arranca en 0 sin importar lo precargado — el campo
     // queda oculto y no tendría cómo editarse (mismo criterio que BookingForm).
     children: (product.accepts_children && option.price_child_usd != null) ? (initialChildren ?? 0) : 0,
+    infants: initialInfants ?? 0,
   });
 
   // Disponibilidad por fecha de la option seleccionada
@@ -173,9 +175,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     : option.transfer_mode === 'optional' ? transferQtyOptional
     : 0;
 
-  const { ticketsUsd, transferUsd, totalUsd } = useMemo(
-    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren),
-    [option, form.adults, form.children, transferQty, supportsChildren],
+  const { ticketsUsd, transferUsd, infantTransferUsd, totalUsd } = useMemo(
+    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren, form.infants),
+    [option, form.adults, form.children, transferQty, supportsChildren, form.infants],
   );
 
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
@@ -195,6 +197,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     service_date: form.service_date,
     adults: form.adults,
     children: form.children,
+    infants: form.infants,
     customer: {
       name: form.name.trim(),
       email: form.email.trim().toLowerCase(),
@@ -402,7 +405,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                 </p>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className={`grid gap-3 ${supportsChildren ? 'grid-cols-2 sm:grid-cols-3' : 'grid-cols-2'}`}>
               <Field label={t('checkout.adults')} required>
                 <NumberStepper
                   value={form.adults} min={1} max={maxAdults}
@@ -419,6 +422,12 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                   />
                 </Field>
               )}
+              <Field label={t('checkout.infants')}>
+                <NumberStepper
+                  value={form.infants} min={0} max={20}
+                  onChange={(v) => updateField('infants', v)}
+                />
+              </Field>
             </div>
           </div>
 
@@ -433,6 +442,12 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                   <span className="text-cream/60">{t('checkout.transfer')} ({transferQty} pax)</span>
                   <span className="text-cream/80">+ USD {transferUsd}</span>
                 </div>
+                {infantTransferUsd > 0 && (
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span className="text-cream/60">{t('checkout.transfer')} ({t('checkout.infants').toLowerCase()})</span>
+                    <span className="text-cream/80">+ USD {infantTransferUsd}</span>
+                  </div>
+                )}
               </div>
             )}
             <div className="flex items-start justify-between gap-4">
