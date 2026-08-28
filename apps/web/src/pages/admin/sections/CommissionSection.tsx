@@ -192,8 +192,63 @@ function OptionCommissionBlock({
             </button>
           </div>
 
-          <div className="rounded-lg border border-gold/10 bg-ink/30 overflow-hidden">
-            <table className="w-full text-sm">
+          {/* Mobile (< sm): una card apilada por perfil -- la tabla de abajo, con 5
+              columnas + inputs, no entra en una pantalla de teléfono y quedaba con el
+              botón "Guardar" recortado fuera de vista (overflow-hidden no scrollea). */}
+          <div className="sm:hidden space-y-2">
+            {KIND_ROWS.map((k) => {
+              const base = baseByKind[k.value] ?? 10;
+              const hasOverride = overrideByKind.has(k.value);
+              const effectiveAdjustment = hasOverride ? overrideByKind.get(k.value)! : option.commission_adjustment_percent;
+              const effective = Math.max(0, Math.min(100, base + effectiveAdjustment));
+              return (
+                <div key={k.value} className="rounded-lg border border-gold/10 bg-ink/30 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-cream/80">{k.icon} {k.label}</span>
+                    <span className={`font-display text-lg ${hasOverride ? 'text-gold' : 'text-cream/80'}`}>
+                      {effective}%
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-cream/40">Base {base}% · vigente = base + override (o el ajuste general)</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" step={0.1} min={-100} max={100}
+                      value={drafts[k.value] ?? ''}
+                      onChange={(e) => setDrafts((prev) => ({ ...prev, [k.value]: e.target.value }))}
+                      placeholder="sin override"
+                      className="input flex-1"
+                    />
+                    <span className="text-cream/40 text-xs shrink-0">%</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={savingKind === k.value || !drafts[k.value]}
+                      onClick={() => handleSaveKind(k.value)}
+                      className="flex-1 rounded-md border border-gold/30 px-2.5 py-1.5 text-xs text-cream hover:bg-gold/10 transition disabled:opacity-40"
+                    >
+                      {savingKind === k.value ? '...' : 'Guardar'}
+                    </button>
+                    {hasOverride && (
+                      <button
+                        type="button"
+                        disabled={savingKind === k.value}
+                        onClick={() => handleClearKind(k.value)}
+                        className="flex-1 rounded-md border border-red-500/30 px-2.5 py-1.5 text-xs text-red-400 hover:bg-red-500/10 transition disabled:opacity-40"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop/tablet (>= sm): tabla completa, con scroll horizontal propio por
+              si la ventana es angosta (nunca debe scrollear la página entera). */}
+          <div className="hidden sm:block rounded-lg border border-gold/10 bg-ink/30 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b border-gold/10 text-left text-cream/50 text-xs uppercase tracking-wide">
                   <th className="px-3 py-2">Perfil</th>
