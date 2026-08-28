@@ -34,6 +34,9 @@ const sellerSchema = z.object({
   landing_customization_enabled: z.boolean().optional(),
   team_enabled: z.boolean().optional(),
   team_pin_required: z.boolean().optional(),
+  // Botón flotante de WhatsApp en su portal, para contactarnos rápido -- lo habilita
+  // el admin solo para recomendadores más estables/de confianza.
+  whatsapp_button_enabled: z.boolean().optional(),
 });
 
 adminSellersRouter.get('/', async (_req, res, next) => {

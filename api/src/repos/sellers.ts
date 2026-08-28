@@ -32,6 +32,7 @@ export interface SellerWithStats {
   landing_customization_enabled: boolean; // puede personalizar su landing (logo/lema/teléfono)
   team_enabled: boolean;                 // "Mi equipo" (sub-vendedores) habilitado por el admin
   team_pin_required: boolean;            // si el equipo opera con PIN (true) o en modo abierto sin PIN (false)
+  whatsapp_button_enabled: boolean;      // botón flotante de WhatsApp en su portal -- solo para recomendadores estables
   created_at: string;
   // stats agregados
   orders_total: number;                  // todas las órdenes atribuidas
@@ -54,7 +55,8 @@ export async function listSellersWithStats(): Promise<SellerWithStats[]> {
        s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
        s.commission_percent::text AS commission_percent,
        s.notes, s.is_active, s.is_permanent, s.card_enabled, s.is_house, (s.admin_pin_hash IS NOT NULL) AS has_admin_pin,
-       s.landing_customization_enabled, s.team_enabled, s.team_pin_required, s.created_at,
+       s.landing_customization_enabled, s.team_enabled, s.team_pin_required,
+       s.whatsapp_button_enabled, s.created_at,
        COALESCE(stats.orders_total, 0)::int AS orders_total,
        COALESCE(stats.orders_paid, 0)::int AS orders_paid,
        COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,

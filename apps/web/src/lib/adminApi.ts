@@ -329,6 +329,8 @@ export interface AdminSeller {
   landing_customization_enabled?: boolean;
   team_enabled?: boolean;
   team_pin_required?: boolean;
+  // Botón flotante de WhatsApp en su portal -- solo para recomendadores estables/de confianza.
+  whatsapp_button_enabled?: boolean;
   created_at: string;
   supabase_user_id?: string | null;
   orders_total?: number;

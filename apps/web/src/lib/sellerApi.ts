@@ -152,6 +152,9 @@ export interface SellerMe {
   // sellers.team_enabled. Apagado, el vendedor no ve "Mi Equipo" en el nav ni puede
   // usar sus rutas, pero nada de lo que ya cargó se borra.
   team_enabled: boolean;
+  // Botón flotante de WhatsApp en el portal -- lo habilita el admin solo para
+  // recomendadores más estables/de confianza (ver sellers.whatsapp_button_enabled).
+  whatsapp_button_enabled: boolean;
 }
 
 export interface SellerOrder {

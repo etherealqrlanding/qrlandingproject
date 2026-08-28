@@ -215,6 +215,7 @@ sellerRouter.get('/me', async (req, res, next) => {
          s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
          s.is_permanent, s.card_enabled, s.team_pin_required,
          s.landing_customization_enabled, s.logo_url, s.tagline, s.public_phone,
+         s.whatsapp_button_enabled,
          COALESCE(stats.orders_paid, 0)::int       AS orders_paid,
          COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
          COALESCE(stats.revenue_paid_ars, 0)::float AS revenue_paid_ars,

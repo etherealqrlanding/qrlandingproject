@@ -21,6 +21,7 @@ const empty = {
   landing_customization_enabled: false,
   team_enabled: false,
   team_pin_required: true,
+  whatsapp_button_enabled: false,
 };
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
@@ -242,6 +243,15 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             Cuenta propia (agencia)
             <span className="ml-2 text-xs text-cream/50">
               no es un afiliado externo — se excluye del revenue/incentivos del listado de recomendadores
+            </span>
+          </span>
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <Checkbox checked={form.whatsapp_button_enabled ?? false} onChange={(checked) => update('whatsapp_button_enabled', checked)} />
+          <span className="text-cream/80">
+            Botón flotante de WhatsApp en su portal
+            <span className="ml-2 text-xs text-cream/50">
+              (para que nos contacte rápido -- pensado para recomendadores más estables/de confianza, no para ocasionales)
             </span>
           </span>
         </label>
