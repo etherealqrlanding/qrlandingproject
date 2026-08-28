@@ -8,7 +8,6 @@ const DAY = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 interface Props {
   option: ProductOption;
   productAvailableDays: number[];
-  productAcceptsChildren: boolean;
   productChildrenAgeLabel: string | null;
   // Comisión EFECTIVA para tu perfil en este producto (base + ajuste, o su override
   // puntual) -- undefined mientras carga o si no se pudo resolver, no se muestra nada.
@@ -16,9 +15,9 @@ interface Props {
   onBook?: () => void;
 }
 
-export function OptionInfoCard({ option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, commissionPercent, onBook }: Props) {
+export function OptionInfoCard({ option, productAvailableDays, productChildrenAgeLabel, commissionPercent, onBook }: Props) {
   const hasTimes = option.pickup_window_es || option.dinner_time_es || option.show_time_es;
-  const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
+  const showChildPrice = option.price_child_usd != null;
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (

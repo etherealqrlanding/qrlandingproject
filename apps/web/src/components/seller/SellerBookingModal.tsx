@@ -214,7 +214,6 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
             )}
             <BookingForm
               option={option}
-              productAcceptsChildren={product.accepts_children}
               childrenAgeLabel={product.children_age_label}
               infantAgeLabel={product.infant_age_label}
               allowCash={isPermanent}

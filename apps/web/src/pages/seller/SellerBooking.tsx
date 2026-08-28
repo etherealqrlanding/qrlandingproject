@@ -170,7 +170,6 @@ export default function SellerBooking() {
                               key={opt.id}
                               option={opt}
                               productAvailableDays={expandedDetail.available_days}
-                              productAcceptsChildren={expandedDetail.accepts_children}
                               productChildrenAgeLabel={expandedDetail.children_age_label}
                               commissionPercent={commissionByOption[opt.id]}
                               onBook={() => setBooking({ product: expandedDetail, option: opt })}

@@ -183,17 +183,12 @@ export default function AvailabilityCheckModal({ productSlug, productName, onClo
                   </label>
                   <div className="flex gap-3">
                     <MiniStepper label="Adultos" value={adults} onChange={setAdults} />
-                    {detail.accepts_children && (
-                      <MiniStepper
-                        label={detail.children_age_label ? `Menores (${detail.children_age_label})` : 'Menores'}
-                        value={children}
-                        onChange={setChildren}
-                      />
-                    )}
+                    <MiniStepper
+                      label={detail.children_age_label ? `Menores (${detail.children_age_label})` : 'Menores'}
+                      value={children}
+                      onChange={setChildren}
+                    />
                   </div>
-                  {!detail.accepts_children && (
-                    <p className="mt-1.5 text-[11px] text-cream/30">Esta casa no acepta menores.</p>
-                  )}
                 </div>
 
                 {optionId != null && (

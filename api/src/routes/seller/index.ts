@@ -449,7 +449,6 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
       is_active: boolean; product_active: boolean;
-      accepts_children: boolean;
     }>(
       `SELECT
          o.id, o.product_id, o.name_es, o.name_en,
@@ -467,7 +466,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
          o.net_transfer_price_ars::text AS net_transfer_price_ars,
          o.available_days, o.default_capacity_per_day, o.is_active,
          p.name AS product_name, p.slug AS product_slug,
-         p.is_active AS product_active, p.accepts_children
+         p.is_active AS product_active
        FROM product_options o
        JOIN products p ON p.id = o.product_id
       WHERE o.id = $1 LIMIT 1`,
@@ -498,7 +497,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     // Calcular totales
     const priceAdult = Number.parseFloat(option.price_adult_usd);
     const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
-    if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
+    if (input.children > 0 && option.price_child_usd == null) {
       return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
     }
     const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;

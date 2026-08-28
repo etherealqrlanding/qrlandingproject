@@ -22,8 +22,6 @@ export interface BookingFormTotals {
 
 export interface BookingFormProps {
   option: ProductOption;
-  // Política de menores de la CASA (no del tier) — el tier solo aporta el precio.
-  productAcceptsChildren: boolean;
   childrenAgeLabel?: string | null;
   infantAgeLabel?: string | null;
   allowCash: boolean;
@@ -49,7 +47,7 @@ const NATIONALITIES = [
 ];
 
 export default function BookingForm({
-  option, productAcceptsChildren, childrenAgeLabel, infantAgeLabel, allowCash, allowCard, contextBanner, submitLabels, submitting, externalError, initialDate, initialAdults, initialChildren, onValidSubmit,
+  option, childrenAgeLabel, infantAgeLabel, allowCash, allowCard, contextBanner, submitLabels, submitting, externalError, initialDate, initialAdults, initialChildren, onValidSubmit,
 }: BookingFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(
@@ -86,9 +84,9 @@ export default function BookingForm({
     nationality: '',
     service_date: initialDate ?? today,
     adults: initialAdults ?? 2,
-    // Si la casa no acepta menores, arranca en 0 sin importar lo que venga precargado —
-    // el campo queda oculto y no tendría cómo editarse.
-    children: productAcceptsChildren ? (initialChildren ?? 0) : 0,
+    // Si este tier no tiene precio de menor cargado, arranca en 0 sin importar lo que
+    // venga precargado — el campo queda oculto y no tendría cómo editarse.
+    children: option.price_child_usd != null ? (initialChildren ?? 0) : 0,
     infants: 0,
   });
   // Solo para validar que no haya un typo en el mail del pasajero — no se envía al backend.
@@ -136,7 +134,7 @@ export default function BookingForm({
   const selectedDateStatus = selectedDay?.status;
   const isDateBlocked = selectedDateStatus === 'full' || selectedDateStatus === 'closed';
   const isDateLow = selectedDateStatus === 'low';
-  const supportsChildren = productAcceptsChildren && option.price_child_usd != null;
+  const supportsChildren = option.price_child_usd != null;
   const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 

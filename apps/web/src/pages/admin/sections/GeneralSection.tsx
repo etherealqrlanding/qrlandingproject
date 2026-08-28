@@ -23,7 +23,6 @@ const empty = {
   starting_price_usd: null as number | null,
   is_active: true, display_order: 0,
   available_days: [1, 2, 3, 4, 5, 6, 7] as number[],
-  accepts_children: false,
   children_age_label: null as string | null,
   infant_age_label: null as string | null,
 };
@@ -263,28 +262,22 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
             <span className="text-cream/80">{form.is_active ? 'Activo (visible)' : 'Inactivo (oculto)'}</span>
           </label>
         </Field>
-        <Field label="Acepta menores" hint="Política general de la casa. El precio de menor se define por tier en la solapa Tiers / Opciones.">
-          <label className="flex items-center gap-2 py-2">
-            <Checkbox
-              checked={form.accepts_children}
-              onChange={(checked) => update('accepts_children', checked)}
-            />
-            <span className="text-cream/80">{form.accepts_children ? 'Sí, admite menores' : 'No admite menores'}</span>
-          </label>
-        </Field>
       </div>
 
-      {form.accepts_children && (
-        <Field label="Rango de edad de menores" hint='Texto libre, ej. "3 a 10 años". Se muestra junto al campo de menores en la reserva.'>
-          <input
-            type="text" maxLength={80}
-            value={form.children_age_label ?? ''}
-            onChange={(e) => update('children_age_label', e.target.value || null)}
-            className="input max-w-xs"
-            placeholder="3 a 10 años"
-          />
-        </Field>
-      )}
+      {/* Todas las casas admiten menores -- lo que varía es si un tier puntual tiene
+          precio de menor cargado (solapa Tiers / Opciones). Este campo siempre está
+          visible para que el admin no se olvide de cargar la política de edades: antes
+          había un check "Acepta menores" que, si quedaba sin marcar por error, hacía
+          que la opción de menores desapareciera aunque el tier tuviera precio cargado. */}
+      <Field label="Rango de edad de menores" hint='Texto libre, ej. "3 a 10 años". Se muestra junto al campo de menores en la reserva.'>
+        <input
+          type="text" maxLength={80}
+          value={form.children_age_label ?? ''}
+          onChange={(e) => update('children_age_label', e.target.value || null)}
+          className="input max-w-xs"
+          placeholder="3 a 10 años"
+        />
+      </Field>
 
       <Field
         label="Rango de edad de infantes"

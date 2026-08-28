@@ -219,7 +219,6 @@ export default function ProductPage() {
                   key={opt.id}
                   option={opt}
                   productAvailableDays={product.available_days}
-                  productAcceptsChildren={product.accepts_children}
                   productChildrenAgeLabel={product.children_age_label}
                   productInfantAgeLabel={product.infant_age_label}
                   // Si la casa tiene logo, se usa el mismo en todos los tiers (marca
@@ -298,7 +297,7 @@ export default function ProductPage() {
             {(() => {
               const { totalUsd } = computeBookingTotals(
                 selectedOption, selectionPreview.adults, selectionPreview.children, selectionPreview.transferQty,
-                product.accepts_children && selectedOption.price_child_usd != null,
+                selectedOption.price_child_usd != null,
                 selectionPreview.infants,
               );
               return (
@@ -359,11 +358,10 @@ function formatShortDate(iso: string): string {
 }
 
 function OptionCard({
-  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, productInfantAgeLabel, imageUrl, isLogo, selected, onSelect, onPreviewChange, onBook, lang,
+  option, productAvailableDays, productChildrenAgeLabel, productInfantAgeLabel, imageUrl, isLogo, selected, onSelect, onPreviewChange, onBook, lang,
 }: {
   option: ProductOption;
   productAvailableDays: number[];
-  productAcceptsChildren: boolean;
   productChildrenAgeLabel: string | null;
   productInfantAgeLabel: string | null;
   imageUrl: string | null;
@@ -387,7 +385,7 @@ function OptionCard({
   const pickup = localized(option, 'pickup_window', lang);
   const dinner = localized(option, 'dinner_time', lang);
   const show = localized(option, 'show_time', lang);
-  const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
+  const showChildPrice = option.price_child_usd != null;
   const hasTimes = Boolean(pickup || dinner || show);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -879,7 +877,7 @@ function BookingSummary({
 
   const showCash = sellerInfo?.is_permanent === true;
   const showCard = sellerInfo?.card_enabled !== false;
-  const showChildPrice = product.accepts_children && option.price_child_usd != null;
+  const showChildPrice = option.price_child_usd != null;
   const showTransferRow = option.transfer_mode !== 'none';
   const urgentDayLabel = urgentDay
     ? new Date(`${urgentDay.date}T00:00:00`).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })

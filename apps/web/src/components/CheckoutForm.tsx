@@ -103,9 +103,10 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     nationality: '',
     service_date: initialDate ?? today,
     adults: initialAdults ?? 2,
-    // Si la casa no acepta menores, arranca en 0 sin importar lo precargado — el campo
-    // queda oculto y no tendría cómo editarse (mismo criterio que BookingForm).
-    children: (product.accepts_children && option.price_child_usd != null) ? (initialChildren ?? 0) : 0,
+    // Si este tier no tiene precio de menor cargado, arranca en 0 sin importar lo
+    // precargado — el campo queda oculto y no tendría cómo editarse (mismo criterio
+    // que BookingForm).
+    children: option.price_child_usd != null ? (initialChildren ?? 0) : 0,
     infants: initialInfants ?? 0,
   });
 
@@ -160,7 +161,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const isDateBlocked = isPastDate || selectedDateStatus === 'full' || selectedDateStatus === 'closed';
   const isDateLow = selectedDateStatus === 'low';
 
-  const supportsChildren = product.accepts_children && option.price_child_usd != null;
+  const supportsChildren = option.price_child_usd != null;
   const maxAdults = remaining != null ? Math.min(20, Math.max(1, remaining - form.children)) : 20;
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 

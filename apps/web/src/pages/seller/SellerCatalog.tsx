@@ -213,7 +213,6 @@ export default function SellerCatalog() {
                                   key={opt.id}
                                   option={opt}
                                   productAvailableDays={detail.available_days}
-                                  productAcceptsChildren={detail.accepts_children}
                                   productChildrenAgeLabel={detail.children_age_label}
                                   commissionPercent={commissionByOption[opt.id]}
                                   onBook={() => setBooking({ product: detail, option: opt })}

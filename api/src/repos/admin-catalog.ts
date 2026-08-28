@@ -35,10 +35,12 @@ export interface AdminProductInput {
   is_active?: boolean;
   display_order?: number;
   available_days?: number[];
-  // Política general de la casa (aplica a todos sus tiers) — el precio de menor sigue
-  // siendo por tier (product_options.price_child_usd), esto es solo el flag.
+  // Legado: ya no se usa para nada (antes gateaba si se ofrecía precio de menor, pero
+  // eso generaba errores -- todas las casas admiten menores, lo que varía es si un
+  // tier puntual tiene price_child_usd cargado). Se mantiene la columna sin uso activo.
   accepts_children?: boolean;
-  // Texto libre del rango de edad (ej. "3 a 10 años"), solo relevante si accepts_children.
+  // Texto libre del rango de edad (ej. "3 a 10 años") -- siempre relevante, se muestra
+  // junto al campo de menores en cualquier tier que tenga price_child_usd cargado.
   children_age_label?: string | null;
   // Texto libre del rango de edad de infantes (ej. "0 a 2 años") -- a diferencia de
   // children_age_label, siempre aplica (los infantes existen en todos los servicios).

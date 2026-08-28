@@ -130,7 +130,6 @@ async function prepareCheckoutHold(
     default_capacity_per_day: number;
     product_name: string; product_slug: string;
     is_active: boolean; product_active: boolean;
-    accepts_children: boolean;
   }>(
     `SELECT o.id, o.product_id, o.name_es, o.name_en,
             o.price_adult_usd::text          AS price_adult_usd,
@@ -146,8 +145,7 @@ async function prepareCheckoutHold(
             o.net_price_child_ars::text      AS net_price_child_ars,
             o.net_transfer_price_ars::text   AS net_transfer_price_ars,
             o.available_days, o.default_capacity_per_day, o.is_active,
-            p.name AS product_name, p.slug AS product_slug, p.is_active AS product_active,
-            p.accepts_children
+            p.name AS product_name, p.slug AS product_slug, p.is_active AS product_active
        FROM product_options o
        JOIN products p ON p.id = o.product_id
       WHERE o.id = $1 LIMIT 1`,
@@ -188,7 +186,7 @@ async function prepareCheckoutHold(
   // 3) Totales (USD)
   const priceAdult = Number.parseFloat(option.price_adult_usd);
   const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
-  if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
+  if (input.children > 0 && option.price_child_usd == null) {
     return { ok: false, status: 400, body: { error: 'This option does not allow children pricing' } };
   }
   // 'optional' = con costo, el cliente elige sumarlo. 'included' = ya está en el
@@ -609,7 +607,6 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
       is_active: boolean; product_active: boolean;
-      accepts_children: boolean;
     }>(
       `SELECT o.id, o.product_id, o.name_es,
               o.price_adult_usd::text        AS price_adult_usd,
@@ -626,7 +623,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
               o.net_transfer_price_ars::text AS net_transfer_price_ars,
               o.available_days, o.default_capacity_per_day, o.is_active,
               p.name AS product_name, p.slug AS product_slug,
-              p.is_active AS product_active, p.accepts_children
+              p.is_active AS product_active
          FROM product_options o
          JOIN products p ON p.id = o.product_id
         WHERE o.id = $1 LIMIT 1`,
@@ -672,7 +669,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
     // Cálculo de totales
     const priceAdult = Number.parseFloat(option.price_adult_usd);
     const priceChild = option.price_child_usd != null ? Number.parseFloat(option.price_child_usd) : 0;
-    if (input.children > 0 && (option.price_child_usd == null || !option.accepts_children)) {
+    if (input.children > 0 && option.price_child_usd == null) {
       return res.status(400).json({ error: 'This option does not allow children pricing' });
     }
     const transferPriceUsdCash = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
