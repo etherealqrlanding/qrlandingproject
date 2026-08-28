@@ -422,7 +422,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                   />
                 </Field>
               )}
-              <Field label={t('checkout.infants')}>
+              <Field label={product.infant_age_label ? `${t('checkout.infants')} (${product.infant_age_label})` : t('checkout.infants')}>
                 <NumberStepper
                   value={form.infants} min={0} max={20}
                   onChange={(v) => updateField('infants', v)}

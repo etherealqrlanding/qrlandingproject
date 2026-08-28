@@ -22,7 +22,10 @@ const sellerSchema = z.object({
   contact_email: z.string().email().max(160).optional().nullable(),
   contact_phone: z.string().max(40).optional().nullable(),
   kind: z.string().max(40).optional().nullable(),
-  commission_percent: z.number().min(0).max(100),
+  // Ya no es la fuente de verdad de la comisión (ver product_kind_commission_adjustments +
+  // settings.seller_kind_base_commission) -- se acepta si alguien todavía lo manda, pero
+  // el admin ya no lo edita desde la UI.
+  commission_percent: z.number().min(0).max(100).optional(),
   notes: z.string().max(1000).optional().nullable(),
   is_active: z.boolean().optional(),
   is_permanent: z.boolean().optional(),

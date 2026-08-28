@@ -7,7 +7,9 @@ export interface SellerInput {
   contact_email?: string | null;
   contact_phone?: string | null;
   kind?: string | null;
-  commission_percent: number;
+  // Ya no es la fuente de verdad de la comisión (ver services/commission.ts) -- se
+  // mantiene la columna por compat/histórico, pero ya no la edita el admin.
+  commission_percent?: number;
   notes?: string | null;
   is_active?: boolean;
   is_house?: boolean;
@@ -119,7 +121,7 @@ export async function createSeller(input: SellerInput): Promise<number> {
     [
       input.code, input.name,
       input.contact_email ?? null, input.contact_phone ?? null,
-      input.kind ?? null, input.commission_percent,
+      input.kind ?? null, input.commission_percent ?? 10,
       input.notes ?? null, input.is_active ?? true, input.is_house ?? false,
     ],
   );

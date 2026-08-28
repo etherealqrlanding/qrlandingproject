@@ -150,6 +150,11 @@ export interface OrderEmailData {
   unit_price_child_usd?: number | null;
   transfer_qty?: number | null;
   infants?: number | null;
+  // Rango de edad configurado por el admin para menores/infantes -- se muestran en el
+  // comprobante para que quede trazada la política vigente al momento de la reserva
+  // (evita malentendidos en la puerta de la casa por un criterio de edad distinto).
+  children_age_label?: string | null;
+  infant_age_label?: string | null;
   transfer_hotel?: string | null;
   pickup_window?: string | null;
   dinner_time?: string | null;
@@ -291,11 +296,14 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   rows.push(emailRow('Adultos', pax));
   if (d.children > 0) {
     let ch = `${d.children} menor(es)`;
+    if (d.children_age_label) ch += ` (${escapeHtml(d.children_age_label)})`;
     if (showAmounts && d.unit_price_child_usd != null) ch += ` · ${perPaxStr(d.unit_price_child_usd, d)} c/u`;
     rows.push(emailRow('Menores', ch));
   }
   if (d.infants != null && d.infants > 0) {
-    rows.push(emailRow('Infantes', `${d.infants} (sin cargo de entrada)`));
+    let inf = `${d.infants} (sin cargo de entrada)`;
+    if (d.infant_age_label) inf += ` -- ${escapeHtml(d.infant_age_label)}`;
+    rows.push(emailRow('Infantes', inf));
   }
 
   if (d.pickup_window) rows.push(emailRow('Horario de traslado', escapeHtml(d.pickup_window)));
@@ -460,7 +468,7 @@ export const ORDER_EMAIL_SELECT = `
        oi.unit_price_child_usd::float AS unit_price_child_usd,
        oi.transfer_qty, oi.transfer_hotel, oi.infants,
        opt.pickup_window_es, opt.dinner_time_es, opt.show_time_es, opt.includes_es,
-       p.address_es,
+       p.address_es, p.children_age_label, p.infant_age_label,
        s.id AS seller_id, s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
        a.commission_amount_usd::float AS commission_usd,
        a.commission_amount_ars::float AS commission_ars,
@@ -497,6 +505,8 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
     unit_price_child_usd: (data.unit_price_child_usd as number) ?? null,
     transfer_qty: (data.transfer_qty as number) ?? null,
     infants: (data.infants as number) ?? null,
+    children_age_label: (data.children_age_label as string) ?? null,
+    infant_age_label: (data.infant_age_label as string) ?? null,
     transfer_hotel: (data.transfer_hotel as string) ?? null,
     pickup_window: (data.pickup_window_es as string) ?? null,
     dinner_time: (data.dinner_time_es as string) ?? null,

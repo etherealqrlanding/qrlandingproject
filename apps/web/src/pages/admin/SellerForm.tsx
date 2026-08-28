@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { adminApi, AdminApiError, type AdminSeller } from '../../lib/adminApi';
+import { sellerKindLabel } from '../../lib/sellerKinds';
 import SellerDataSection from './sections/SellerDataSection';
 import SellerQrSection from './sections/SellerQrSection';
 import SellerOrdersSection from './sections/SellerOrdersSection';
@@ -28,6 +29,11 @@ export default function SellerForm() {
   // directo las tarjetas de abajo, sin tener que ir a buscarlo de nuevo en el select.
   const [statsSelection, setStatsSelection] = useState<'account' | number>('account');
   const statsRef = useRef<HTMLDivElement>(null);
+  const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    adminApi.settings.getSellerKindCommission().then(setKindBaseCommissions).catch(() => {});
+  }, []);
 
   const handleSelectMemberStats = (memberId: number) => {
     setStatsSelection(memberId);
@@ -136,7 +142,11 @@ export default function SellerForm() {
         </div>
         {seller && (
           <p className="mt-1 text-sm text-cream/50">
-            Código <span className="font-mono text-gold-soft">{seller.code}</span> · {Number(seller.commission_percent).toFixed(1)}% incentivo
+            Código <span className="font-mono text-gold-soft">{seller.code}</span>
+            {' · '}{sellerKindLabel(seller.kind) ?? 'Sin perfil'}
+            {kindBaseCommissions && (
+              <> ({kindBaseCommissions[seller.kind ?? 'sin_especificar'] ?? 10}% base)</>
+            )}
           </p>
         )}
       </header>

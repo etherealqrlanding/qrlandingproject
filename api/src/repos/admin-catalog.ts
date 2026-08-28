@@ -40,6 +40,9 @@ export interface AdminProductInput {
   accepts_children?: boolean;
   // Texto libre del rango de edad (ej. "3 a 10 años"), solo relevante si accepts_children.
   children_age_label?: string | null;
+  // Texto libre del rango de edad de infantes (ej. "0 a 2 años") -- a diferencia de
+  // children_age_label, siempre aplica (los infantes existen en todos los servicios).
+  infant_age_label?: string | null;
   // Logo de la casa — reemplaza la foto de portada en las cards (catálogo público y
   // listado del admin). Independiente de la galería de fotos (product_images).
   logo_url?: string | null;
@@ -50,7 +53,7 @@ export async function adminListProducts() {
     `SELECT
        p.id, p.slug, p.name, p.venue_name, p.is_active, p.display_order,
        p.starting_price_usd::float AS starting_price_usd,
-       p.accepts_children, p.children_age_label, p.logo_url,
+       p.accepts_children, p.children_age_label, p.infant_age_label, p.logo_url,
        c.id AS category_id, c.slug AS category_slug, c.name_es AS category_name_es,
        p.updated_at,
        (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id) AS options_count,
@@ -113,6 +116,7 @@ export async function adminGetProduct(id: number) {
     net_price_adult_ars: num(o.net_price_adult_ars),
     net_price_child_ars: num(o.net_price_child_ars),
     net_transfer_price_ars: num(o.net_transfer_price_ars),
+    commission_adjustment_percent: num(o.commission_adjustment_percent),
   }));
   return { ...prod[0], starting_price_usd: num(prod[0].starting_price_usd), options, images: imgsRes.rows, menus };
 }
@@ -130,8 +134,8 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        schedule_summary_es, schedule_summary_en,
        video_url,
        starting_price_usd, is_active, display_order, available_days, accepts_children, children_age_label,
-       logo_url
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+       logo_url, infant_age_label
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -150,6 +154,7 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.accepts_children ?? false,
       input.children_age_label ?? null,
       input.logo_url ?? null,
+      input.infant_age_label ?? null,
     ],
   );
   return rows[0].id;
@@ -214,6 +219,9 @@ export interface AdminOptionInput {
   transfer_mode?: 'none' | 'optional' | 'included';
   transfer_price_usd?: number;
   infant_transfer_chargeable?: boolean;
+  // Ajuste general de comisión (%, puede ser negativo) -- se suma a la base del perfil
+  // del vendedor salvo que exista un override puntual (ver option_kind_commission_adjustments).
+  commission_adjustment_percent?: number;
   net_transfer_price_usd?: number | null;
   net_price_currency?: 'USD' | 'ARS' | null;
   net_price_adult_ars?: number | null;
@@ -243,8 +251,9 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
        pickup_window_es, pickup_window_en,
        dinner_time_es, dinner_time_en,
        show_time_es, show_time_en,
-       default_capacity_per_day, display_order, is_active, infant_transfer_chargeable
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+       default_capacity_per_day, display_order, is_active, infant_transfer_chargeable,
+       commission_adjustment_percent
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
      RETURNING id`,
     [
       productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
@@ -263,6 +272,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
       input.default_capacity_per_day ?? 80,
       input.display_order ?? 0, input.is_active ?? true,
       input.infant_transfer_chargeable ?? false,
+      input.commission_adjustment_percent ?? 0,
     ],
   );
   return rows[0].id;
@@ -295,6 +305,46 @@ export async function adminDeleteOption(id: number): Promise<boolean> {
     const result = await pool.query(`UPDATE product_options SET is_active = FALSE WHERE id = $1`, [id]);
     return (result.rowCount ?? 0) > 0;
   }
+}
+
+// ─── Ajustes de comisión por perfil (override puntual tier+kind) ────────────
+// Reemplaza (no suma) el ajuste general del tier, solo para ese perfil de vendedor
+// puntual -- ver api/src/services/commission.ts para cómo se combinan.
+
+export interface OptionKindAdjustment {
+  seller_kind: string;
+  adjustment_percent: number;
+}
+
+export async function getOptionKindAdjustments(optionId: number): Promise<OptionKindAdjustment[]> {
+  const { rows } = await pool.query<{ seller_kind: string; adjustment_percent: number }>(
+    `SELECT seller_kind, adjustment_percent::float AS adjustment_percent
+       FROM option_kind_commission_adjustments
+      WHERE option_id = $1
+      ORDER BY seller_kind`,
+    [optionId],
+  );
+  return rows;
+}
+
+export async function upsertOptionKindAdjustment(
+  optionId: number, sellerKind: string, adjustmentPercent: number,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO option_kind_commission_adjustments (option_id, seller_kind, adjustment_percent)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (option_id, seller_kind) DO UPDATE
+       SET adjustment_percent = EXCLUDED.adjustment_percent, updated_at = NOW()`,
+    [optionId, sellerKind, adjustmentPercent],
+  );
+}
+
+export async function deleteOptionKindAdjustment(optionId: number, sellerKind: string): Promise<boolean> {
+  const result = await pool.query(
+    `DELETE FROM option_kind_commission_adjustments WHERE option_id = $1 AND seller_kind = $2`,
+    [optionId, sellerKind],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 // ─── Imágenes ───────────────────────────────────────────

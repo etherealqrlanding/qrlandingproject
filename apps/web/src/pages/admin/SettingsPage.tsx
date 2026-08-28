@@ -1,5 +1,87 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminSetting } from '../../lib/adminApi';
+import { SELLER_KINDS } from '../../lib/sellerKinds';
+
+// Preview en vivo del tipo de cambio con markup mientras el admin edita el %, sin
+// esperar a guardar -- solo para mostrar, el cálculo real lo hace el backend al guardar.
+function rateNumForMarkup(raw: number, markupInput: string): number {
+  const pct = Number(markupInput);
+  const safePct = Number.isFinite(pct) ? pct : 0;
+  return Math.round(raw * (1 + safePct / 100) * 100) / 100;
+}
+
+const COMMISSION_KIND_ROWS = [...SELLER_KINDS, { value: 'sin_especificar', label: 'Sin especificar', icon: '🌟', suggestsCash: false }];
+
+function SellerKindCommissionForm({
+  values,
+  onSave,
+}: {
+  values: Record<string, number> | null;
+  onSave: (values: Record<string, number>) => Promise<void>;
+}) {
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!values) return;
+    setForm(Object.fromEntries(COMMISSION_KIND_ROWS.map((k) => [k.value, String(values[k.value] ?? 10)])));
+  }, [values]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed: Record<string, number> = {};
+    for (const k of COMMISSION_KIND_ROWS) {
+      const n = Number(form[k.value]);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        setErr(`"${k.label}": ingresá un porcentaje válido (0 a 100).`);
+        return;
+      }
+      parsed[k.value] = n;
+    }
+    setErr(null); setMsg(null); setSaving(true);
+    try {
+      await onSave(parsed);
+      setMsg('✓ Guardado.');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <section className="rounded-lg border border-gold/15 bg-ink-soft/50 p-6 max-w-2xl">
+      <h2 className="font-display text-2xl text-cream">Comisión base por perfil</h2>
+      <p className="mt-2 text-sm text-cream/60">
+        Cada perfil de vendedor tiene una comisión base. Un producto puntual puede ajustarla (para arriba o para
+        abajo) desde su editor -- la comisión final de cada venta es esta base más el ajuste del producto.
+      </p>
+      <form onSubmit={handleSave} className="mt-5 space-y-3">
+        {COMMISSION_KIND_ROWS.map((k) => (
+          <label key={k.value} className="flex items-center justify-between gap-3 max-w-xs">
+            <span className="text-sm text-cream/80">{k.icon} {k.label}</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number" min={0} max={100} step={0.1}
+                value={form[k.value] ?? ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, [k.value]: e.target.value }))}
+                className="input w-24 text-right"
+              />
+              <span className="text-cream/50 text-sm">%</span>
+            </div>
+          </label>
+        ))}
+        <div className="pt-2">
+          <button type="submit" disabled={saving} className="btn-primary disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+        </div>
+        {msg && <p className="text-sm text-gold">{msg}</p>}
+        {err && <p className="text-sm text-bordeaux-light">{err}</p>}
+      </form>
+    </section>
+  );
+}
 
 function CutoffForm({
   title,
@@ -231,10 +313,16 @@ export default function SettingsPage() {
   const [rateModeSaving, setRateModeSaving] = useState(false);
   const [rateModeMsg, setRateModeMsg] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState<string | null>(null);
+  const [kindCommissions, setKindCommissions] = useState<Record<string, number> | null>(null);
+  const [rateMarkup, setRateMarkup] = useState<string>('0');
+  const [rawRate, setRawRate] = useState<number | null>(null);
+  const [markupSaving, setMarkupSaving] = useState(false);
+  const [markupMsg, setMarkupMsg] = useState<string | null>(null);
+  const [markupErr, setMarkupErr] = useState<string | null>(null);
 
   const load = async () => {
     try {
-      const [data, mw, cw, ar, mm, rm, ww] = await Promise.all([
+      const [data, mw, cw, ar, mm, rm, ww, kc, markup] = await Promise.all([
         adminApi.settings.list(),
         adminApi.settings.getModifyWindow(),
         adminApi.settings.getCancelWindow(),
@@ -242,6 +330,8 @@ export default function SettingsPage() {
         adminApi.settings.getMaintenanceMode(),
         adminApi.settings.getExchangeRateMode(),
         adminApi.settings.getSupportWhatsapp(),
+        adminApi.settings.getSellerKindCommission(),
+        adminApi.settings.getExchangeRateMarkup(),
       ]);
       setSettings(data);
       setModifyWindow(mw.hours);
@@ -250,10 +340,13 @@ export default function SettingsPage() {
       setMaintenance(mm.enabled);
       setRateMode(rm.mode);
       setWhatsapp(ww.number);
+      setKindCommissions(kc);
+      setRateMarkup(String(markup.percent));
       const exchange = data.find((s) => s.key === 'exchange_rate_usd_ars');
       if (exchange) {
-        const value = exchange.value as { rate?: number };
+        const value = exchange.value as { rate?: number; raw_rate?: number };
         setRate(String(value.rate ?? ''));
+        setRawRate(value.raw_rate ?? null);
       }
     } catch (err) {
       setError((err as AdminApiError).message);
@@ -339,6 +432,27 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveMarkup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = Number(rateMarkup);
+    if (!Number.isFinite(p) || p < -50 || p > 200) {
+      setMarkupErr('Ingresá un porcentaje válido (-50 a 200).');
+      return;
+    }
+    setMarkupErr(null); setMarkupMsg(null); setMarkupSaving(true);
+    try {
+      const res = await adminApi.settings.updateExchangeRateMarkup(p);
+      setRate(String(res.rate));
+      setMarkupMsg('✓ Guardado.');
+      await load();
+      setTimeout(() => setMarkupMsg(null), 3000);
+    } catch (err) {
+      setMarkupErr((err as Error).message);
+    } finally {
+      setMarkupSaving(false);
+    }
+  };
+
   const exchange = settings?.find((s) => s.key === 'exchange_rate_usd_ars');
   const updatedAt = exchange?.updated_at;
   const rateNum = Number(rate);
@@ -402,6 +516,44 @@ export default function SettingsPage() {
         </div>
         {rateModeMsg && <p className="mt-2 text-sm text-gold">{rateModeMsg}</p>}
 
+        {rateMode === 'auto' && (
+          <form onSubmit={handleSaveMarkup} className="mt-5 rounded-md border border-gold/10 bg-ink/30 p-4 space-y-3">
+            <div>
+              <p className="text-sm text-cream/80">Markup sobre dolarapi.com</p>
+              <p className="mt-0.5 text-xs text-cream/45">
+                % que se suma al valor oficial de dolarapi.com para tener un tipo de cambio propio (competitivo,
+                con impuestos propios cargados, etc.). Se aplica en cada sync automático.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block">
+                <span className="block text-xs text-cream/60 mb-1">Markup (%)</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number" step={0.1} min={-50} max={200}
+                    value={rateMarkup}
+                    onChange={(e) => setRateMarkup(e.target.value)}
+                    className="input w-28"
+                  />
+                  <span className="text-cream/50 text-sm">%</span>
+                </div>
+              </label>
+              <button type="submit" disabled={markupSaving} className="btn-primary disabled:opacity-50">
+                {markupSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+              {rawRate != null && (
+                <div className="text-xs text-cream/50">
+                  Dolarapi.com: <span className="text-cream/80">ARS {rawRate.toLocaleString('es-AR')}</span>
+                  {' → '}
+                  con markup: <span className="text-gold">ARS {rateNumForMarkup(rawRate, rateMarkup).toLocaleString('es-AR')}</span>
+                </div>
+              )}
+            </div>
+            {markupMsg && <p className="text-sm text-gold">{markupMsg}</p>}
+            {markupErr && <p className="text-sm text-bordeaux-light">{markupErr}</p>}
+          </form>
+        )}
+
         <form onSubmit={handleSaveRate} className="mt-5 grid sm:grid-cols-[1fr_auto] gap-3">
           <label className="block">
             <span className="block text-sm text-cream/80 mb-1.5">1 USD =</span>
@@ -444,6 +596,14 @@ export default function SettingsPage() {
           </p>
         </section>
       )}
+
+      <SellerKindCommissionForm
+        values={kindCommissions}
+        onSave={async (values) => {
+          const res = await adminApi.settings.updateSellerKindCommission(values);
+          setKindCommissions(res);
+        }}
+      />
 
       {/* Cómo se calcula la comisión */}
       <section className="rounded-lg border border-gold/10 bg-ink/30 p-5 max-w-2xl">

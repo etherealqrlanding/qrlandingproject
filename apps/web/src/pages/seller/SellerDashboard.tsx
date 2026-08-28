@@ -80,7 +80,9 @@ export default function SellerDashboard() {
 
   if (!me) return null;
 
-  const commissionRate = `${Number(me.commission_percent).toFixed(1)}%`;
+  // Comisión BASE de tu perfil -- la efectiva de una venta puntual puede variar según
+  // el servicio (ver el catálogo, que muestra el % vigente antes de reservar).
+  const baseCommissionRate = `${Number(me.base_commission_percent).toFixed(1)}%`;
   const pending = me.commission_pending_ars;
   const earned = me.commission_earned_ars;
   const paid = me.commission_paid_ars;
@@ -107,7 +109,7 @@ export default function SellerDashboard() {
           Hola, {me.name.split(' ')[0]}
         </h1>
         <p className="mt-1 text-xs md:text-sm text-cream/50">
-          Incentivo: <span className="text-gold-soft">{commissionRate}</span> · código{' '}
+          Incentivo base: <span className="text-gold-soft">{baseCommissionRate}</span> · código{' '}
           <span className="font-mono text-gold-soft">{me.code}</span>
         </p>
       </header>
@@ -116,7 +118,7 @@ export default function SellerDashboard() {
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 md:mb-8">
         <StatCard label="Ventas" value={String(me.orders_paid)} sub="órdenes cobradas" />
         <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="ventas por Mercado Pago" />
-        <StatCard label="Incentivo ganado" value={fmt(earned)} sub={`${commissionRate} de tus ventas`} />
+        <StatCard label="Incentivo ganado" value={fmt(earned)} sub="según tu perfil y cada servicio" />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
         <StatCard label="Pendiente (MP)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
         <StatCard label="Neto a rendir" value={fmt(netToSettle)} sub={netToSettle > 0 ? 'de ventas en efectivo' : 'al día'} />
@@ -154,7 +156,7 @@ export default function SellerDashboard() {
               <span className="font-mono text-gold-soft">{me.code}</span>
             </InfoRow>
             {me.kind && <InfoRow label="Perfil">{sellerKindLabel(me.kind)}</InfoRow>}
-            <InfoRow label="Incentivo"><span className="text-gold">{commissionRate}</span></InfoRow>
+            <InfoRow label="Incentivo base"><span className="text-gold">{baseCommissionRate}</span></InfoRow>
             {me.contact_email && <InfoRow label="Email">{me.contact_email}</InfoRow>}
             {me.contact_phone && <InfoRow label="Teléfono">{me.contact_phone}</InfoRow>}
 

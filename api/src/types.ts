@@ -104,6 +104,9 @@ export interface ProductDetail extends ProductSummary {
   // (ProductOption.price_child_usd); esto solo habilita/deshabilita ofrecerlo.
   accepts_children: boolean;
   children_age_label: string | null;
+  // Rango de edad de infantes (texto libre, ej. "0 a 2 años") -- a diferencia de
+  // children_age_label, siempre aplica (los infantes existen en todos los servicios).
+  infant_age_label: string | null;
   images: ProductImage[];
   options: ProductOption[];
 }

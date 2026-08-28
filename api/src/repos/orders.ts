@@ -2,6 +2,7 @@ import type { PoolClient } from 'pg';
 import { pool } from '../db.js';
 import { checkAvailabilityTxLocked } from './availability.js';
 import { getArchiveRetentionDays } from '../services/settings.js';
+import { computeEffectiveCommissionPercent } from '../services/commission.js';
 
 export interface CreateOrderInput {
   customer: {
@@ -98,14 +99,18 @@ async function insertOrderItemAndAttribution(
 
   // Atribución a vendedor si vino ref válido
   if (ctx.ref_code) {
-    const { rows: sellerRows } = await client.query<{ id: number; commission_percent: string }>(
-      `SELECT id, commission_percent::text FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
+    const { rows: sellerRows } = await client.query<{ id: number; kind: string | null; is_house: boolean }>(
+      `SELECT id, kind, is_house FROM sellers WHERE code = $1 AND is_active = TRUE LIMIT 1`,
       [ctx.ref_code],
     );
     const seller = sellerRows[0];
     if (seller) {
       let netTotalUsd = item.net_total_usd ?? null;
-      const commissionPercent = Number.parseFloat(seller.commission_percent);
+      // Cuentas internas (ej. ADMINPREVIEW, el link de "ver sitio en vivo" del admin)
+      // nunca generan comisión real -- no pasan por el cálculo base+ajuste.
+      const commissionPercent = seller.is_house
+        ? 0
+        : await computeEffectiveCommissionPercent(seller.kind, item.option_id);
       let commissionUsd = 0;
 
       if (ctx.payment_method === 'cash') {

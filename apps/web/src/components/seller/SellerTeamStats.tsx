@@ -94,7 +94,6 @@ export default function SellerTeamStats() {
     );
   }
 
-  const commissionRate = `${Number(me.commission_percent).toFixed(1)}%`;
   const selectedMember = typeof selection === 'number' ? members.find((m) => m.id === selection) ?? null : null;
 
   return (
@@ -176,7 +175,7 @@ export default function SellerTeamStats() {
               <StatCard
                 label="Incentivo ganado"
                 value={fmt(stats.commission_earned_ars)}
-                sub={`${commissionRate} de ${selectedMember ? 'sus' : 'las'} ventas`}
+                sub="según el perfil y cada servicio"
               />
               <StatCard label="Ya cobrado" value={fmt(stats.commission_paid_ars)} sub="liquidado a la cuenta" />
               <StatCard label="Pendiente (MP)" value={fmt(stats.commission_pending_ars)} sub={stats.commission_pending_ars > 0 ? 'a cobrar del operador' : 'al día'} />

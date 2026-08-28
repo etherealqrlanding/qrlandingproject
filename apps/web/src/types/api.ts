@@ -91,6 +91,7 @@ export interface ProductDetail extends ProductSummary {
   // (ProductOption.price_child_usd); esto solo habilita/deshabilita ofrecerlo.
   accepts_children: boolean;
   children_age_label: string | null;
+  infant_age_label: string | null;
   images: ProductImage[];
   options: ProductOption[];
 }

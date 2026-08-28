@@ -25,6 +25,7 @@ export interface BookingFormProps {
   // Política de menores de la CASA (no del tier) — el tier solo aporta el precio.
   productAcceptsChildren: boolean;
   childrenAgeLabel?: string | null;
+  infantAgeLabel?: string | null;
   allowCash: boolean;
   // Tarjeta (Mercado Pago + Pix) habilitada para esta cuenta -- lo decide solo el
   // admin de la plataforma (sellers.card_enabled), nunca el vendedor ni el admin de cuenta.
@@ -48,7 +49,7 @@ const NATIONALITIES = [
 ];
 
 export default function BookingForm({
-  option, productAcceptsChildren, childrenAgeLabel, allowCash, allowCard, contextBanner, submitLabels, submitting, externalError, initialDate, initialAdults, initialChildren, onValidSubmit,
+  option, productAcceptsChildren, childrenAgeLabel, infantAgeLabel, allowCash, allowCard, contextBanner, submitLabels, submitting, externalError, initialDate, initialAdults, initialChildren, onValidSubmit,
 }: BookingFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>(
@@ -337,7 +338,7 @@ export default function BookingForm({
                 />
               </Field>
             )}
-            <Field label="Infantes">
+            <Field label={infantAgeLabel ? `Infantes (${infantAgeLabel})` : 'Infantes'}>
               <NumberStepper
                 value={form.infants} min={0} max={20}
                 onChange={(v) => updateField('infants', v)}

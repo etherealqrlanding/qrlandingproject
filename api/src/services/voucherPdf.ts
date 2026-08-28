@@ -73,8 +73,14 @@ export async function generateVoucherPdf(orderId: number): Promise<Buffer | null
   row(doc, 'Experiencia', order.option_name);
   row(doc, 'Fecha', order.service_date);
   let pax = `${order.adults} adulto(s)`;
-  if (order.children > 0) pax += ` · ${order.children} menor(es)`;
-  if (order.infants != null && order.infants > 0) pax += ` · ${order.infants} infante(s)`;
+  if (order.children > 0) {
+    pax += ` · ${order.children} menor(es)`;
+    if (order.children_age_label) pax += ` (${order.children_age_label})`;
+  }
+  if (order.infants != null && order.infants > 0) {
+    pax += ` · ${order.infants} infante(s)`;
+    if (order.infant_age_label) pax += ` (${order.infant_age_label})`;
+  }
   row(doc, 'Pasajeros', pax);
   if (order.transfer_qty != null && order.transfer_qty > 0) {
     const totalPax = order.adults + order.children;

@@ -47,8 +47,8 @@ function SummaryCard({ label, value, hint, highlight, showHintOnMobile }: Readon
 
 // ── Mobile card ───────────────────────────────────────────────────────────────
 function SellerCard({
-  s, highlighted, cardRef, onNavigate,
-}: Readonly<{ s: AdminSeller; highlighted?: boolean; cardRef?: (node: HTMLElement | null) => void; onNavigate: () => void }>) {
+  s, baseCommission, highlighted, cardRef, onNavigate,
+}: Readonly<{ s: AdminSeller; baseCommission: number; highlighted?: boolean; cardRef?: (node: HTMLElement | null) => void; onNavigate: () => void }>) {
   const pending = s.commission_pending_payment_ars ?? 0;
   return (
     <div
@@ -86,7 +86,7 @@ function SellerCard({
             </>
           )}
           <span>·</span>
-          <span>Com. {Number(s.commission_percent).toFixed(1)}%</span>
+          <span>Base {baseCommission.toFixed(1)}%</span>
           {s.orders_paid != null && (
             <>
               <span>·</span>
@@ -125,6 +125,7 @@ export default function SellersList() {
   const [showInactive, setShowInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
   const { isHighlighted, highlightedRef, markVisited } = useReturnHighlight(
     LAST_VIEWED_KEY, sellers, (s: AdminSeller) => s.id,
   );
@@ -133,7 +134,13 @@ export default function SellersList() {
     adminApi.sellers.list()
       .then(setSellers)
       .catch((err) => setError((err as Error).message));
+    adminApi.settings.getSellerKindCommission().then(setKindBaseCommissions).catch(() => {});
   }, []);
+
+  // Comisión base del perfil de este vendedor -- ya no un número manual propio, ver
+  // Configuración → Comisión base por perfil. Solo informativa en este listado: la
+  // comisión real de una venta puntual depende también del producto.
+  const baseCommissionFor = (kind: string | null) => kindBaseCommissions?.[kind ?? 'sin_especificar'] ?? 10;
 
   const totals = useMemo(() => {
     if (!sellers) return null;
@@ -189,6 +196,7 @@ export default function SellersList() {
             <SellerCard
               key={s.id}
               s={s}
+              baseCommission={baseCommissionFor(s.kind)}
               highlighted={isHighlighted(s.id)}
               cardRef={isHighlighted(s.id) ? highlightedRef : undefined}
               onNavigate={() => markVisited(s.id)}
@@ -203,7 +211,7 @@ export default function SellersList() {
               <tr>
                 <th className="text-left py-2.5 px-3">Recomendador</th>
                 <th className="text-left py-2.5 px-3">Código</th>
-                <th className="text-right py-2.5 px-3">Com.%</th>
+                <th className="text-right py-2.5 px-3">Base %</th>
                 <th className="text-right py-2.5 px-3">Ventas</th>
                 <th className="text-left py-2.5 px-3">Perfil</th>
                 <th className="text-right py-2.5 px-3">Pendiente</th>
@@ -234,7 +242,7 @@ export default function SellersList() {
                     <p className="text-xs text-cream/40 truncate max-w-[130px]">{s.contact_email ?? '—'}</p>
                   </td>
                   <td className="py-2.5 px-3 font-mono text-xs text-gold-soft whitespace-nowrap">{s.code}</td>
-                  <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs">{Number(s.commission_percent).toFixed(1)}%</td>
+                  <td className="py-2.5 px-3 text-right text-cream/80 tabular-nums text-xs">{baseCommissionFor(s.kind).toFixed(1)}%</td>
                   <td className="py-2.5 px-3 text-right text-cream/70 tabular-nums text-xs">{s.orders_paid ?? 0}</td>
                   <td className="py-2.5 px-3 text-left text-xs whitespace-nowrap">
                     {s.kind

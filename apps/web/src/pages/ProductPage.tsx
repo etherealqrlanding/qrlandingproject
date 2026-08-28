@@ -221,6 +221,7 @@ export default function ProductPage() {
                   productAvailableDays={product.available_days}
                   productAcceptsChildren={product.accepts_children}
                   productChildrenAgeLabel={product.children_age_label}
+                  productInfantAgeLabel={product.infant_age_label}
                   // Si la casa tiene logo, se usa el mismo en todos los tiers (marca
                   // unificada). Si no, las opciones no tienen fotos propias — se
                   // recorren las de la casa (mismo orden que el carrusel de arriba)
@@ -358,12 +359,13 @@ function formatShortDate(iso: string): string {
 }
 
 function OptionCard({
-  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, imageUrl, isLogo, selected, onSelect, onPreviewChange, onBook, lang,
+  option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, productInfantAgeLabel, imageUrl, isLogo, selected, onSelect, onPreviewChange, onBook, lang,
 }: {
   option: ProductOption;
   productAvailableDays: number[];
   productAcceptsChildren: boolean;
   productChildrenAgeLabel: string | null;
+  productInfantAgeLabel: string | null;
   imageUrl: string | null;
   // El logo es el mismo para todos los tiers de la casa — a diferencia de una foto,
   // no se recorta (object-contain) porque suele venir con transparencia.
@@ -568,7 +570,9 @@ function OptionCard({
             />
           )}
           <NumberStepper
-            bare label={t('checkout.infants')} value={infants} min={0} max={20} onChange={setInfants}
+            bare
+            label={`${t('checkout.infants')}${productInfantAgeLabel ? ` (${productInfantAgeLabel})` : ''}`}
+            value={infants} min={0} max={20} onChange={setInfants}
             decrementLabel="menos" incrementLabel="más"
           />
           {option.transfer_mode === 'optional' && (
@@ -917,7 +921,9 @@ function BookingSummary({
           </div>
         )}
         <div className="flex items-center justify-between py-1.5">
-          <span className="text-cream/50">{t('checkout.infants')}</span>
+          <span className="text-cream/50">
+            {t('checkout.infants')}{product.infant_age_label ? ` (${product.infant_age_label})` : ''}
+          </span>
           <span className="text-cream/90 font-medium">{preview.infants}</span>
         </div>
         {showTransferRow && (

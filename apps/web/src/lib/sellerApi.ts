@@ -131,7 +131,9 @@ export interface SellerMe {
   logo_url: string | null;
   tagline: string | null;
   public_phone: string | null;
-  commission_percent: string;
+  // Comisión base de TU perfil -- la comisión efectiva de una venta puntual puede ser
+  // distinta según el servicio (ver sellerApi.productsCommission).
+  base_commission_percent: number;
   orders_paid: number;
   revenue_paid_usd: number;
   revenue_paid_ars: number;
@@ -370,6 +372,10 @@ export async function getNotificationStreamUrl(): Promise<string | null> {
 
 export const sellerApi = {
   me: () => request<SellerMe>('/api/seller/me'),
+  // Comisión EFECTIVA de cada tier/servicio activo del catálogo para tu perfil (base +
+  // ajuste del tier, o su override puntual) -- separado del catálogo público, que
+  // nunca debe filtrar esta info.
+  optionsCommission: () => request<Record<number, number>>('/api/seller/me/options-commission'),
   // Mismas métricas que `me()`, recortables por sub-vendedor y/o período — usado por
   // el dashboard de estadísticas de "Mi equipo". Sin filtros, da lo mismo que `me()`.
   stats: (opts: { memberId?: number; from?: string; to?: string } = {}) => {

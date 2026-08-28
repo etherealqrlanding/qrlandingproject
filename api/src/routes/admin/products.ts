@@ -13,9 +13,13 @@ import {
   adminUpdateImage,
   adminUpdateOption,
   adminUpdateProduct,
+  getOptionKindAdjustments,
+  upsertOptionKindAdjustment,
+  deleteOptionKindAdjustment,
 } from '../../repos/admin-catalog.js';
 import { getAvailabilityForDate, getAvailabilityForProductRange } from '../../repos/availability.js';
 import { deleteOptionMenu, upsertOptionMenu } from '../../repos/admin-menus.js';
+import { SELLER_KIND_VALUES, NULL_KIND_BUCKET } from '../../services/commission.js';
 
 export const adminProductsRouter = Router();
 
@@ -85,6 +89,7 @@ const productSchema = z.object({
   available_days: z.array(z.number().int().min(1).max(7)).max(7).optional(),
   accepts_children: z.boolean().optional(),
   children_age_label: z.string().max(80).optional().nullable(),
+  infant_age_label: z.string().max(80).optional().nullable(),
   logo_url: z.string().url().max(800).optional().nullable(),
 });
 
@@ -176,6 +181,11 @@ const optionSchema = z.object({
   transfer_mode: z.enum(['none', 'optional', 'included']).optional(),
   transfer_price_usd: z.number().nonnegative().optional(),
   infant_transfer_chargeable: z.boolean().optional(),
+  // Ajuste general de comisión de este tier (%, puede ser negativo) -- se suma a la
+  // base del perfil del vendedor salvo que exista un override puntual (ver
+  // /options/:optionId/kind-adjustments). Distintos servicios de la misma casa pueden
+  // tener márgenes distintos.
+  commission_adjustment_percent: z.number().min(-100).max(100).optional(),
   net_transfer_price_usd: z.number().nonnegative().optional().nullable(),
   net_transfer_price_ars: z.number().nonnegative().optional().nullable(),
   available_days: z.array(z.number().int().min(1).max(7)).max(7).optional(),
@@ -220,6 +230,45 @@ adminProductsRouter.delete('/options/:optionId', async (req, res, next) => {
     const id = Number(req.params.optionId);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid id' });
     const ok = await adminDeleteOption(id);
+    if (!ok) return res.status(404).json({ error: 'Not found' });
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+// ─── Ajustes de comisión por perfil (override puntual para este tier) ──────
+const kindAdjustmentSchema = z.object({
+  adjustment_percent: z.number().min(-100).max(100),
+});
+
+adminProductsRouter.get('/options/:optionId/kind-adjustments', async (req, res, next) => {
+  try {
+    const optionId = Number(req.params.optionId);
+    if (!Number.isInteger(optionId) || optionId <= 0) return res.status(400).json({ error: 'Invalid option id' });
+    const rows = await getOptionKindAdjustments(optionId);
+    res.json({ data: rows });
+  } catch (err) { next(err); }
+});
+
+adminProductsRouter.put('/options/:optionId/kind-adjustments/:sellerKind', async (req, res, next) => {
+  try {
+    const optionId = Number(req.params.optionId);
+    if (!Number.isInteger(optionId) || optionId <= 0) return res.status(400).json({ error: 'Invalid option id' });
+    const sellerKind = req.params.sellerKind;
+    if (!([...SELLER_KIND_VALUES, NULL_KIND_BUCKET] as string[]).includes(sellerKind)) {
+      return res.status(400).json({ error: 'Invalid seller_kind' });
+    }
+    const parsed = kindAdjustmentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await upsertOptionKindAdjustment(optionId, sellerKind, parsed.data.adjustment_percent);
+    res.json({ data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
+adminProductsRouter.delete('/options/:optionId/kind-adjustments/:sellerKind', async (req, res, next) => {
+  try {
+    const optionId = Number(req.params.optionId);
+    if (!Number.isInteger(optionId) || optionId <= 0) return res.status(400).json({ error: 'Invalid option id' });
+    const ok = await deleteOptionKindAdjustment(optionId, req.params.sellerKind);
     if (!ok) return res.status(404).json({ error: 'Not found' });
     res.json({ data: { ok: true } });
   } catch (err) { next(err); }

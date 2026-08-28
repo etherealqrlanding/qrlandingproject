@@ -376,6 +376,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
               option={booking.option}
               productAcceptsChildren={booking.product.accepts_children}
               childrenAgeLabel={booking.product.children_age_label}
+              infantAgeLabel={booking.product.infant_age_label}
               allowCash={selectedSeller.is_permanent}
               allowCard={selectedSeller.card_enabled}
               submitting={false}

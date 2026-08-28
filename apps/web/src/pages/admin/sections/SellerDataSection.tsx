@@ -16,7 +16,7 @@ interface Props {
 const empty = {
   code: '', name: '',
   contact_email: '', contact_phone: '',
-  kind: '', commission_percent: 10,
+  kind: '',
   notes: '', is_active: true, is_permanent: false, card_enabled: true, is_house: false,
   landing_customization_enabled: false,
   team_enabled: false,
@@ -24,15 +24,23 @@ const empty = {
 };
 
 export default function SellerDataSection({ seller, isNew, onCreated, onUpdated, onDelete, onPermanentDelete }: Readonly<Props>) {
-  const [form, setForm] = useState(() => seller ? { ...empty, ...seller, commission_percent: Number(seller.commission_percent) } : { ...empty });
+  const [form, setForm] = useState(() => seller ? { ...empty, ...seller } : { ...empty });
   const [emailConfirm, setEmailConfirm] = useState(() => seller?.contact_email ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
+  // Comisión base del perfil elegido -- solo informativa acá (se configura en
+  // Configuración → Comisión base por perfil). El ajuste por producto se ve en el
+  // editor de cada producto (solapa "Comisión").
+  const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    adminApi.settings.getSellerKindCommission().then(setKindBaseCommissions).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (seller) {
-      setForm({ ...empty, ...seller, commission_percent: Number(seller.commission_percent) });
+      setForm({ ...empty, ...seller });
       setEmailConfirm(seller.contact_email ?? '');
       setDirty(false);
     }
@@ -61,9 +69,12 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
     }
     setSaving(true);
     try {
+      // commission_percent ya no se edita acá -- se omite explícitamente para no
+      // reenviar el valor legado tal cual viene (string) y que el backend lo rechace.
+      const formWithoutCommission: Record<string, unknown> = { ...form };
+      delete formWithoutCommission.commission_percent;
       const payload = {
-        ...form,
-        commission_percent: Number(form.commission_percent),
+        ...formWithoutCommission,
         contact_email: form.contact_email || null,
         contact_phone: form.contact_phone || null,
         kind: form.kind || null,
@@ -134,13 +145,12 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
             )}
           </div>
         </Field>
-        <Field label="Incentivo (%)" required hint="Entre 0 y 100. Se aplica a todas las ventas que genere.">
-          <input
-            type="number" required min={0} max={100} step={0.1}
-            value={form.commission_percent}
-            onChange={(e) => update('commission_percent', Number(e.target.value))}
-            className="input"
-          />
+        <Field label="Comisión base de este perfil" hint="Se configura por perfil en Configuración → Comisión base por perfil. Cada producto puede además ajustarla (para arriba, para abajo, o con un override puntual para este perfil).">
+          <div className="input flex items-center text-cream/70">
+            {kindBaseCommissions
+              ? `${kindBaseCommissions[form.kind || 'sin_especificar'] ?? 10}%`
+              : '—'}
+          </div>
         </Field>
       </div>
 
@@ -268,8 +278,8 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         )}
         {form.is_house && (
           <p className="text-xs text-gold-soft bg-gold/5 border border-gold/15 rounded-md px-3 py-2">
-            💡 Para ventas directas de la agencia (Instagram, WhatsApp, mostrador) sin pagarte incentivo a vos mismo,
-            usá <strong>Incentivo 0%</strong>. Si solo querés cobrar por Mercado Pago (sin efectivo), dejá
+            💡 Las cuentas propias (agencia) nunca generan comisión -- se ignora la comisión base del perfil y el
+            ajuste de cada producto automáticamente. Si solo querés cobrar por Mercado Pago (sin efectivo), dejá
             <strong> "Recomendador permanente"</strong> sin marcar.
           </p>
         )}

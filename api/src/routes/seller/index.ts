@@ -26,7 +26,8 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
-import { getExchangeRate, getExchangeRateMode, convertUsdToArs, getModifyWindow, getCancelWindow, getSameDayCutoff, getArchiveRetentionDays, checkOperationWindow } from '../../services/settings.js';
+import { getExchangeRate, getExchangeRateMode, convertUsdToArs, getModifyWindow, getCancelWindow, getSameDayCutoff, getArchiveRetentionDays, checkOperationWindow, getSellerKindBaseCommission } from '../../services/settings.js';
+import { computeEffectiveCommissionPercentForCatalog, NULL_KIND_BUCKET } from '../../services/commission.js';
 import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification, notifyAdminsNewOrderPaid } from '../../repos/notifications.js';
@@ -214,7 +215,6 @@ sellerRouter.get('/me', async (req, res, next) => {
          s.id, s.code, s.name, s.contact_email, s.contact_phone, s.kind,
          s.is_permanent, s.card_enabled, s.team_pin_required,
          s.landing_customization_enabled, s.logo_url, s.tagline, s.public_phone,
-         s.commission_percent::text AS commission_percent,
          COALESCE(stats.orders_paid, 0)::int       AS orders_paid,
          COALESCE(stats.revenue_paid_usd, 0)::float AS revenue_paid_usd,
          COALESCE(stats.revenue_paid_ars, 0)::float AS revenue_paid_ars,
@@ -273,7 +273,30 @@ sellerRouter.get('/me', async (req, res, next) => {
       WHERE s.id = $1`,
       [req.seller!.sellerId],
     );
-    res.json({ data: rows[0] });
+    const row = rows[0];
+    if (!row) return res.status(404).json({ error: 'Not found' });
+    // Comisión base del perfil (kind) del vendedor -- ya no un número manual por
+    // vendedor, sino el que configura el admin por perfil. La comisión EFECTIVA de
+    // una venta puntual puede variar según el tier/servicio (ver GET /me/options-commission).
+    const baseCommissions = await getSellerKindBaseCommission();
+    const baseCommissionPercent = baseCommissions[row.kind ?? NULL_KIND_BUCKET] ?? 10;
+    res.json({ data: { ...row, base_commission_percent: baseCommissionPercent } });
+  } catch (err) { next(err); }
+});
+
+// GET /me/options-commission — comisión EFECTIVA de cada tier/servicio activo del
+// catálogo para el perfil de este vendedor (base del perfil + ajuste del tier, o su
+// override puntual). Es lo que se muestra en el catálogo del portal ANTES de elegir
+// qué vender -- separado del catálogo público (GET /api/products), que nunca debe
+// filtrar esta info.
+sellerRouter.get('/me/options-commission', async (req, res, next) => {
+  try {
+    const { rows } = await pool.query<{ kind: string | null }>(
+      `SELECT kind FROM sellers WHERE id = $1 LIMIT 1`,
+      [req.seller!.sellerId],
+    );
+    const percents = await computeEffectiveCommissionPercentForCatalog(rows[0]?.kind ?? null);
+    res.json({ data: percents });
   } catch (err) { next(err); }
 });
 

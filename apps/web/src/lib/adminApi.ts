@@ -189,10 +189,17 @@ export interface AdminProductDetail {
   is_active: boolean; display_order: number;
   available_days: number[];
   accepts_children: boolean;
+  children_age_label: string | null;
+  infant_age_label: string | null;
   logo_url: string | null;
   options: AdminOption[];
   images: AdminImage[];
   menus: AdminMenu[];
+}
+
+export interface AdminOptionKindAdjustment {
+  seller_kind: string;
+  adjustment_percent: number;
 }
 
 export interface AdminOption {
@@ -207,6 +214,10 @@ export interface AdminOption {
   transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
   infant_transfer_chargeable: boolean;
+  // Ajuste general de comisión de este tier (%, puede ser negativo) -- se suma a la
+  // base del perfil del vendedor salvo que exista un override puntual (ver
+  // products.optionKindAdjustments).
+  commission_adjustment_percent: number;
   net_transfer_price_usd: number | string | null;
   net_price_currency: 'USD' | 'ARS' | null;
   net_price_adult_ars: number | string | null;
@@ -640,6 +651,18 @@ export const adminApi = {
         }),
       delete: (optionId: number) =>
         request<{ ok: true }>(`/api/admin/products/options/${optionId}`, { method: 'DELETE' }),
+      kindAdjustments: {
+        list: (optionId: number) =>
+          request<AdminOptionKindAdjustment[]>(`/api/admin/products/options/${optionId}/kind-adjustments`),
+        upsert: (optionId: number, sellerKind: string, adjustmentPercent: number) =>
+          request<{ ok: true }>(`/api/admin/products/options/${optionId}/kind-adjustments/${sellerKind}`, {
+            method: 'PUT', body: JSON.stringify({ adjustment_percent: adjustmentPercent }),
+          }),
+        delete: (optionId: number, sellerKind: string) =>
+          request<{ ok: true }>(`/api/admin/products/options/${optionId}/kind-adjustments/${sellerKind}`, {
+            method: 'DELETE',
+          }),
+      },
     },
     images: {
       create: (productId: number, input: Partial<AdminImage>) =>
@@ -721,7 +744,7 @@ export const adminApi = {
   sellers: {
     list: () => request<AdminSeller[]>('/api/admin/sellers'),
     get: (id: number) => request<AdminSeller>(`/api/admin/sellers/${id}`),
-    create: (input: Partial<AdminSeller> & { commission_percent: number }) =>
+    create: (input: Partial<AdminSeller>) =>
       request<AdminSeller>('/api/admin/sellers', {
         method: 'POST', body: JSON.stringify(input),
       }),
@@ -915,6 +938,12 @@ export const adminApi = {
       request<{ rate: number; mode: 'auto' | 'manual' }>('/api/admin/settings/exchange-rate/sync-now', {
         method: 'POST',
       }),
+    getExchangeRateMarkup: () =>
+      request<{ percent: number }>('/api/admin/settings/exchange-rate-markup'),
+    updateExchangeRateMarkup: (percent: number) =>
+      request<{ rate: number; percent: number }>('/api/admin/settings/exchange-rate-markup', {
+        method: 'PUT', body: JSON.stringify({ percent }),
+      }),
     getBookingCutoff: () =>
       request<{ time: string | null }>('/api/admin/settings/booking-cutoff'),
     updateBookingCutoff: (time: string | null) =>
@@ -952,6 +981,12 @@ export const adminApi = {
     updateArchiveRetention: (days: number | null) =>
       request<{ days: number | null }>('/api/admin/settings/archive-retention', {
         method: 'PUT', body: JSON.stringify({ days }),
+      }),
+    getSellerKindCommission: () =>
+      request<Record<string, number>>('/api/admin/settings/seller-kind-commission'),
+    updateSellerKindCommission: (values: Record<string, number>) =>
+      request<Record<string, number>>('/api/admin/settings/seller-kind-commission', {
+        method: 'PUT', body: JSON.stringify(values),
       }),
     getAbout: () => request<AboutContent>('/api/admin/settings/content/about'),
     updateAbout: (input: Omit<AboutContent, 'updated_at'>) =>

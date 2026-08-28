@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
+import { sellerApi } from '../../lib/sellerApi';
 import type { ProductDetail, ProductOption, ProductSummary } from '../../types/api';
 import SellerBookingModal from '../../components/seller/SellerBookingModal';
 import { OptionInfoCard } from '../../components/seller/OptionInfoCard';
@@ -22,12 +23,17 @@ export default function SellerBooking() {
 
   const [booking, setBooking] = useState<{ product: ProductDetail; option: ProductOption; initialDate?: string; initialAdults?: number; initialChildren?: number } | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState<{ slug: string; name: string } | null>(null);
+  // Comisión EFECTIVA por tier/servicio para tu perfil -- endpoint separado y
+  // autenticado, nunca embebido en el catálogo público (api.products.*), que
+  // cualquiera puede ver.
+  const [commissionByOption, setCommissionByOption] = useState<Record<number, number>>({});
 
   useEffect(() => {
     api.products.list()
       .then(setProducts)
       .catch((err) => setError((err as Error).message))
       .finally(() => setLoading(false));
+    sellerApi.optionsCommission().then(setCommissionByOption).catch(() => {});
   }, []);
 
   const handleToggle = async (slug: string) => {
@@ -166,6 +172,7 @@ export default function SellerBooking() {
                               productAvailableDays={expandedDetail.available_days}
                               productAcceptsChildren={expandedDetail.accepts_children}
                               productChildrenAgeLabel={expandedDetail.children_age_label}
+                              commissionPercent={commissionByOption[opt.id]}
                               onBook={() => setBooking({ product: expandedDetail, option: opt })}
                             />
                           ))}

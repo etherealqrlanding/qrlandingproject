@@ -25,6 +25,7 @@ const empty = {
   available_days: [1, 2, 3, 4, 5, 6, 7] as number[],
   accepts_children: false,
   children_age_label: null as string | null,
+  infant_age_label: null as string | null,
 };
 
 const DAYS = [
@@ -284,6 +285,19 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
           />
         </Field>
       )}
+
+      <Field
+        label="Rango de edad de infantes"
+        hint='Texto libre, ej. "0 a 2 años". Los infantes existen en todos los servicios (no depende de "Acepta menores") y nunca pagan entrada -- se muestra junto al campo de infantes en la reserva y en los emails/voucher, para que el pasajero sepa la política antes de cargar la cantidad.'
+      >
+        <input
+          type="text" maxLength={80}
+          value={form.infant_age_label ?? ''}
+          onChange={(e) => update('infant_age_label', e.target.value || null)}
+          className="input max-w-xs"
+          placeholder="0 a 2 años"
+        />
+      </Field>
 
 
       <div className="flex items-center justify-between pt-4 border-t border-gold/10">

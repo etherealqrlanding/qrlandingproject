@@ -10,10 +10,13 @@ interface Props {
   productAvailableDays: number[];
   productAcceptsChildren: boolean;
   productChildrenAgeLabel: string | null;
+  // Comisión EFECTIVA para tu perfil en este producto (base + ajuste, o su override
+  // puntual) -- undefined mientras carga o si no se pudo resolver, no se muestra nada.
+  commissionPercent?: number;
   onBook?: () => void;
 }
 
-export function OptionInfoCard({ option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, onBook }: Props) {
+export function OptionInfoCard({ option, productAvailableDays, productAcceptsChildren, productChildrenAgeLabel, commissionPercent, onBook }: Props) {
   const hasTimes = option.pickup_window_es || option.dinner_time_es || option.show_time_es;
   const showChildPrice = productAcceptsChildren && option.price_child_usd != null;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -38,6 +41,9 @@ export function OptionInfoCard({ option, productAvailableDays, productAcceptsChi
             <p className="text-xs text-cream/50 mt-1">
               Menor{productChildrenAgeLabel ? ` (${productChildrenAgeLabel})` : ''}: USD {option.price_child_usd}
             </p>
+          )}
+          {commissionPercent != null && (
+            <p className="text-[11px] text-gold-soft mt-1.5">Tu incentivo: {commissionPercent.toFixed(1)}%</p>
           )}
         </div>
       </div>

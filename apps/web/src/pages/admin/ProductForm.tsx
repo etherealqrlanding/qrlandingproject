@@ -7,9 +7,10 @@ import ProductLogoEditor from './sections/ProductLogoEditor';
 import GeneralSection from './sections/GeneralSection';
 import ProductAvailabilityEditor from './sections/ProductAvailabilityEditor';
 import MenuEditor from './sections/MenuEditor';
+import CommissionSection from './sections/CommissionSection';
 import ConfirmDialog from '../../components/ConfirmDialog';
 
-type Tab = 'general' | 'options' | 'menu' | 'availability' | 'images';
+type Tab = 'general' | 'options' | 'menu' | 'availability' | 'images' | 'commission';
 type DeleteDialog = 'deactivate' | 'hard';
 
 export default function ProductForm() {
@@ -106,7 +107,7 @@ export default function ProductForm() {
         <>
           {!isNew && (
             <div className="flex flex-wrap gap-1 border-b border-gold/10 mb-6 sm:flex-nowrap sm:overflow-x-auto">
-              {(['general', 'options', 'menu', 'availability', 'images'] as Tab[]).map((t) => (
+              {(['general', 'options', 'menu', 'availability', 'images', 'commission'] as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -122,6 +123,7 @@ export default function ProductForm() {
                   {t === 'menu' && 'Menú'}
                   {t === 'availability' && 'Disponibilidad por fecha'}
                   {t === 'images' && `Imágenes (${product?.images.length ?? 0})`}
+                  {t === 'commission' && 'Comisión'}
                 </button>
               ))}
             </div>
@@ -152,6 +154,9 @@ export default function ProductForm() {
               <ProductLogoEditor product={product} onChange={handleUpdated} />
               <ImagesEditor product={product} onChange={handleUpdated} />
             </>
+          )}
+          {tab === 'commission' && product && (
+            <CommissionSection product={product} onChange={handleUpdated} />
           )}
         </>
       )}

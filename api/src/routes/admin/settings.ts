@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool } from '../../db.js';
-import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getSameDayCutoff, setSameDayCutoff, getBookingHorizonMonths, setBookingHorizonMonths, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays, getSupportWhatsapp, setSupportWhatsapp } from '../../services/settings.js';
+import { getExchangeRate, setExchangeRate, getExchangeRateMode, setExchangeRateMode, setExchangeRateFromAuto, getExchangeRateMarkupPercent, setExchangeRateMarkupPercent, getSameDayCutoff, setSameDayCutoff, getBookingHorizonMonths, setBookingHorizonMonths, getModifyWindow, setModifyWindow, getCancelWindow, setCancelWindow, getMaintenanceMode, setMaintenanceMode, getArchiveRetentionDays, setArchiveRetentionDays, getSupportWhatsapp, setSupportWhatsapp, getSellerKindBaseCommission, setSellerKindBaseCommission } from '../../services/settings.js';
 import { fetchOficialVentaRate } from '../../services/exchangeRateSync.js';
 import { getAbout, setAbout, getFaq, setFaq, getSellerFaq, setSellerFaq, getTerms, setTerms } from '../../services/content.js';
+import { ALL_COMMISSION_KIND_KEYS } from '../../services/commission.js';
 
 export const adminSettingsRouter = Router();
 
@@ -58,6 +59,24 @@ adminSettingsRouter.post('/exchange-rate/sync-now', async (_req, res, next) => {
     const rate = await fetchOficialVentaRate();
     await setExchangeRateFromAuto(rate);
     res.json({ data: { rate: await getExchangeRate(), mode: await getExchangeRateMode() } });
+  } catch (err) { next(err); }
+});
+
+// ─── Markup sobre el valor de dolarapi.com (solo aplica en modo auto) ─────
+const rateMarkupSchema = z.object({ percent: z.number().min(-50).max(200) });
+
+adminSettingsRouter.get('/exchange-rate-markup', async (_req, res, next) => {
+  try {
+    res.json({ data: { percent: await getExchangeRateMarkupPercent() } });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/exchange-rate-markup', async (req, res, next) => {
+  try {
+    const parsed = rateMarkupSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await setExchangeRateMarkupPercent(parsed.data.percent);
+    res.json({ data: { rate: await getExchangeRate(), percent: await getExchangeRateMarkupPercent() } });
   } catch (err) { next(err); }
 });
 
@@ -181,6 +200,29 @@ adminSettingsRouter.put('/maintenance', async (req, res, next) => {
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
     await setMaintenanceMode(parsed.data.enabled);
     res.json({ data: { enabled: await getMaintenanceMode() } });
+  } catch (err) { next(err); }
+});
+
+// ─── Comisión base por perfil de vendedor ─────────────────
+// Objeto con las 7 claves exactas (los 6 perfiles + "sin_especificar") -- se rechaza
+// cualquier clave que no matchee la lista canónica, para no dejar filas fantasma que
+// nunca terminan aplicándose a ningún vendedor real.
+const sellerKindCommissionSchema = z.object(
+  Object.fromEntries(ALL_COMMISSION_KIND_KEYS.map((k) => [k, z.number().min(0).max(100)])),
+);
+
+adminSettingsRouter.get('/seller-kind-commission', async (_req, res, next) => {
+  try {
+    res.json({ data: await getSellerKindBaseCommission() });
+  } catch (err) { next(err); }
+});
+
+adminSettingsRouter.put('/seller-kind-commission', async (req, res, next) => {
+  try {
+    const parsed = sellerKindCommissionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+    await setSellerKindBaseCommission(parsed.data);
+    res.json({ data: await getSellerKindBaseCommission() });
   } catch (err) { next(err); }
 });
 
