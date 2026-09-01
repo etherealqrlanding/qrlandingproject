@@ -15,7 +15,7 @@ import {
   mapNauttStatusToOrderStatus,
   NauttError,
 } from '../services/nautt.js';
-import { getExchangeRate, convertUsdToArs, getSameDayCutoff } from '../services/settings.js';
+import { getExchangeRate, getBaseExchangeRate, convertUsdToArs, getSameDayCutoff } from '../services/settings.js';
 import {
   createPendingOrder,
   createOrderFromHold,
@@ -74,8 +74,12 @@ const createCheckoutSchema = z.object({
   transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  // Zona del hotel elegido -- algunas casas cobran distinto el traslado a
+  // Palermo (ver product_options.transfer_price_usd_palermo). Default 'centro'
+  // (el precio base) si no viene o la casa no distingue por zona.
+  transfer_zone: z.enum(['centro', 'palermo']).optional(),
   // Infantes (bebés): nunca pagan tarifa de entrada, no cuentan para el cupo del
-  // día. Solo pueden generar cargo de traslado (ver infant_transfer_chargeable).
+  // día. Siempre pagan traslado si el tier lo tiene con costo (ver computeBookingTotals).
   infants: z.number().int().min(0).max(20).optional(),
   // El check "Acepto los Términos y Condiciones" del checkout es obligatorio — z.literal(true)
   // rechaza cualquier otro valor (false, ausente, etc.), no solo lo marca opcional.
@@ -121,8 +125,7 @@ async function prepareCheckoutHold(
     price_adult_usd: string; price_child_usd: string | null;
     net_price_adult_usd: string | null; net_price_child_usd: string | null;
     transfer_mode: 'none' | 'optional' | 'included';
-    transfer_price_usd: string; net_transfer_price_usd: string | null;
-    infant_transfer_chargeable: boolean;
+    transfer_price_usd: string; transfer_price_usd_palermo: string | null; net_transfer_price_usd: string | null;
     net_price_currency: string;
     net_price_adult_ars: string | null; net_price_child_ars: string | null;
     net_transfer_price_ars: string | null;
@@ -138,8 +141,8 @@ async function prepareCheckoutHold(
             o.net_price_child_usd::text      AS net_price_child_usd,
             o.transfer_mode,
             o.transfer_price_usd::text       AS transfer_price_usd,
+            o.transfer_price_usd_palermo::text AS transfer_price_usd_palermo,
             o.net_transfer_price_usd::text   AS net_transfer_price_usd,
-            o.infant_transfer_chargeable,
             o.net_price_currency,
             o.net_price_adult_ars::text      AS net_price_adult_ars,
             o.net_price_child_ars::text      AS net_price_child_ars,
@@ -191,29 +194,38 @@ async function prepareCheckoutHold(
   }
   // 'optional' = con costo, el cliente elige sumarlo. 'included' = ya está en el
   // precio del servicio, siempre aplica y no se cobra aparte.
-  const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+  // Zona Palermo: solo si la casa configuró un precio distinto para esa zona
+  // (transfer_price_usd_palermo); si no, siempre se cobra el precio base.
+  const transferPriceUsd = option.transfer_mode === 'optional'
+    ? (input.transfer_zone === 'palermo' && option.transfer_price_usd_palermo != null
+        ? Number.parseFloat(option.transfer_price_usd_palermo)
+        : Number.parseFloat(option.transfer_price_usd ?? '0'))
+    : 0;
   const pax = input.adults + input.children;
-  // 'optional' = con costo, el cliente elige cuántos pasajeros lo llevan (0..pax).
-  // 'included' = ya está en el precio del servicio, siempre para todos los pax, sin costo aparte.
-  const transferQty = option.transfer_mode === 'included'
-    ? pax
-    : option.transfer_mode === 'optional'
-      ? Math.max(0, Math.min(input.transfer_qty ?? 0, pax))
-      : 0;
+  // El traslado es todo o nada, nunca una cantidad parcial: 'included' aplica a
+  // todos los pax sin preguntar; 'optional' depende del Sí/No del cliente
+  // (cualquier transfer_qty > 0 recibido se interpreta como "sí", nunca se toma
+  // el número tal cual — no hay forma de comprar traslado para una parte del grupo).
+  const transferQty = option.transfer_mode === 'included' ? pax
+    : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? pax : 0)
+    : 0;
   const transferSubtotal = option.transfer_mode === 'optional'
     ? Math.round(transferPriceUsd * transferQty * 100) / 100
     : 0;
-  // Infantes: nunca pagan tarifa de entrada. Solo generan cargo de traslado si el
-  // tier lo tiene habilitado Y la familia está usando traslado en esta reserva
-  // (transferQty > 0) — automático, no hay selección manual de "cuántos infantes".
+  // Infantes: nunca pagan tarifa de entrada, pero siempre pagan traslado (mismo
+  // precio que un adulto) en cuanto el tier tiene traslado con costo — ocupan
+  // lugar en el vehículo igual que cualquier otro pasajero.
   const infants = input.infants ?? 0;
-  const infantTransferApplies = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQty > 0;
+  const infantTransferApplies = option.transfer_mode === 'optional' && transferQty > 0;
   const infantTransferUsd = infantTransferApplies ? Math.round(transferPriceUsd * infants * 100) / 100 : 0;
   const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal + infantTransferUsd;
 
   // 4) Tipo de cambio (para totales en ARS y netos en ARS)
   const rate = await getExchangeRate();
   const totalArs = convertUsdToArs(subtotalUsd, rate);
+  // Sin el markup del admin -- solo para convertir la comisión del recomendador,
+  // así el margen de tipo de cambio queda 100% para la plataforma.
+  const commissionRate = await getBaseExchangeRate();
 
   // Neto (mínimo a recibir por el operador), igual que en /preferences
   const netCurrency = option.net_price_currency ?? 'USD';
@@ -274,6 +286,7 @@ async function prepareCheckoutHold(
       total_usd: subtotalUsd,
       total_ars: totalArs,
       exchange_rate_used: rate,
+      commission_exchange_rate_used: commissionRate,
       ref_code: input.ref_code ?? null,
       payment_method: paymentMethod,
       default_capacity_per_day: option.default_capacity_per_day,
@@ -598,8 +611,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       name_es: string; price_adult_usd: string; price_child_usd: string | null;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
-      transfer_price_usd: string; net_transfer_price_usd: string | null;
-      infant_transfer_chargeable: boolean;
+      transfer_price_usd: string; transfer_price_usd_palermo: string | null; net_transfer_price_usd: string | null;
       net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
       net_transfer_price_ars: string | null;
@@ -615,8 +627,8 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
               o.net_price_child_usd::text    AS net_price_child_usd,
               o.transfer_mode,
               o.transfer_price_usd::text     AS transfer_price_usd,
+              o.transfer_price_usd_palermo::text AS transfer_price_usd_palermo,
               o.net_transfer_price_usd::text AS net_transfer_price_usd,
-              o.infant_transfer_chargeable,
               o.net_price_currency,
               o.net_price_adult_ars::text    AS net_price_adult_ars,
               o.net_price_child_ars::text    AS net_price_child_ars,
@@ -672,23 +684,27 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
     if (input.children > 0 && option.price_child_usd == null) {
       return res.status(400).json({ error: 'This option does not allow children pricing' });
     }
-    const transferPriceUsdCash = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+    const transferPriceUsdCash = option.transfer_mode === 'optional'
+      ? (input.transfer_zone === 'palermo' && option.transfer_price_usd_palermo != null
+          ? Number.parseFloat(option.transfer_price_usd_palermo)
+          : Number.parseFloat(option.transfer_price_usd ?? '0'))
+      : 0;
     const paxCash = input.adults + input.children;
-    const transferQtyCash = option.transfer_mode === 'included'
-      ? paxCash
-      : option.transfer_mode === 'optional'
-        ? Math.max(0, Math.min(input.transfer_qty ?? 0, paxCash))
-        : 0;
+    // Todo o nada: cualquier transfer_qty > 0 recibido significa "sí quiero traslado".
+    const transferQtyCash = option.transfer_mode === 'included' ? paxCash
+      : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? paxCash : 0)
+      : 0;
     const transferSubtotalCash = option.transfer_mode === 'optional'
       ? Math.round(transferPriceUsdCash * transferQtyCash * 100) / 100
       : 0;
     const infantsCash = input.infants ?? 0;
-    const infantTransferAppliesCash = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQtyCash > 0;
+    const infantTransferAppliesCash = option.transfer_mode === 'optional' && transferQtyCash > 0;
     const infantTransferUsdCash = infantTransferAppliesCash ? Math.round(transferPriceUsdCash * infantsCash * 100) / 100 : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotalCash + infantTransferUsdCash;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
+    const commissionRate = await getBaseExchangeRate();
 
     // Neto para efectivo
     const netCurrencyCash = option.net_price_currency ?? 'USD';
@@ -756,6 +772,7 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       total_usd: subtotalUsd,
       total_ars: totalArs,
       exchange_rate_used: rate,
+      commission_exchange_rate_used: commissionRate,
       ref_code: input.ref_code,
       payment_method: 'cash',
       default_capacity_per_day: option.default_capacity_per_day,

@@ -30,6 +30,12 @@ export interface AdminProductInput {
   badge_en?: string | null;
   schedule_summary_es?: string | null;
   schedule_summary_en?: string | null;
+  // Horarios estructurados de la casa (una sola carga, compartida por todos sus
+  // tiers) -- ver product_options.has_dinner / show_only_time_enabled.
+  dinner_show_time_es?: string | null;
+  show_only_time_es?: string | null;
+  dinner_transfer_window_es?: string | null;
+  show_only_transfer_window_es?: string | null;
   video_url?: string | null;
   starting_price_usd?: number | null;
   is_active?: boolean;
@@ -134,10 +140,11 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        tagline_es, tagline_en,
        badge_es, badge_en,
        schedule_summary_es, schedule_summary_en,
+       dinner_show_time_es, show_only_time_es, dinner_transfer_window_es, show_only_transfer_window_es,
        video_url,
        starting_price_usd, is_active, display_order, available_days, accepts_children, children_age_label,
        logo_url, infant_age_label
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -148,6 +155,8 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.tagline_es ?? null, input.tagline_en ?? null,
       input.badge_es ?? null, input.badge_en ?? null,
       input.schedule_summary_es ?? null, input.schedule_summary_en ?? null,
+      input.dinner_show_time_es ?? null, input.show_only_time_es ?? null,
+      input.dinner_transfer_window_es ?? null, input.show_only_transfer_window_es ?? null,
       input.video_url ?? null,
       input.starting_price_usd ?? null,
       input.is_active ?? true,
@@ -218,9 +227,14 @@ export interface AdminOptionInput {
   net_price_adult_usd?: number | null;
   net_price_child_usd?: number | null;
   has_dinner?: boolean;
+  // Si está tildado, este tier muestra el horario de solo show + su traslado
+  // (configurados una sola vez a nivel casa, ver AdminProductInput).
+  show_only_time_enabled?: boolean;
   transfer_mode?: 'none' | 'optional' | 'included';
   transfer_price_usd?: number;
-  infant_transfer_chargeable?: boolean;
+  // Precio de traslado para hoteles en Palermo -- opcional, no todas las casas
+  // distinguen por zona. NULL/ausente = siempre se usa transfer_price_usd.
+  transfer_price_usd_palermo?: number | null;
   // Ajuste general de comisión (%, puede ser negativo) -- se suma a la base del perfil
   // del vendedor salvo que exista un override puntual (ver option_kind_commission_adjustments).
   commission_adjustment_percent?: number;
@@ -230,12 +244,6 @@ export interface AdminOptionInput {
   net_price_child_ars?: number | null;
   net_transfer_price_ars?: number | null;
   available_days?: number[];
-  pickup_window_es?: string | null;
-  pickup_window_en?: string | null;
-  dinner_time_es?: string | null;
-  dinner_time_en?: string | null;
-  show_time_es?: string | null;
-  show_time_en?: string | null;
   default_capacity_per_day?: number;
   display_order?: number;
   is_active?: boolean;
@@ -247,15 +255,13 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
        product_id, code, name_es, name_en, description_es, description_en,
        includes_es, includes_en, price_adult_usd, price_child_usd,
        net_price_adult_usd, net_price_child_usd,
-       has_dinner, transfer_mode, transfer_price_usd, net_transfer_price_usd,
+       has_dinner, show_only_time_enabled, transfer_mode, transfer_price_usd, transfer_price_usd_palermo,
+       net_transfer_price_usd,
        net_price_currency, net_price_adult_ars, net_price_child_ars, net_transfer_price_ars,
        available_days,
-       pickup_window_es, pickup_window_en,
-       dinner_time_es, dinner_time_en,
-       show_time_es, show_time_en,
-       default_capacity_per_day, display_order, is_active, infant_transfer_chargeable,
+       default_capacity_per_day, display_order, is_active,
        commission_adjustment_percent
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
      RETURNING id`,
     [
       productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
@@ -263,17 +269,14 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
       sanitizeIncludes(input.includes_es) ?? [], sanitizeIncludes(input.includes_en) ?? [],
       input.price_adult_usd, input.price_child_usd ?? null,
       input.net_price_adult_usd ?? null, input.net_price_child_usd ?? null,
-      input.has_dinner ?? false, input.transfer_mode ?? 'none',
-      input.transfer_price_usd ?? 0, input.net_transfer_price_usd ?? null,
+      input.has_dinner ?? false, input.show_only_time_enabled ?? false, input.transfer_mode ?? 'none',
+      input.transfer_price_usd ?? 0, input.transfer_price_usd_palermo ?? null,
+      input.net_transfer_price_usd ?? null,
       input.net_price_currency ?? 'USD',
       input.net_price_adult_ars ?? null, input.net_price_child_ars ?? null, input.net_transfer_price_ars ?? null,
       input.available_days ?? [1,2,3,4,5,6,7],
-      input.pickup_window_es ?? null, input.pickup_window_en ?? null,
-      input.dinner_time_es ?? null, input.dinner_time_en ?? null,
-      input.show_time_es ?? null, input.show_time_en ?? null,
       input.default_capacity_per_day ?? 80,
       input.display_order ?? 0, input.is_active ?? true,
-      input.infant_transfer_chargeable ?? false,
       input.commission_adjustment_percent ?? 0,
     ],
   );

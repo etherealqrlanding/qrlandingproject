@@ -184,6 +184,12 @@ export interface AdminProductDetail {
   neighborhood_es: string | null; neighborhood_en: string | null;
   tagline_es: string | null; tagline_en: string | null;
   schedule_summary_es: string | null; schedule_summary_en: string | null;
+  // Horarios estructurados de la casa (una sola carga, compartida por todos sus
+  // tiers) -- cada tier elige cuáles usar con un check en vez de tipearlos de nuevo.
+  dinner_show_time_es: string | null;
+  show_only_time_es: string | null;
+  dinner_transfer_window_es: string | null;
+  show_only_transfer_window_es: string | null;
   video_url: string | null;
   starting_price_usd: number | null;
   is_active: boolean; display_order: number;
@@ -211,9 +217,15 @@ export interface AdminOption {
   net_price_adult_usd: number | string | null;
   net_price_child_usd: number | string | null;
   has_dinner: boolean;
+  // Si está tildado, este tier muestra el horario de solo show + su traslado
+  // (configurados una sola vez a nivel casa) — independiente de has_dinner, un
+  // tier puede mostrar ambos horarios si corresponde.
+  show_only_time_enabled: boolean;
   transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
-  infant_transfer_chargeable: boolean;
+  // Precio de traslado para hoteles en Palermo -- opcional, no todas las casas
+  // distinguen por zona. NULL = siempre se usa transfer_price_usd.
+  transfer_price_usd_palermo: number | null;
   // Ajuste general de comisión de este tier (%, puede ser negativo) -- se suma a la
   // base del perfil del vendedor salvo que exista un override puntual (ver
   // products.optionKindAdjustments).
@@ -224,9 +236,6 @@ export interface AdminOption {
   net_price_child_ars: number | string | null;
   net_transfer_price_ars: number | string | null;
   available_days: number[];
-  pickup_window_es: string | null; pickup_window_en: string | null;
-  dinner_time_es: string | null; dinner_time_en: string | null;
-  show_time_es: string | null; show_time_en: string | null;
   default_capacity_per_day: number;
   low_availability_threshold: number;
   show_remaining_count: boolean;
@@ -456,6 +465,7 @@ export interface AdminBookingInput {
   transfer_qty?: number;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
+  transfer_zone?: 'centro' | 'palermo';
 }
 
 export interface AdminBookingResult {

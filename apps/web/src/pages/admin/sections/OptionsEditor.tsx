@@ -28,12 +28,9 @@ const blankOption: Partial<AdminOption> = {
   net_price_currency: 'USD',
   net_price_adult_usd: null, net_price_child_usd: null, net_transfer_price_usd: null,
   net_price_adult_ars: null, net_price_child_ars: null, net_transfer_price_ars: null,
-  has_dinner: false, transfer_mode: 'none', transfer_price_usd: 0,
-  infant_transfer_chargeable: false,
+  has_dinner: false, show_only_time_enabled: false, transfer_mode: 'none', transfer_price_usd: 0,
+  transfer_price_usd_palermo: null,
   available_days: [1, 2, 3, 4, 5, 6, 7],
-  pickup_window_es: '', pickup_window_en: '',
-  dinner_time_es: '', dinner_time_en: '',
-  show_time_es: '', show_time_en: '',
   default_capacity_per_day: 15,
   display_order: 0, is_active: true,
 };
@@ -143,7 +140,7 @@ export default function OptionsEditor({ product, onChange }: Props) {
       {expandedId === 'new' && (
         <Collapse className="rounded-lg border border-gold/30 bg-gold/5 p-5">
           <h3 className="font-display text-lg text-cream mb-4">Nuevo tier</h3>
-          <OptionFormFields option={draftNew} onChange={setDraftNew} />
+          <OptionFormFields option={draftNew} onChange={setDraftNew} product={product} />
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost text-sm">Cancelar</button>
             <button type="button" onClick={handleCreate} className="btn-primary text-sm">Crear tier</button>
@@ -155,6 +152,7 @@ export default function OptionsEditor({ product, onChange }: Props) {
         <OptionRow
           key={opt.id}
           option={opt}
+          product={product}
           expanded={expandedId === opt.id}
           onToggle={() => setExpandedId(expandedId === opt.id ? null : opt.id)}
           onSave={(changes) => handleSaveExisting(opt, changes)}
@@ -175,8 +173,9 @@ export default function OptionsEditor({ product, onChange }: Props) {
   );
 }
 
-function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvailability, onToggleVisibility, isToggling }: {
+function OptionRow({ option, product, expanded, onToggle, onSave, onDelete, onManageAvailability, onToggleVisibility, isToggling }: {
   option: AdminOption;
+  product: AdminProductDetail;
   expanded: boolean;
   onToggle: () => void;
   onSave: (changes: Partial<AdminOption>) => void;
@@ -250,7 +249,7 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
 
       {expanded && (
         <Collapse className="p-5 border-t border-gold/10">
-          <OptionFormFields option={draft} onChange={setDraft} />
+          <OptionFormFields option={draft} onChange={setDraft} product={product} />
           <div className="mt-5 flex items-center justify-between">
             <div className="flex gap-2">
               <button type="button" onClick={onManageAvailability} className="btn-ghost text-sm">
@@ -274,9 +273,10 @@ function OptionRow({ option, expanded, onToggle, onSave, onDelete, onManageAvail
   );
 }
 
-function OptionFormFields({ option, onChange }: {
+function OptionFormFields({ option, onChange, product }: {
   option: Partial<AdminOption>;
   onChange: (next: Partial<AdminOption>) => void;
+  product: AdminProductDetail;
 }) {
   const update = <K extends keyof AdminOption>(key: K, value: AdminOption[K] | null | string | string[] | number | boolean) =>
     onChange({ ...option, [key]: value });
@@ -463,38 +463,54 @@ function OptionFormFields({ option, onChange }: {
         </div>
       </Field>
 
-      <div className="grid sm:grid-cols-3 gap-4">
-        <Field label="Ventana de traslado" hint="Ej: 'Entre 19:30 y 20:00'">
-          <input
-            type="text" maxLength={200}
-            value={option.pickup_window_es ?? ''} onChange={(e) => update('pickup_window_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Horario cena" hint="Ej: 'Cena desde 20:00'">
-          <input
-            type="text" maxLength={200}
-            value={option.dinner_time_es ?? ''} onChange={(e) => update('dinner_time_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-        <Field label="Horario show" hint="Ej: 'Show desde 22:00'">
-          <input
-            type="text" maxLength={200}
-            value={option.show_time_es ?? ''} onChange={(e) => update('show_time_es', e.target.value)}
-            className="input"
-          />
-        </Field>
-      </div>
-
-      <div className="grid sm:grid-cols-4 gap-4">
-        <label className="flex items-center gap-2">
+      {/* Los horarios (cena, solo show, traslado a cada uno) ya no se tipean por
+          tier: se cargan una sola vez por casa en Datos generales, y acá el tier
+          solo elige cuáles usar — así todos los tiers de la misma casa quedan
+          siempre coherentes entre sí. */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <label className="flex items-start gap-2">
           <Checkbox
             checked={option.has_dinner ?? false}
             onChange={(checked) => update('has_dinner', checked)}
           />
-          <span className="text-sm text-cream/80">Incluye cena</span>
+          <span>
+            <span className="block text-sm text-cream/80">Incluye cena</span>
+            {option.has_dinner && (
+              (product.dinner_show_time_es || product.dinner_transfer_window_es) ? (
+                <span className="block text-xs text-cream/40 mt-0.5">
+                  {[product.dinner_show_time_es, product.dinner_transfer_window_es].filter(Boolean).join(' · ')}
+                </span>
+              ) : (
+                <span className="block text-xs text-bordeaux-light mt-0.5">
+                  Cargá el horario de cena en Datos generales
+                </span>
+              )
+            )}
+          </span>
         </label>
+        <label className="flex items-start gap-2">
+          <Checkbox
+            checked={option.show_only_time_enabled ?? false}
+            onChange={(checked) => update('show_only_time_enabled', checked)}
+          />
+          <span>
+            <span className="block text-sm text-cream/80">Muestra horario de solo show</span>
+            {option.show_only_time_enabled && (
+              (product.show_only_time_es || product.show_only_transfer_window_es) ? (
+                <span className="block text-xs text-cream/40 mt-0.5">
+                  {[product.show_only_time_es, product.show_only_transfer_window_es].filter(Boolean).join(' · ')}
+                </span>
+              ) : (
+                <span className="block text-xs text-bordeaux-light mt-0.5">
+                  Cargá el horario de solo show en Datos generales
+                </span>
+              )
+            )}
+          </span>
+        </label>
+      </div>
+
+      <div className="grid sm:grid-cols-4 gap-4">
         <div className="sm:col-span-2 space-y-1.5">
           <span className="block text-sm text-cream/80">Traslado</span>
           <div className="flex gap-2 flex-wrap">
@@ -518,24 +534,33 @@ function OptionFormFields({ option, onChange }: {
             ))}
           </div>
           {option.transfer_mode === 'optional' && (
-            <label className="block">
-              <span className="block text-xs text-cream/60 mb-1">Precio traslado (USD/pax)</span>
-              <input
-                type="number" min={0} step={0.01}
-                value={option.transfer_price_usd ?? 0}
-                onChange={(e) => update('transfer_price_usd', Number(e.target.value))}
-                className="input w-28 text-sm"
-              />
-            </label>
+            <div className="flex flex-wrap gap-4">
+              <label className="block">
+                <span className="block text-xs text-cream/60 mb-1">Precio traslado (USD/pax)</span>
+                <input
+                  type="number" min={0} step={0.01}
+                  value={option.transfer_price_usd ?? 0}
+                  onChange={(e) => update('transfer_price_usd', Number(e.target.value))}
+                  className="input w-28 text-sm"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs text-cream/60 mb-1">Precio traslado Palermo (USD/pax)</span>
+                <input
+                  type="number" min={0} step={0.01}
+                  placeholder="Igual"
+                  value={option.transfer_price_usd_palermo ?? ''}
+                  onChange={(e) => update('transfer_price_usd_palermo', e.target.value === '' ? null : Number(e.target.value))}
+                  className="input w-28 text-sm"
+                />
+              </label>
+            </div>
           )}
           {option.transfer_mode === 'optional' && (
-            <label className="flex items-center gap-2 pt-1">
-              <Checkbox
-                checked={option.infant_transfer_chargeable ?? false}
-                onChange={(checked) => update('infant_transfer_chargeable', checked)}
-              />
-              <span className="text-sm text-cream/80">Cobrar traslado a infantes</span>
-            </label>
+            <p className="text-xs text-cream/40 pt-1">
+              El traslado siempre incluye a todos los pasajeros (adultos, menores e infantes) automáticamente.
+              {' '}Dejá "Precio traslado Palermo" vacío si esta casa no cobra distinto para hoteles en Palermo.
+            </p>
           )}
         </div>
         <Field label="Orden display" hint="Menor número aparece primero dentro del producto">

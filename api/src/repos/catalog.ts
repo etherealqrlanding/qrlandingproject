@@ -1,6 +1,34 @@
 import { pool } from '../db.js';
 import type { Category, ProductDetail, ProductImage, ProductMenu, ProductOption, ProductSummary } from '../types.js';
 
+// Resuelve los horarios EFECTIVOS de un tier a partir de los 4 horarios
+// configurados una sola vez a nivel casa + los checks del propio tier
+// (has_dinner / show_only_time_enabled) -- reemplaza los viejos campos de
+// texto libre por tier (pickup_window/dinner_time/show_time), que ya no
+// existen en product_options. Si un tier tiene ambos checks activos, el
+// traslado muestra las dos ventanas (son horarios distintos).
+export function resolveOptionSchedule(
+  product: {
+    dinner_show_time_es: string | null;
+    show_only_time_es: string | null;
+    dinner_transfer_window_es: string | null;
+    show_only_transfer_window_es: string | null;
+  },
+  option: { has_dinner: boolean; show_only_time_enabled: boolean },
+): { pickup_window_es: string | null; dinner_time_es: string | null; show_time_es: string | null } {
+  const dinner_time_es = option.has_dinner ? product.dinner_show_time_es : null;
+  const show_time_es = option.show_only_time_enabled ? product.show_only_time_es : null;
+  const pickupParts = [
+    option.has_dinner ? product.dinner_transfer_window_es : null,
+    option.show_only_time_enabled ? product.show_only_transfer_window_es : null,
+  ].filter((v): v is string => Boolean(v));
+  return {
+    dinner_time_es,
+    show_time_es,
+    pickup_window_es: pickupParts.length > 0 ? pickupParts.join(' · ') : null,
+  };
+}
+
 interface MenuRow {
   id: number;
   option_id: number;
@@ -118,6 +146,8 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
        p.tagline_es, p.tagline_en,
        p.badge_es, p.badge_en,
        p.schedule_summary_es, p.schedule_summary_en,
+       p.dinner_show_time_es, p.show_only_time_es,
+       p.dinner_transfer_window_es, p.show_only_transfer_window_es,
        p.video_url,
        p.available_days,
        p.starting_price_usd::float AS starting_price_usd,
@@ -139,19 +169,16 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
         ORDER BY is_hero DESC, display_order`,
       [product.id],
     ),
-    pool.query<ProductOption>(
+    pool.query<Omit<ProductOption, 'pickup_window_es' | 'dinner_time_es' | 'show_time_es'> & { show_only_time_enabled: boolean }>(
       `SELECT
          id, code, name_es, name_en, description_es, description_en,
          includes_es, includes_en,
          price_adult_usd::float AS price_adult_usd,
          price_child_usd::float AS price_child_usd,
-         has_dinner, transfer_mode,
+         has_dinner, show_only_time_enabled, transfer_mode,
          transfer_price_usd::float AS transfer_price_usd,
-         infant_transfer_chargeable,
+         transfer_price_usd_palermo::float AS transfer_price_usd_palermo,
          available_days,
-         pickup_window_es, pickup_window_en,
-         dinner_time_es, dinner_time_en,
-         show_time_es, show_time_en,
          display_order
          FROM product_options
         WHERE product_id = $1 AND is_active = TRUE
@@ -166,6 +193,10 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
     ...product,
     hero_image: imagesRes.rows.find((i) => i.is_hero)?.url ?? imagesRes.rows[0]?.url ?? null,
     images: imagesRes.rows,
-    options: optionsRes.rows.map((o) => ({ ...o, menu: menuByOption.get(o.id) ?? null })),
+    options: optionsRes.rows.map(({ show_only_time_enabled, ...o }) => ({
+      ...o,
+      ...resolveOptionSchedule(product, { has_dinner: o.has_dinner, show_only_time_enabled }),
+      menu: menuByOption.get(o.id) ?? null,
+    })),
   };
 }

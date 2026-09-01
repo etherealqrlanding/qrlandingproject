@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { type AdminSeller } from '../../../lib/adminApi';
+import { adminApi, type AdminSeller } from '../../../lib/adminApi';
 import { supabase } from '../../../lib/supabase';
 
 interface Props { seller: AdminSeller; }
@@ -16,6 +16,13 @@ export default function SellerQrSection({ seller }: Props) {
   const [pngBlobUrl, setPngBlobUrl] = useState<string | null>(null);
   const [svgBlobUrl, setSvgBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // La comisión ya no se edita por vendedor -- sale de la base por perfil que
+  // configura el admin en Settings.
+  const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
+  useEffect(() => {
+    adminApi.settings.getSellerKindCommission().then(setKindBaseCommissions).catch(() => {});
+  }, []);
+  const baseCommission = kindBaseCommissions?.[seller.kind ?? 'sin_especificar'] ?? 10;
 
   const targetUrl = `${window.location.origin}/?ref=${seller.code}`;
 
@@ -85,7 +92,7 @@ export default function SellerQrSection({ seller }: Props) {
           </button>
         </div>
         <p className="mt-2 text-xs text-cream/50">
-          Cualquier cliente que entre por este link se atribuye a <span className="text-cream">{seller.name}</span> y le suma {Number(seller.commission_percent).toFixed(1)}% de incentivo.
+          Cualquier cliente que entre por este link se atribuye a <span className="text-cream">{seller.name}</span> y le suma {baseCommission.toFixed(1)}% de incentivo.
         </p>
       </section>
 

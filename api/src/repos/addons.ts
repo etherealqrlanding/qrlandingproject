@@ -159,14 +159,16 @@ export async function applyAddonPayment(
     // transacciones espera a la otra en vez de correr con datos ya obsoletos: quien llegue
     // segundo ve el estado ya committeado, no el de antes.
     const { rows: orderRows } = await client.query<{
-      order_id: number; status: string; exchange_rate_used: number; payment_method: string;
+      order_id: number; status: string; exchange_rate_used: number; commission_exchange_rate_used: number; payment_method: string;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number;
       commission_percent: number | null; seller_id: number | null; net_total_usd: number | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status,
-              o.exchange_rate_used::float AS exchange_rate_used, o.payment_method,
+              o.exchange_rate_used::float AS exchange_rate_used,
+              COALESCE(o.commission_exchange_rate_used, o.exchange_rate_used)::float AS commission_exchange_rate_used,
+              o.payment_method,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
@@ -253,7 +255,7 @@ export async function applyAddonPayment(
       } else {
         newCommissionUsd = round2(calc.newSubtotalUsd * (cur.commission_percent ?? 0) / 100);
       }
-      const newCommissionArs = round2(newCommissionUsd * cur.exchange_rate_used);
+      const newCommissionArs = round2(newCommissionUsd * cur.commission_exchange_rate_used);
       await client.query(
         `UPDATE order_attributions
             SET commission_amount_usd = $1, commission_amount_ars = $2,

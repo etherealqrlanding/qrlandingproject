@@ -6,7 +6,8 @@ import TransferSection from '../TransferSection';
 import Spinner from '../Spinner';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import NumberStepper from '../NumberStepper';
-import { computeBookingTotals } from '../../lib/pricing';
+import { computeBookingTotals, transferPriceRange, transferUnitPrice } from '../../lib/pricing';
+import { zoneForHotel } from '../../lib/hotels';
 
 // Núcleo del formulario de reserva manual: datos del pasajero, disponibilidad en vivo,
 // cálculo de precios, traslado y método de pago. Lo comparten el portal de vendedores
@@ -55,9 +56,9 @@ export default function BookingForm({
   );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  // Solo relevante para transfer_mode === 'optional' ('included' = todos los pax,
-  // 'none' = 0, derivados más abajo).
-  const [transferQtyOptional, setTransferQtyOptional] = useState(0);
+  // Solo relevante para transfer_mode === 'optional' — 'included' no pregunta
+  // (va gratis para todos) y 'none' no tiene traslado.
+  const [transferWanted, setTransferWanted] = useState(false);
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   // Monto que se le cobra al pasajero en efectivo. Es SOLO referencia visual para el
@@ -139,19 +140,21 @@ export default function BookingForm({
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 
   const totalPax = form.adults + form.children;
-  // No puede haber más pax con traslado que pax totales: se recorta solo si adultos
-  // o menores bajan por debajo de lo que ya estaba seleccionado.
-  useEffect(() => {
-    setTransferQtyOptional((v) => Math.min(v, totalPax));
-  }, [totalPax]);
-
+  // El traslado, cuando se suma, es siempre todo o nada: todos los pax de la
+  // reserva, nunca una cantidad parcial. 'included' va gratis para todos sin
+  // preguntar; 'optional' depende del Sí/No que eligió quien reserva.
   const transferQty = option.transfer_mode === 'included' ? totalPax
-    : option.transfer_mode === 'optional' ? transferQtyOptional
+    : option.transfer_mode === 'optional' ? (transferWanted ? totalPax : 0)
     : 0;
 
+  // Zona de traslado según el hotel elegido — antes de elegirlo (o si la casa no
+  // distingue por zona) se usa la zona base como estimado.
+  const transferZone = zoneForHotel(transferHotel);
+  const zoneRange = transferPriceRange(option);
+
   const { ticketsUsd, transferUsd, infantTransferUsd, totalUsd } = useMemo(
-    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren, form.infants),
-    [option, form.adults, form.children, transferQty, supportsChildren, form.infants],
+    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren, form.infants, transferZone),
+    [option, form.adults, form.children, transferQty, supportsChildren, form.infants, transferZone],
   );
 
   const updateField = <K extends keyof typeof form>(field: K, value: typeof form[K]) =>
@@ -222,6 +225,7 @@ export default function BookingForm({
       transfer_qty: transferQty,
       transfer_hotel: transferQty > 0 ? (transferHotel || null) : null,
       transfer_room: transferQty > 0 ? (transferRoom.trim() || null) : null,
+      transfer_zone: transferZone,
     }, { ticketsUsd, transferUsd, infantTransferUsd, totalUsd });
   };
 
@@ -354,7 +358,9 @@ export default function BookingForm({
                 <span className="text-cream/80">USD {ticketsUsd}</span>
               </div>
               <div className="flex items-baseline justify-between text-sm">
-                <span className="text-cream/60">Traslado ({form.adults + form.children} pax)</span>
+                <span className="text-cream/60">
+                  Traslado ({form.adults + form.children} pax{zoneRange.hasZonePricing && transferHotel ? ` · ${transferZone === 'palermo' ? 'Palermo' : 'Centro'}` : ''})
+                </span>
                 <span className="text-cream/80">+USD {transferUsd}</span>
               </div>
               {infantTransferUsd > 0 && (
@@ -362,6 +368,11 @@ export default function BookingForm({
                   <span className="text-cream/60">Traslado (infantes)</span>
                   <span className="text-cream/80">+USD {infantTransferUsd}</span>
                 </div>
+              )}
+              {zoneRange.hasZonePricing && !transferHotel && (
+                <p className="text-[11px] text-cream/40 italic pt-1">
+                  El precio final del traslado depende de la zona del hotel del pasajero — se confirma al elegirlo.
+                </p>
               )}
             </div>
           )}
@@ -400,19 +411,21 @@ export default function BookingForm({
           ) : null}
         </div>
 
-        {/* Traslado */}
+        {/* Traslado — cuando es opcional, quien reserva decide con Sí/No; siempre
+            todo o nada para el grupo entero. */}
         {option.transfer_mode !== 'none' && (
           <TransferSection
-            qty={transferQtyOptional}
-            maxQty={totalPax}
+            totalPax={totalPax + form.infants}
             hotel={transferHotel}
             room={transferRoom}
-            onChange={setTransferQtyOptional}
             onHotelChange={setTransferHotel}
             onRoomChange={setTransferRoom}
             pickupWindow={option.pickup_window_es}
             lang="es"
             included={option.transfer_mode === 'included'}
+            wanted={transferWanted}
+            onWantedChange={(v) => { setTransferWanted(v); if (!v) { setTransferHotel(''); setTransferRoom(''); } }}
+            pricePerPax={transferUnitPrice(option, transferZone)}
           />
         )}
 

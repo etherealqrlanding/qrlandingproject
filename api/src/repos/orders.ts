@@ -36,6 +36,9 @@ export interface CreateOrderInput {
   total_usd: number;
   total_ars: number;
   exchange_rate_used: number;
+  // Tipo de cambio SIN el markup del admin -- se usa solo para convertir la
+  // comisión del recomendador a ARS (ver services/settings.ts getBaseExchangeRate).
+  commission_exchange_rate_used: number;
   ref_code: string | null;
   payment_method?: 'mercadopago' | 'cash' | 'pix';
   utm?: { source?: string | null; medium?: string | null; campaign?: string | null };
@@ -75,7 +78,7 @@ async function insertOrderItemAndAttribution(
   client: PoolClient,
   orderId: number,
   item: CreateOrderInput['item'],
-  ctx: { total_usd: number; exchange_rate_used: number; ref_code: string | null; payment_method?: 'mercadopago' | 'cash' | 'pix'; seller_member_id?: number | null },
+  ctx: { total_usd: number; exchange_rate_used: number; commission_exchange_rate_used: number; ref_code: string | null; payment_method?: 'mercadopago' | 'cash' | 'pix'; seller_member_id?: number | null },
 ): Promise<void> {
   await client.query(
     `INSERT INTO order_items (
@@ -129,7 +132,7 @@ async function insertOrderItemAndAttribution(
         commissionUsd = Math.max(0, Math.round((ctx.total_usd * commissionPercent / 100) * 100) / 100);
       }
 
-      const commissionArs = Math.round(commissionUsd * ctx.exchange_rate_used * 100) / 100;
+      const commissionArs = Math.round(commissionUsd * ctx.commission_exchange_rate_used * 100) / 100;
       await client.query(
         `INSERT INTO order_attributions (
            order_id, seller_id,
@@ -162,16 +165,16 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
     const { rows: orderRows } = await client.query<{ id: number; public_id: string }>(
       `INSERT INTO orders (
          status, customer_name, customer_email, customer_phone, customer_nationality, customer_dni,
-         total_usd, total_ars, exchange_rate_used, currency,
+         total_usd, total_ars, exchange_rate_used, commission_exchange_rate_used, currency,
          ref_code, payment_method, utm_source, utm_medium, utm_campaign
        ) VALUES (
-         'pending', $1, $2, $3, $4, $5, $6, $7, $8, 'ARS', $9, $10, $11, $12, $13
+         'pending', $1, $2, $3, $4, $5, $6, $7, $8, $9, 'ARS', $10, $11, $12, $13, $14
        )
        RETURNING id, public_id`,
       [
         input.customer.name, input.customer.email, input.customer.phone ?? null,
         input.customer.nationality ?? null, input.customer.dni ?? null,
-        input.total_usd, input.total_ars, input.exchange_rate_used,
+        input.total_usd, input.total_ars, input.exchange_rate_used, input.commission_exchange_rate_used,
         input.ref_code, input.payment_method ?? 'mercadopago',
         input.utm?.source ?? null, input.utm?.medium ?? null, input.utm?.campaign ?? null,
       ],
@@ -181,6 +184,7 @@ export async function createPendingOrder(input: CreateOrderInput): Promise<Creat
     await insertOrderItemAndAttribution(client, order.id, input.item, {
       total_usd: input.total_usd,
       exchange_rate_used: input.exchange_rate_used,
+      commission_exchange_rate_used: input.commission_exchange_rate_used,
       ref_code: input.ref_code,
       payment_method: input.payment_method,
       seller_member_id: input.seller_member_id,
@@ -228,23 +232,27 @@ export async function createOrderFromHold(
     const payload = hold.payload;
     const holdExpiredBeforePayment = new Date(hold.expires_at).getTime() < Date.now();
 
+    // Fallback defensivo: un hold creado justo antes de este deploy no tendría el
+    // campo todavía. No debería pasar en la práctica (los holds duran minutos).
+    const commissionRateUsed = payload.commission_exchange_rate_used ?? payload.exchange_rate_used;
+
     const { rows: orderRows } = await client.query<{ id: number; public_id: string }>(
       `INSERT INTO orders (
          public_id, status, customer_name, customer_email, customer_phone, customer_nationality, customer_dni,
-         total_usd, total_ars, exchange_rate_used, currency,
+         total_usd, total_ars, exchange_rate_used, commission_exchange_rate_used, currency,
          ref_code, payment_method, utm_source, utm_medium, utm_campaign,
          mp_payment_id, mp_payment_status, mp_payment_method, paid_at,
          hold_expired_before_payment
        ) VALUES (
-         $1::uuid, 'paid', $2, $3, $4, $5, $6, $7, $8, $9, 'ARS', $10, $11, $12, $13, $14,
-         $15, $16, $17, NOW(), $18
+         $1::uuid, 'paid', $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ARS', $11, $12, $13, $14, $15,
+         $16, $17, $18, NOW(), $19
        )
        RETURNING id, public_id`,
       [
         holdId,
         payload.customer.name, payload.customer.email, payload.customer.phone ?? null,
         payload.customer.nationality ?? null, payload.customer.dni ?? null,
-        payload.total_usd, payload.total_ars, payload.exchange_rate_used,
+        payload.total_usd, payload.total_ars, payload.exchange_rate_used, commissionRateUsed,
         payload.ref_code, payload.payment_method ?? hold.payment_method,
         payload.utm?.source ?? null, payload.utm?.medium ?? null, payload.utm?.campaign ?? null,
         gateway.mp_payment_id, gateway.mp_payment_status, gateway.mp_payment_method,
@@ -256,6 +264,7 @@ export async function createOrderFromHold(
     await insertOrderItemAndAttribution(client, order.id, payload.item, {
       total_usd: payload.total_usd,
       exchange_rate_used: payload.exchange_rate_used,
+      commission_exchange_rate_used: commissionRateUsed,
       ref_code: payload.ref_code,
       payment_method: payload.payment_method,
     });

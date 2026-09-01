@@ -15,7 +15,7 @@ import Collapse from '../components/Collapse';
 import TransferHotelsInfo from '../components/TransferHotelsInfo';
 import { useExchangeRate } from '../lib/useExchangeRate';
 import NumberStepper from '../components/NumberStepper';
-import { computeBookingTotals } from '../lib/pricing';
+import { computeBookingTotals, round2, transferPriceRange } from '../lib/pricing';
 import AvailabilityCalendar from '../components/AvailabilityCalendar';
 
 // Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
@@ -80,7 +80,7 @@ export default function ProductPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutPaymentMethod, setCheckoutPaymentMethod] = useState<'mercadopago' | 'cash' | 'pix'>('mercadopago');
-  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number; transferQty?: number; infants?: number }>({});
+  const [checkoutPrefill, setCheckoutPrefill] = useState<{ date?: string; adults?: number; children?: number; infants?: number; transferWanted?: boolean }>({});
   // Espejo en vivo de lo que el usuario va marcando en la card de la opción
   // seleccionada (adultos/menores/traslado/fecha) — lo consume "Tu elección" para
   // mostrar el mismo preview sincronizado, y los 3 puntos que abren el checkout
@@ -235,7 +235,7 @@ export default function ProductPage() {
                   onBook={(pax) => {
                     setSelectedOptionId(opt.id);
                     setCheckoutPaymentMethod(defaultPaymentMethod);
-                    setCheckoutPrefill({ date: pax.date, adults: pax.adults, children: pax.children, transferQty: pax.transferQty, infants: pax.infants });
+                    setCheckoutPrefill({ date: pax.date, adults: pax.adults, children: pax.children, infants: pax.infants, transferWanted: pax.transferQty > 0 });
                     setCheckoutOpen(true);
                   }}
                   lang={lang}
@@ -275,8 +275,8 @@ export default function ProductPage() {
                 date: selectionPreview.date,
                 adults: selectionPreview.adults,
                 children: selectionPreview.children,
-                transferQty: selectionPreview.transferQty,
                 infants: selectionPreview.infants,
+                transferWanted: selectionPreview.transferQty > 0,
               });
               setCheckoutOpen(true);
             }}
@@ -321,8 +321,8 @@ export default function ProductPage() {
                 date: selectionPreview.date,
                 adults: selectionPreview.adults,
                 children: selectionPreview.children,
-                transferQty: selectionPreview.transferQty,
                 infants: selectionPreview.infants,
+                transferWanted: selectionPreview.transferQty > 0,
               });
               setCheckoutOpen(true);
             }}
@@ -344,8 +344,8 @@ export default function ProductPage() {
           initialDate={checkoutPrefill.date}
           initialAdults={checkoutPrefill.adults}
           initialChildren={checkoutPrefill.children}
-          initialTransferQty={checkoutPrefill.transferQty}
           initialInfants={checkoutPrefill.infants}
+          initialTransferWanted={checkoutPrefill.transferWanted}
         />
       )}
     </article>
@@ -394,20 +394,31 @@ function OptionCard({
   const [adults, setAdults] = useState(1);
   const [children, setChildren] = useState(0);
   const [infants, setInfants] = useState(0);
-  const [transferQtyOptional, setTransferQtyOptional] = useState(0);
+  // Solo aplica cuando transfer_mode === 'optional': el cliente decide con un
+  // Sí/No si quiere sumar el traslado (con costo) o no, arranca en "No" para no
+  // sorprender con un cargo que no pidió. 'included' no pregunta nada (va gratis
+  // para todos); 'none' no tiene traslado.
+  const [transferWanted, setTransferWanted] = useState(false);
   const totalPax = adults + children;
-  // No puede haber más pax con traslado que pax totales — se recorta solo.
-  useEffect(() => {
-    setTransferQtyOptional((v) => Math.min(v, totalPax));
-  }, [totalPax]);
+  // El traslado, cuando se suma, es siempre todo o nada: todos los pax de la
+  // reserva (adultos + menores) — no puede haber menos ni más traslado que
+  // pasajeros. Los infantes se cobran aparte en computeBookingTotals, pero también
+  // ocupan lugar en el vehículo.
   const transferQty = option.transfer_mode === 'included' ? totalPax
-    : option.transfer_mode === 'optional' ? transferQtyOptional
+    : option.transfer_mode === 'optional' ? (transferWanted ? totalPax : 0)
     : 0;
-  const { totalUsd } = useMemo(
+  const { totalUsd, transferUsd, infantTransferUsd } = useMemo(
     () => computeBookingTotals(option, adults, children, transferQty, showChildPrice, infants),
     [option, adults, children, transferQty, showChildPrice, infants],
   );
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
+  // Desglose para que el cliente vea exactamente qué compone el total (pasajeros +
+  // traslado), en vez de un único número sin explicación.
+  const adultsUsd = round2(option.price_adult_usd * adults);
+  const childrenUsd = showChildPrice ? round2((option.price_child_usd ?? 0) * children) : 0;
+  // Acá todavía no se eligió hotel (eso pasa recién en el checkout) — si la casa
+  // distingue precio por zona, el total es solo un estimado con el precio base.
+  const zoneRange = transferPriceRange(option);
 
   // Selector de fecha + disponibilidad en vivo, directo en la card (reemplaza al viejo
   // botón "Verificar disponibilidad" que abría un modal aparte): se abre un popover con
@@ -478,12 +489,12 @@ function OptionCard({
       setAdults(1);
       setChildren(0);
       setInfants(0);
-      setTransferQtyOptional(0);
+      setTransferWanted(false);
       setSelectedDate(undefined);
     }
   }, [selected]);
 
-  const stepperCount = 3 + (showChildPrice ? 1 : 0) + (option.transfer_mode === 'optional' ? 1 : 0);
+  const stepperCount = 3 + (showChildPrice ? 1 : 0);
   // Siempre 2 por fila, incluso en mobile (adultos+menores en una fila, traslado+fecha
   // en la siguiente) — antes cada uno ocupaba su propia fila y el contenedor se hacía
   // demasiado alto en mobile. En pantallas más anchas se abre a 3/4 si hay lugar.
@@ -573,13 +584,6 @@ function OptionCard({
             value={infants} min={0} max={20} onChange={setInfants}
             decrementLabel="menos" incrementLabel="más"
           />
-          {option.transfer_mode === 'optional' && (
-            <NumberStepper
-              bare label={t('checkout.transfer')} value={transferQtyOptional} min={0} max={totalPax} onChange={setTransferQtyOptional}
-              decrementLabel="menos" incrementLabel="más"
-            />
-          )}
-
           <div className="relative" ref={dateFieldRef}>
             <span className="block text-xs text-cream/80 mb-1">{t('checkout.service_date')}</span>
             <button
@@ -623,10 +627,82 @@ function OptionCard({
           </div>
         </div>
 
-        <div className="mt-2.5 pt-2 border-t border-gold/10 flex items-end justify-between gap-3">
+        {option.transfer_mode === 'optional' && (
+          <div className="mt-2.5 pt-2.5 border-t border-gold/10 flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-xs text-cream/80">
+                🚐 {t('product.transfer_ask')} <span className="text-cream/40">(USD {option.transfer_price_usd}/pax)</span>
+              </p>
+              <p className={`mt-0.5 text-[11px] ${transferWanted ? 'text-emerald-400' : 'text-cream/40'}`}>
+                {transferWanted ? `✓ ${t('product.transfer_added')}` : t('product.transfer_not_added')}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setTransferWanted(true); }}
+                aria-pressed={transferWanted}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                  transferWanted
+                    ? 'bg-gold text-ink'
+                    : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'
+                }`}
+              >
+                {t('product.transfer_yes')}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setTransferWanted(false); }}
+                aria-pressed={!transferWanted}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${
+                  !transferWanted
+                    ? 'bg-gold text-ink'
+                    : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'
+                }`}
+              >
+                {t('product.transfer_no')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Desglose del total: para que quede claro qué compone el precio (pasajeros
+            y traslado), no solo el número final. */}
+        <div className="mt-2.5 pt-2 border-t border-gold/10 space-y-1">
+          <div className="flex items-center justify-between text-xs text-cream/60">
+            <span>{t('checkout.adults')} ({adults} × USD {option.price_adult_usd})</span>
+            <span className="text-cream/80">USD {adultsUsd}</span>
+          </div>
+          {showChildPrice && children > 0 && (
+            <div className="flex items-center justify-between text-xs text-cream/60">
+              <span>{t('product.children')} ({children} × USD {option.price_child_usd})</span>
+              <span className="text-cream/80">USD {childrenUsd}</span>
+            </div>
+          )}
+          {transferUsd > 0 && (
+            <div className="flex items-center justify-between text-xs text-cream/60">
+              <span>
+                {t('checkout.transfer')} ({transferQty} × USD {zoneRange.hasZonePricing ? `${t('product.transfer_from')} ${zoneRange.min}` : option.transfer_price_usd})
+              </span>
+              <span className="text-cream/80">+ USD {transferUsd}</span>
+            </div>
+          )}
+          {transferUsd > 0 && zoneRange.hasZonePricing && (
+            <p className="text-[10px] text-cream/40 italic">{t('product.transfer_zone_note')}</p>
+          )}
+          {infantTransferUsd > 0 && (
+            <div className="flex items-center justify-between text-xs text-cream/60">
+              <span>{t('checkout.transfer')} ({t('checkout.infants').toLowerCase()})</span>
+              <span className="text-cream/80">+ USD {infantTransferUsd}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-2 pt-2 border-t border-gold/10 flex items-end justify-between gap-3">
           <p className="text-[11px] text-cream/50">
-            USD {option.price_adult_usd} {t('product.per_adult_short')}
-            {showChildPrice && <> · USD {option.price_child_usd} {t('product.children').toLowerCase()}</>}
+            {transferUsd > 0 && zoneRange.hasZonePricing
+              ? `${t('checkout.total')} (${t('product.transfer_from')})`
+              : t('checkout.total')}
           </p>
           <div className="text-right shrink-0">
             <p className="text-3xl font-display text-gold leading-tight">USD {totalUsd}</p>

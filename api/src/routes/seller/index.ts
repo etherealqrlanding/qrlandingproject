@@ -26,7 +26,7 @@ import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment,
 import { addConnection, removeConnection } from '../../services/sseNotifier.js';
 import { createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
-import { getExchangeRate, getExchangeRateMode, convertUsdToArs, getModifyWindow, getCancelWindow, getSameDayCutoff, getArchiveRetentionDays, checkOperationWindow, getSellerKindBaseCommission } from '../../services/settings.js';
+import { getExchangeRate, getBaseExchangeRate, getExchangeRateMode, convertUsdToArs, getModifyWindow, getCancelWindow, getSameDayCutoff, getArchiveRetentionDays, checkOperationWindow, getSellerKindBaseCommission } from '../../services/settings.js';
 import { computeEffectiveCommissionPercentForCatalog, NULL_KIND_BUCKET } from '../../services/commission.js';
 import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
@@ -378,6 +378,7 @@ const sellerCheckoutSchema = z.object({
   transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  transfer_zone: z.enum(['centro', 'palermo']).optional(),
   // Sub-vendedor (ej. conserje) que cerró esta venta puntual dentro de mi cuenta —
   // opcional, solo aplica si tengo equipo cargado. Requiere su PIN como firma.
   seller_member_id: z.number().int().positive().optional(),
@@ -440,8 +441,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       name_es: string; name_en: string;
       price_adult_usd: string; price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
-      transfer_price_usd: string;
-      infant_transfer_chargeable: boolean;
+      transfer_price_usd: string; transfer_price_usd_palermo: string | null;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       net_transfer_price_usd: string | null; net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
@@ -457,7 +457,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
          o.price_child_usd::text  AS price_child_usd,
          o.transfer_mode,
          o.transfer_price_usd::text AS transfer_price_usd,
-         o.infant_transfer_chargeable,
+         o.transfer_price_usd_palermo::text AS transfer_price_usd_palermo,
          o.net_price_adult_usd::text    AS net_price_adult_usd,
          o.net_price_child_usd::text    AS net_price_child_usd,
          o.net_transfer_price_usd::text AS net_transfer_price_usd,
@@ -501,25 +501,29 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     if (input.children > 0 && option.price_child_usd == null) {
       return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
     }
-    const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+    const transferPriceUsd = option.transfer_mode === 'optional'
+      ? (input.transfer_zone === 'palermo' && option.transfer_price_usd_palermo != null
+          ? Number.parseFloat(option.transfer_price_usd_palermo)
+          : Number.parseFloat(option.transfer_price_usd ?? '0'))
+      : 0;
     const pax = input.adults + input.children;
-    // 'included' siempre aplica a todos los pax (ya está en el precio, no se
-    // pregunta); 'optional' depende de la cantidad que haya elegido el recomendador.
-    const transferQty = option.transfer_mode === 'included'
-      ? pax
-      : option.transfer_mode === 'optional'
-        ? Math.max(0, Math.min(input.transfer_qty ?? 0, pax))
-        : 0;
+    // Todo o nada: cualquier transfer_qty > 0 recibido significa "sí quiero traslado".
+    const transferQty = option.transfer_mode === 'included' ? pax
+      : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? pax : 0)
+      : 0;
     const transferSubtotal = option.transfer_mode === 'optional'
       ? Math.round(transferPriceUsd * transferQty * 100) / 100
       : 0;
+    // Infantes: nunca pagan tarifa de entrada, pero siempre pagan traslado (mismo
+    // precio que un adulto) en cuanto el tier tiene traslado con costo.
     const infants = input.infants ?? 0;
-    const infantTransferApplies = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQty > 0;
+    const infantTransferApplies = option.transfer_mode === 'optional' && transferQty > 0;
     const infantTransferUsd = infantTransferApplies ? Math.round(transferPriceUsd * infants * 100) / 100 : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal + infantTransferUsd;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
+    const commissionRate = await getBaseExchangeRate();
 
     // Neto: monto mínimo que el operador debe recibir (para la comisión en efectivo).
     const netCurrency = option.net_price_currency ?? 'USD';
@@ -575,6 +579,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       total_usd: subtotalUsd,
       total_ars: totalArs,
       exchange_rate_used: rate,
+      commission_exchange_rate_used: commissionRate,
       ref_code: seller.code,
       payment_method: input.payment_method,
       default_capacity_per_day: option.default_capacity_per_day,
@@ -1114,7 +1119,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
 
     const { rows } = await pool.query<{
       order_id: number; status: string; payment_method: string;
-      total_ars: number; exchange_rate_used: number;
+      total_ars: number; exchange_rate_used: number; commission_exchange_rate_used: number;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
@@ -1124,6 +1129,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
               o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
+              COALESCE(o.commission_exchange_rate_used, o.exchange_rate_used)::float AS commission_exchange_rate_used,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
@@ -1164,6 +1170,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       infantTransferUsd: row.infant_transfer_usd,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
+      commissionExchangeRateUsed: row.commission_exchange_rate_used,
       commissionPercent: null,
     };
     const calc = computeOrderReduction(snap, {
@@ -1175,7 +1182,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     if (!calc.ok) return res.status(400).json({ error: calc.error });
 
     const cash = recomputeCashCommission(row.net_total_usd, row.subtotal_usd, calc.newSubtotalUsd);
-    const newCommissionArs = Math.round(cash.newCommissionUsd * row.exchange_rate_used * 100) / 100;
+    const newCommissionArs = Math.round(cash.newCommissionUsd * row.commission_exchange_rate_used * 100) / 100;
 
     const newTransferQty = calc.newTransferQty;
     const noteLine = `[${new Date().toISOString()}] Reducción efectivo (vendedor): ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${newTransferQty !== row.transfer_qty ? `, traslado ${row.transfer_qty}→${newTransferQty}` : ''}. Devolución en efectivo USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;

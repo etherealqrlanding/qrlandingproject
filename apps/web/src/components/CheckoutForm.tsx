@@ -10,7 +10,8 @@ import Spinner from './Spinner';
 import AvailabilityCalendar from './AvailabilityCalendar';
 import Checkbox from './Checkbox';
 import NumberStepper from './NumberStepper';
-import { computeBookingTotals } from '../lib/pricing';
+import { computeBookingTotals, transferPriceRange, transferUnitPrice } from '../lib/pricing';
+import { zoneForHotel } from '../lib/hotels';
 
 interface Props {
   product: ProductDetail;
@@ -28,8 +29,11 @@ interface Props {
   initialDate?: string;
   initialAdults?: number;
   initialChildren?: number;
-  initialTransferQty?: number;
   initialInfants?: number;
+  // Precarga si el traslado (con costo) ya venía marcado "Sí" en la card de
+  // opciones — así el precio no le salta al abrir el checkout. Solo aplica a
+  // transfer_mode === 'optional' (ver transferWanted más abajo).
+  initialTransferWanted?: boolean;
 }
 
 const PixIcon = (
@@ -52,7 +56,7 @@ const NATIONALITIES = [
   'Italia', 'Francia', 'Alemania', 'Chile', 'Uruguay', 'México', 'Otra',
 ];
 
-export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren, initialTransferQty, initialInfants }: Props) {
+export default function CheckoutForm({ product, option, onClose, initialPaymentMethod, showCash, showCard, initialDate, initialAdults, initialChildren, initialInfants, initialTransferWanted }: Props) {
   const { t, i18n } = useTranslation();
   const lang = i18n.resolvedLanguage;
   const exchangeRate = useExchangeRate();
@@ -64,9 +68,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  // Solo relevante para transfer_mode === 'optional' (el resto de los casos deriva
-  // transferQty más abajo: 'included' = todos los pax, 'none' = 0).
-  const [transferQtyOptional, setTransferQtyOptional] = useState(() => Math.max(0, initialTransferQty ?? 0));
+  // Solo relevante para transfer_mode === 'optional' — 'included' no pregunta
+  // (va gratis para todos) y 'none' no tiene traslado.
+  const [transferWanted, setTransferWanted] = useState(initialTransferWanted ?? false);
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -166,19 +170,21 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   const maxChildren = remaining != null ? Math.min(20, Math.max(0, remaining - form.adults)) : 20;
 
   const totalPax = form.adults + form.children;
-  // No puede haber más pax con traslado que pax totales: se recorta solo si adultos
-  // o menores bajan por debajo de lo que ya estaba seleccionado.
-  useEffect(() => {
-    setTransferQtyOptional((v) => Math.min(v, totalPax));
-  }, [totalPax]);
-
+  // El traslado, cuando se suma, es siempre todo o nada: todos los pax de la
+  // reserva, nunca una cantidad parcial. 'included' va gratis para todos sin
+  // preguntar; 'optional' depende del Sí/No que eligió el cliente.
   const transferQty = option.transfer_mode === 'included' ? totalPax
-    : option.transfer_mode === 'optional' ? transferQtyOptional
+    : option.transfer_mode === 'optional' ? (transferWanted ? totalPax : 0)
     : 0;
 
+  // Zona de traslado según el hotel elegido — antes de elegirlo (o si la casa no
+  // distingue por zona) se usa la zona base como estimado.
+  const transferZone = zoneForHotel(transferHotel);
+  const zoneRange = transferPriceRange(option);
+
   const { ticketsUsd, transferUsd, infantTransferUsd, totalUsd } = useMemo(
-    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren, form.infants),
-    [option, form.adults, form.children, transferQty, supportsChildren, form.infants],
+    () => computeBookingTotals(option, form.adults, form.children, transferQty, supportsChildren, form.infants, transferZone),
+    [option, form.adults, form.children, transferQty, supportsChildren, form.infants, transferZone],
   );
 
   const totalArs = exchangeRate != null ? Math.round(totalUsd * exchangeRate) : null;
@@ -209,6 +215,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
     transfer_qty: transferQty,
     transfer_hotel: transferQty > 0 ? (transferHotel || null) : null,
     transfer_room: transferQty > 0 ? (transferRoom.trim() || null) : null,
+    // Zona del hotel elegido -- decide si se cobra transfer_price_usd_palermo en
+    // vez del precio base. Solo importa si la casa realmente distingue por zona.
+    transfer_zone: transferZone,
     terms_accepted: termsAccepted,
   };
 
@@ -440,7 +449,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                   <span className="text-cream/80">USD {ticketsUsd}</span>
                 </div>
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-cream/60">{t('checkout.transfer')} ({transferQty} pax)</span>
+                  <span className="text-cream/60">
+                    {t('checkout.transfer')} ({transferQty} pax{zoneRange.hasZonePricing && transferHotel ? ` · ${transferZone === 'palermo' ? 'Palermo' : 'Centro'}` : ''})
+                  </span>
                   <span className="text-cream/80">+ USD {transferUsd}</span>
                 </div>
                 {infantTransferUsd > 0 && (
@@ -449,10 +460,17 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                     <span className="text-cream/80">+ USD {infantTransferUsd}</span>
                   </div>
                 )}
+                {zoneRange.hasZonePricing && !transferHotel && (
+                  <p className="text-[11px] text-cream/40 italic pt-1">{t('product.transfer_zone_note')}</p>
+                )}
               </div>
             )}
             <div className="flex items-start justify-between gap-4">
-              <span className="text-sm text-cream/70 pt-2">{t('checkout.total')}</span>
+              <span className="text-sm text-cream/70 pt-2">
+                {transferUsd > 0 && zoneRange.hasZonePricing && !transferHotel
+                  ? `${t('checkout.total')} (${t('product.transfer_from')})`
+                  : t('checkout.total')}
+              </span>
               <div className="text-right">
                 <p className="font-display text-3xl text-gold">USD {totalUsd}</p>
                 {totalArs != null && (
@@ -468,19 +486,22 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
             </div>
           </div>
 
-          {/* Traslado — solo si la option lo tiene (opcional u incluido) */}
+          {/* Traslado — solo si la option lo tiene (opcional u incluido). Cuando es
+              opcional, el cliente decide con Sí/No; siempre todo o nada para el
+              grupo entero, nunca una cantidad parcial de pasajeros. */}
           {option.transfer_mode !== 'none' && (
             <TransferSection
-              qty={transferQtyOptional}
-              maxQty={totalPax}
+              totalPax={totalPax + form.infants}
               hotel={transferHotel}
               room={transferRoom}
-              onChange={setTransferQtyOptional}
               onHotelChange={setTransferHotel}
               onRoomChange={setTransferRoom}
-              pickupWindow={lang === 'en' ? option.pickup_window_en : option.pickup_window_es}
+              pickupWindow={option.pickup_window_es}
               lang={lang === 'en' ? 'en' : 'es'}
               included={option.transfer_mode === 'included'}
+              wanted={transferWanted}
+              onWantedChange={(v) => { setTransferWanted(v); if (!v) { setTransferHotel(''); setTransferRoom(''); } }}
+              pricePerPax={transferUnitPrice(option, transferZone)}
             />
           )}
 

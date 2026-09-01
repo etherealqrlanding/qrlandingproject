@@ -262,6 +262,9 @@ export interface SellerBookingInput {
   transfer_qty?: number;
   transfer_hotel?: string | null;
   transfer_room?: string | null;
+  // Zona del hotel elegido -- decide si se cobra transfer_price_usd_palermo en vez
+  // del precio base. Solo importa si la casa realmente distingue por zona.
+  transfer_zone?: 'centro' | 'palermo';
   seller_member_id?: number | null;
   seller_member_pin?: string;
 }

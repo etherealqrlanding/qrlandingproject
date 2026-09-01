@@ -409,3 +409,15 @@ export const HOTELS_BY_NEIGHBORHOOD: HotelNeighborhood[] = [
 export const ALL_HOTELS = HOTELS_BY_NEIGHBORHOOD.flatMap((n) =>
   n.hotels.map((h) => ({ ...h, neighborhood: n.label })),
 );
+
+// Zona de traslado: algunas casas cobran distinto según si el hotel está en
+// Palermo o en el resto de las zonas (Centro, Recoleta, Puerto Madero, San
+// Telmo, Retiro) -- ver ProductOption.transfer_price_usd_palermo. El string
+// de hotel viaja como "Nombre – Dirección" (ver TransferSection.selectHotel).
+export type TransferZone = 'centro' | 'palermo';
+
+export function zoneForHotel(hotelLabel: string | null | undefined): TransferZone {
+  if (!hotelLabel) return 'centro';
+  const hotel = ALL_HOTELS.find((h) => `${h.name} – ${h.address}` === hotelLabel);
+  return hotel?.neighborhood === 'Palermo' ? 'palermo' : 'centro';
+}

@@ -52,12 +52,19 @@ export default function SellerTeamStatsSection({ seller, selection, onSelectionC
   const [stats, setStats] = useState<AdminSellerPeriodStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
+  // La comisión ya no se edita por vendedor -- sale de la base por perfil que
+  // configura el admin en Settings (ver SellersList.tsx para el mismo patrón).
+  const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     adminApi.sellers.members(seller.id)
       .then(setMembers)
       .catch((err) => setMembersError((err as AdminApiError).message));
   }, [seller.id]);
+
+  useEffect(() => {
+    adminApi.settings.getSellerKindCommission().then(setKindBaseCommissions).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoadingStats(true);
@@ -87,7 +94,8 @@ export default function SellerTeamStatsSection({ seller, selection, onSelectionC
     );
   }
 
-  const commissionRate = `${Number(seller.commission_percent).toFixed(1)}%`;
+  const baseCommission = kindBaseCommissions?.[seller.kind ?? 'sin_especificar'] ?? 10;
+  const commissionRate = `${baseCommission.toFixed(1)}%`;
   const selectedMember = typeof selection === 'number' ? members.find((m) => m.id === selection) ?? null : null;
 
   return (

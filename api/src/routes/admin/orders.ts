@@ -12,7 +12,7 @@ import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
 import { listPendingAddonsByOrderPublicId, getAddonForAction, applyAddonPayment, cancelAddon, cancelPendingAddonsForOrder } from '../../repos/addons.js';
 import { syncOrderWithMp } from '../checkout.js';
-import { getModifyWindow, getCancelWindow, checkOperationWindow, getExchangeRate, convertUsdToArs } from '../../services/settings.js';
+import { getModifyWindow, getCancelWindow, checkOperationWindow, getExchangeRate, getBaseExchangeRate, convertUsdToArs } from '../../services/settings.js';
 import { checkAvailabilityTxLocked, checkSingleDateAvailability } from '../../repos/availability.js';
 import { createOrderReducedByAdminNotification, createCashAddonCreatedByAdminNotification, createOrderCreatedByAdminNotification } from '../../repos/notifications.js';
 import { config } from '../../config.js';
@@ -58,6 +58,7 @@ const adminCreateOrderSchema = z.object({
   transfer_qty: z.number().int().min(0).max(40).optional(),
   transfer_hotel: z.string().max(200).optional().nullable(),
   transfer_room: z.string().max(80).optional().nullable(),
+  transfer_zone: z.enum(['centro', 'palermo']).optional(),
   infants: z.number().int().min(0).max(20).optional(),
 });
 
@@ -96,8 +97,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
       name_es: string; name_en: string;
       price_adult_usd: string; price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
-      transfer_price_usd: string;
-      infant_transfer_chargeable: boolean;
+      transfer_price_usd: string; transfer_price_usd_palermo: string | null;
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       net_transfer_price_usd: string | null; net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
@@ -113,7 +113,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
          o.price_child_usd::text  AS price_child_usd,
          o.transfer_mode,
          o.transfer_price_usd::text AS transfer_price_usd,
-         o.infant_transfer_chargeable,
+         o.transfer_price_usd_palermo::text AS transfer_price_usd_palermo,
          o.net_price_adult_usd::text    AS net_price_adult_usd,
          o.net_price_child_usd::text    AS net_price_child_usd,
          o.net_transfer_price_usd::text AS net_transfer_price_usd,
@@ -154,25 +154,29 @@ adminOrdersRouter.post('/', async (req, res, next) => {
     if (input.children > 0 && option.price_child_usd == null) {
       return res.status(400).json({ error: 'Esta opción no tiene precio para menores' });
     }
-    const transferPriceUsd = option.transfer_mode === 'optional' ? Number.parseFloat(option.transfer_price_usd ?? '0') : 0;
+    const transferPriceUsd = option.transfer_mode === 'optional'
+      ? (input.transfer_zone === 'palermo' && option.transfer_price_usd_palermo != null
+          ? Number.parseFloat(option.transfer_price_usd_palermo)
+          : Number.parseFloat(option.transfer_price_usd ?? '0'))
+      : 0;
     const pax = input.adults + input.children;
-    // 'included' siempre aplica a todos los pax (ya está en el precio, no se
-    // pregunta); 'optional' depende de la cantidad que haya elegido quien reserva.
-    const transferQty = option.transfer_mode === 'included'
-      ? pax
-      : option.transfer_mode === 'optional'
-        ? Math.max(0, Math.min(input.transfer_qty ?? 0, pax))
-        : 0;
+    // Todo o nada: cualquier transfer_qty > 0 recibido significa "sí quiero traslado".
+    const transferQty = option.transfer_mode === 'included' ? pax
+      : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? pax : 0)
+      : 0;
     const transferSubtotal = option.transfer_mode === 'optional'
       ? Math.round(transferPriceUsd * transferQty * 100) / 100
       : 0;
+    // Infantes: nunca pagan tarifa de entrada, pero siempre pagan traslado (mismo
+    // precio que un adulto) en cuanto el tier tiene traslado con costo.
     const infants = input.infants ?? 0;
-    const infantTransferApplies = option.transfer_mode === 'optional' && option.infant_transfer_chargeable && transferQty > 0;
+    const infantTransferApplies = option.transfer_mode === 'optional' && transferQty > 0;
     const infantTransferUsd = infantTransferApplies ? Math.round(transferPriceUsd * infants * 100) / 100 : 0;
     const subtotalUsd = Math.round((input.adults * priceAdult + input.children * priceChild) * 100) / 100 + transferSubtotal + infantTransferUsd;
 
     const rate = await getExchangeRate();
     const totalArs = convertUsdToArs(subtotalUsd, rate);
+    const commissionRate = await getBaseExchangeRate();
 
     const netCurrency = option.net_price_currency ?? 'USD';
     let netTotalUsd: number | null = null;
@@ -226,6 +230,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
       total_usd: subtotalUsd,
       total_ars: totalArs,
       exchange_rate_used: rate,
+      commission_exchange_rate_used: commissionRate,
       ref_code: seller.code,
       payment_method: input.payment_method,
       default_capacity_per_day: option.default_capacity_per_day,
@@ -536,12 +541,13 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
 
     const { rows: orderRows } = await client.query<{
       id: number; status: string; mp_payment_id: string | null; payment_method: string;
-      total_usd: number; total_ars: number; exchange_rate_used: number;
+      total_usd: number; total_ars: number; exchange_rate_used: number; commission_exchange_rate_used: number;
       service_date: string | Date; commission_percent: number | null;
     }>(
       `SELECT o.id, o.status::text AS status, o.mp_payment_id, o.payment_method,
               o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
               o.exchange_rate_used::float AS exchange_rate_used,
+              COALESCE(o.commission_exchange_rate_used, o.exchange_rate_used)::float AS commission_exchange_rate_used,
               oi.service_date,
               a.commission_percent_snapshot::float AS commission_percent
          FROM orders o
@@ -618,7 +624,7 @@ adminOrdersRouter.post('/:publicId/refund', async (req, res, next) => {
     const newTotalArs = isPartial ? round2(order.total_ars - (amountArs ?? 0)) : null;
     const newCommissionUsd = (isPartial && order.commission_percent != null)
       ? round2((newTotalUsd ?? 0) * order.commission_percent / 100) : null;
-    const newCommissionArs = newCommissionUsd != null ? round2(newCommissionUsd * order.exchange_rate_used) : null;
+    const newCommissionArs = newCommissionUsd != null ? round2(newCommissionUsd * order.commission_exchange_rate_used) : null;
 
     await client.query(
       `UPDATE orders
@@ -738,7 +744,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
     // 1) Cargar orden + item + atribución CON LOCK (todo lo congelado que necesita el cálculo)
     const { rows } = await client.query<{
       order_id: number; status: string; payment_method: string; mp_payment_id: string | null;
-      total_usd: number; total_ars: number; exchange_rate_used: number;
+      total_usd: number; total_ars: number; exchange_rate_used: number; commission_exchange_rate_used: number;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
@@ -749,6 +755,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method, o.mp_payment_id,
               o.total_usd::float AS total_usd, o.total_ars::float AS total_ars,
               o.exchange_rate_used::float AS exchange_rate_used,
+              COALESCE(o.commission_exchange_rate_used, o.exchange_rate_used)::float AS commission_exchange_rate_used,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
@@ -797,6 +804,7 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       infantTransferUsd: row.infant_transfer_usd,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
+      commissionExchangeRateUsed: row.commission_exchange_rate_used,
       commissionPercent: row.commission_percent,
     };
     const calc = computeOrderReduction(snap, {
@@ -962,7 +970,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
 
     const { rows } = await pool.query<{
       order_id: number; status: string; payment_method: string;
-      total_ars: number; exchange_rate_used: number;
+      total_ars: number; exchange_rate_used: number; commission_exchange_rate_used: number;
       item_id: number; adults: number; children: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
       subtotal_usd: number; transfer_qty: number; transfer_hotel: string | null;
@@ -973,6 +981,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
     }>(
       `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
               o.total_ars::float AS total_ars, o.exchange_rate_used::float AS exchange_rate_used,
+              COALESCE(o.commission_exchange_rate_used, o.exchange_rate_used)::float AS commission_exchange_rate_used,
               o.customer_name,
               oi.id AS item_id, oi.adults, oi.children,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
@@ -1016,6 +1025,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       infantTransferUsd: row.infant_transfer_usd,
       totalArs: row.total_ars,
       exchangeRateUsed: row.exchange_rate_used,
+      commissionExchangeRateUsed: row.commission_exchange_rate_used,
       commissionPercent: null, // efectivo: la comisión no es por % sino total − neto
     };
     const calc = computeOrderReduction(snap, {
@@ -1032,7 +1042,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       ? recomputeCashCommission(row.net_total_usd, row.subtotal_usd, calc.newSubtotalUsd)
       : { newNetTotalUsd: null, newCommissionUsd: 0 };
     const newCommissionUsd = hasAttribution ? cash.newCommissionUsd : null;
-    const newCommissionArs = newCommissionUsd != null ? Math.round(newCommissionUsd * row.exchange_rate_used * 100) / 100 : null;
+    const newCommissionArs = newCommissionUsd != null ? Math.round(newCommissionUsd * row.commission_exchange_rate_used * 100) / 100 : null;
 
     const newTransferQty = calc.newTransferQty;
     const noteLine = `[${new Date().toISOString()}] Reducción efectivo: ${row.adults}→${parsed.data.adults} ad, ${row.children}→${parsed.data.children} men${newTransferQty !== row.transfer_qty ? `, traslado ${row.transfer_qty}→${newTransferQty}` : ''}. Devolución en efectivo USD ${calc.refundUsd}${parsed.data.reason ? ` — ${parsed.data.reason}` : ''}`;

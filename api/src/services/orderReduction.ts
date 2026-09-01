@@ -15,6 +15,9 @@ export interface OrderReductionSnapshot {
   infantTransferUsd: number;   // monto congelado (no por-unidad) del traslado de infantes
   totalArs: number;            // ARS realmente cobrado por la orden
   exchangeRateUsed: number;
+  // Tipo de cambio SIN el markup del admin, congelado en la orden -- se usa solo
+  // para la comisión, nunca para el reintegro al cliente (ver getBaseExchangeRate).
+  commissionExchangeRateUsed: number;
   commissionPercent: number | null; // % del vendedor (null si no hay atribución)
 }
 
@@ -114,7 +117,7 @@ export function computeOrderReduction(
   let newCommissionArs: number | null = null;
   if (snap.commissionPercent != null) {
     newCommissionUsd = round2(newSubtotalUsd * snap.commissionPercent / 100);
-    newCommissionArs = round2(newCommissionUsd * snap.exchangeRateUsed);
+    newCommissionArs = round2(newCommissionUsd * snap.commissionExchangeRateUsed);
   }
 
   return {

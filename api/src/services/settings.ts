@@ -52,6 +52,19 @@ export async function getExchangeRateMode(): Promise<ExchangeRateMode> {
   return (await getExchangeRatePayload())?.mode ?? 'manual';
 }
 
+// Tipo de cambio SIN el markup del admin -- se usa exclusivamente para calcular la
+// comisión del recomendador, para que el margen que la plataforma agrega sobre
+// dolarapi.com (competitividad, impuestos propios, etc.) no termine repartiéndose
+// también como comisión. En modo manual no existe el concepto de markup (el admin
+// ya carga el valor final a mano), así que coincide con getExchangeRate().
+export async function getBaseExchangeRate(): Promise<number> {
+  const payload = await getExchangeRatePayload();
+  if (payload?.mode === 'auto' && typeof payload.raw_rate === 'number' && payload.raw_rate > 0) {
+    return payload.raw_rate;
+  }
+  return getExchangeRate();
+}
+
 // Carga manual desde el admin: fija el valor y pasa a modo "manual" explícitamente
 // (si estaba en automático, el próximo sync no lo pisa hasta que el admin reactive "auto").
 // El markup configurado se conserva (sin aplicarse) para cuando vuelva a modo auto.

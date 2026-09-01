@@ -28,6 +28,9 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
   const [sellerListError, setSellerListError] = useState<string | null>(null);
   const [sellerFilter, setSellerFilter] = useState('');
   const [selectedSeller, setSelectedSeller] = useState<AdminSeller | null>(null);
+  // La comisión ya no se edita por vendedor -- sale de la base por perfil que
+  // configura el admin en Settings.
+  const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
     adminApi.sellers.list()
@@ -35,7 +38,9 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
       // no es un vendedor real, no debería poder atribuírsele una reserva.
       .then((rows) => setSellers(rows.filter((s) => s.is_active && s.code !== 'ADMINPREVIEW')))
       .catch((err) => setSellerListError((err as Error).message));
+    adminApi.settings.getSellerKindCommission().then(setKindBaseCommissions).catch(() => {});
   }, []);
+  const baseCommissionFor = (kind: string | null) => kindBaseCommissions?.[kind ?? 'sin_especificar'] ?? 10;
 
   // Paso 2: catálogo — mismo patrón que SellerBooking.tsx (acordeón show → opciones)
   const [products, setProducts] = useState<ProductSummary[]>([]);
@@ -217,7 +222,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                         <span className="text-xs font-mono text-gold-soft shrink-0">{s.code}</span>
                       </div>
                       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-cream/50">
-                        <span>{s.commission_percent}% incentivo</span>
+                        <span>{baseCommissionFor(s.kind).toFixed(1)}% incentivo</span>
                         {s.is_permanent && <span className="text-emerald-400/80">Efectivo habilitado</span>}
                         {!s.card_enabled && <span className="text-bordeaux-light">Tarjeta deshabilitada</span>}
                       </div>

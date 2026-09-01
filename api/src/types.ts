@@ -43,17 +43,15 @@ export interface ProductOption {
   // (transfer_price_usd). 'included' = ya incluido en el precio, sin costo extra.
   transfer_mode: 'none' | 'optional' | 'included';
   transfer_price_usd: number;
-  // Solo tiene efecto real cuando transfer_mode === 'optional' (ahí es donde
-  // transfer_price_usd tiene un valor editable para reusar). Los infantes nunca
-  // pagan tarifa de entrada; esto solo decide si además pagan el traslado.
-  infant_transfer_chargeable: boolean;
+  // Precio de traslado para hoteles en Palermo -- opcional, no todas las casas
+  // distinguen por zona. NULL = siempre se usa transfer_price_usd.
+  transfer_price_usd_palermo: number | null;
   available_days: number[];
+  // Resueltos a partir de los horarios de la casa (ProductDetail) + los checks de
+  // este tier (has_dinner / show_only_time_enabled) -- ya no se tipean por tier.
   pickup_window_es: string | null;
-  pickup_window_en: string | null;
   dinner_time_es: string | null;
-  dinner_time_en: string | null;
   show_time_es: string | null;
-  show_time_en: string | null;
   display_order: number;
   menu: ProductMenu | null;
 }
@@ -96,6 +94,12 @@ export interface ProductDetail extends ProductSummary {
   long_description_en: string | null;
   schedule_summary_es: string | null;
   schedule_summary_en: string | null;
+  // Horarios estructurados de la casa, fuente de los campos resueltos de cada
+  // tier (ver ProductOption.pickup_window_es/dinner_time_es/show_time_es).
+  dinner_show_time_es: string | null;
+  show_only_time_es: string | null;
+  dinner_transfer_window_es: string | null;
+  show_only_transfer_window_es: string | null;
   video_url: string | null;
   // Días de operación de TODA la casa (1=Lun..7=Dom) — un tier solo opera de
   // verdad un día si está en este array Y en su propio available_days (intersección).

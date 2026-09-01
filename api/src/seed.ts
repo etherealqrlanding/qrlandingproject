@@ -37,6 +37,10 @@ const DEMO_PRODUCT = {
   address_en: 'Av. Corrientes 1234, Buenos Aires',
   schedule_summary_es: 'Lunes a Domingos. Traslado 19:30-20:00. Cena desde 20:00. Show desde 22:00.',
   schedule_summary_en: 'Monday to Sunday. Transfer 7:30-8:00 PM. Dinner from 8:00 PM. Show from 10:00 PM.',
+  dinner_show_time_es: 'Cena desde 20:00. Show desde 22:00.',
+  show_only_time_es: 'Show desde 22:00',
+  dinner_transfer_window_es: 'Entre 19:30 y 20:00',
+  show_only_transfer_window_es: 'Entre 21:00 y 21:30',
   starting_price_usd: 38,
 };
 
@@ -68,12 +72,6 @@ const DEMO_OPTIONS = [
     has_dinner: true,
     transfer_mode: 'optional',
     available_days: [1, 2, 3, 4, 5, 6, 7],
-    pickup_window_es: 'Entre 19:30 y 20:00 (Centro, Recoleta, Puerto Madero, San Telmo, Constitución, Palermo)',
-    pickup_window_en: 'Between 7:30 and 8:00 PM (Centro, Recoleta, Puerto Madero, San Telmo, Constitución, Palermo)',
-    dinner_time_es: 'Cena desde 20:00',
-    dinner_time_en: 'Dinner from 8:00 PM',
-    show_time_es: 'Show desde 22:00',
-    show_time_en: 'Show from 10:00 PM',
     display_order: 1,
   },
   {
@@ -103,12 +101,6 @@ const DEMO_OPTIONS = [
     has_dinner: true,
     transfer_mode: 'optional',
     available_days: [1, 2, 3, 4, 5, 6, 7],
-    pickup_window_es: 'Entre 19:30 y 20:00',
-    pickup_window_en: 'Between 7:30 and 8:00 PM',
-    dinner_time_es: 'Cena desde 20:00',
-    dinner_time_en: 'Dinner from 8:00 PM',
-    show_time_es: 'Show desde 22:00',
-    show_time_en: 'Show from 10:00 PM',
     display_order: 2,
   },
   {
@@ -136,12 +128,6 @@ const DEMO_OPTIONS = [
     has_dinner: true,
     transfer_mode: 'optional',
     available_days: [1, 2, 3, 4, 5, 6, 7],
-    pickup_window_es: 'Entre 19:30 y 20:00',
-    pickup_window_en: 'Between 7:30 and 8:00 PM',
-    dinner_time_es: 'Cena desde 20:00',
-    dinner_time_en: 'Dinner from 8:00 PM',
-    show_time_es: 'Show desde 22:00',
-    show_time_en: 'Show from 10:00 PM',
     display_order: 3,
   },
   {
@@ -165,12 +151,9 @@ const DEMO_OPTIONS = [
     price_adult_usd: 56,
     price_child_usd: 28,
     has_dinner: false,
+    show_only_time_enabled: true,
     transfer_mode: 'optional',
     available_days: [1, 2, 3, 4, 5, 6, 7],
-    pickup_window_es: 'Entre 21:00 y 21:30',
-    pickup_window_en: 'Between 9:00 and 9:30 PM',
-    show_time_es: 'Show desde 22:00',
-    show_time_en: 'Show from 10:00 PM',
     display_order: 4,
   },
   {
@@ -192,10 +175,9 @@ const DEMO_OPTIONS = [
     price_adult_usd: 38,
     price_child_usd: null,
     has_dinner: false,
+    show_only_time_enabled: true,
     transfer_mode: 'none',
     available_days: [1, 2, 3, 4, 5, 6, 7],
-    show_time_es: 'Show desde 22:00',
-    show_time_en: 'Show from 10:00 PM',
     display_order: 5,
   },
 ];
@@ -240,8 +222,9 @@ async function seed() {
          long_description_es, long_description_en,
          address_es, address_en,
          schedule_summary_es, schedule_summary_en,
+         dinner_show_time_es, show_only_time_es, dinner_transfer_window_es, show_only_transfer_window_es,
          starting_price_usd, display_order
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (slug) DO UPDATE SET updated_at = NOW()
        RETURNING id`,
       [
@@ -250,6 +233,8 @@ async function seed() {
         DEMO_PRODUCT.long_description_es, DEMO_PRODUCT.long_description_en,
         DEMO_PRODUCT.address_es, DEMO_PRODUCT.address_en,
         DEMO_PRODUCT.schedule_summary_es, DEMO_PRODUCT.schedule_summary_en,
+        DEMO_PRODUCT.dinner_show_time_es, DEMO_PRODUCT.show_only_time_es,
+        DEMO_PRODUCT.dinner_transfer_window_es, DEMO_PRODUCT.show_only_transfer_window_es,
         DEMO_PRODUCT.starting_price_usd, 1,
       ],
     );
@@ -261,20 +246,15 @@ async function seed() {
         `INSERT INTO product_options (
            product_id, code, name_es, name_en, description_es, description_en,
            includes_es, includes_en, price_adult_usd, price_child_usd,
-           has_dinner, transfer_mode, available_days,
-           pickup_window_es, pickup_window_en,
-           dinner_time_es, dinner_time_en,
-           show_time_es, show_time_en,
+           has_dinner, show_only_time_enabled, transfer_mode, available_days,
            display_order
-         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          ON CONFLICT (product_id, code) DO NOTHING`,
         [
           productId, opt.code, opt.name_es, opt.name_en, opt.description_es, opt.description_en,
           opt.includes_es, opt.includes_en, opt.price_adult_usd, opt.price_child_usd,
-          opt.has_dinner, opt.transfer_mode, opt.available_days,
-          opt.pickup_window_es ?? null, opt.pickup_window_en ?? null,
-          opt.dinner_time_es ?? null, opt.dinner_time_en ?? null,
-          opt.show_time_es ?? null, opt.show_time_en ?? null,
+          opt.has_dinner, ('show_only_time_enabled' in opt ? opt.show_only_time_enabled : false),
+          opt.transfer_mode, opt.available_days,
           opt.display_order,
         ],
       );

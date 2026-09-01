@@ -5,6 +5,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { pool } from '../db.js';
 import { getSupportWhatsapp } from './settings.js';
+import { resolveOptionSchedule } from '../repos/catalog.js';
 
 // Carpeta de salida del modo dry-run (ver TEST_EMAIL_DRY_RUN más abajo). Gitignoreada.
 const DRY_RUN_DIR = path.resolve(process.cwd(), 'tmp-test-emails');
@@ -310,9 +311,10 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   if (d.dinner_time) rows.push(emailRow('Cena', escapeHtml(d.dinner_time)));
   if (d.show_time) rows.push(emailRow('Show', escapeHtml(d.show_time)));
   if (d.transfer_qty != null && d.transfer_qty > 0) {
-    const totalPax = d.adults + d.children;
-    const qtyLabel = d.transfer_qty >= totalPax ? 'Incluido' : `${d.transfer_qty} de ${totalPax} pasajeros`;
-    rows.push(emailRow('Traslado', `${qtyLabel}${d.transfer_hotel ? ` — retiro en ${escapeHtml(d.transfer_hotel)}` : ''}`));
+    const totalPax = d.adults + d.children + (d.infants ?? 0);
+    // El traslado siempre es automático para todo el grupo (incluidos infantes) —
+    // ya no puede haber una cantidad parcial, así que no hace falta distinguir.
+    rows.push(emailRow('Traslado', `Para los ${totalPax} pasajero(s) de la reserva${d.transfer_hotel ? ` — retiro en ${escapeHtml(d.transfer_hotel)}` : ''}`));
   }
 
   if (showAmounts) {
@@ -350,7 +352,7 @@ function htmlForCustomer(data: OrderEmailData): string {
 </div></body></html>`;
 }
 
-function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; seller_code?: string | null; commission_usd?: number | null }): string {
+function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; seller_code?: string | null; commission_usd?: number | null; commission_ars?: number | null }): string {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -373,14 +375,14 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <p style="${baseStyles.eyebrow}">Atribución a recomendador</p>
     <div style="${baseStyles.row}"><span>Recomendador</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
-    <div style="${baseStyles.row}"><span>Incentivo por recomendación a pagar</span><strong style="color:#c8a85a">${arsOf(data.commission_usd ?? 0, data.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Incentivo por recomendación a pagar</span><strong style="color:#c8a85a">${fmtArs(data.commission_ars ?? 0)}</strong></div>
   </div>` : ''}
   <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
 }
 
 function htmlForSellerRefund(data: OrderEmailData & {
-  seller_name: string; commission_usd: number; reason?: string | null; is_partial?: boolean;
+  seller_name: string; commission_usd: number; commission_ars: number; reason?: string | null; is_partial?: boolean;
 }): string {
   return `
 <!doctype html>
@@ -390,13 +392,13 @@ function htmlForSellerRefund(data: OrderEmailData & {
   <p>Hola ${escapeHtml(data.seller_name)}, te avisamos que una venta atribuida a tu código fue ${data.is_partial ? 'reintegrada parcialmente' : 'cancelada y reintegrada al cliente'}${data.reason ? ` — ${escapeHtml(data.reason)}` : ''}.</p>
   ${data.is_partial
     ? `<p>El incentivo por recomendación correspondiente a esta venta se ajustará proporcionalmente.</p>`
-    : `<p><strong>El incentivo por recomendación de ${arsOf(data.commission_usd, data.exchange_rate_used)} que correspondía a esta venta ya no aplica.</strong></p>`}
+    : `<p><strong>El incentivo por recomendación de ${fmtArs(data.commission_ars)} que correspondía a esta venta ya no aplica.</strong></p>`}
   <div style="${baseStyles.card}">
     <div style="${baseStyles.row}"><span>Servicio cancelado</span><strong>${escapeHtml(data.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Casa</span><strong>${escapeHtml(data.product_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Cliente</span><span>${escapeHtml(data.customer_name)}</span></div>
     <div style="${baseStyles.row}"><span>Fecha solicitada</span><strong>${data.service_date}</strong></div>
-    <div style="${baseStyles.row}"><span>Incentivo por recomendación que no aplica</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Incentivo por recomendación que no aplica</span><strong style="color:#c8a85a">${fmtArs(data.commission_ars)}</strong></div>
   </div>
   <p>Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
   ${supportBlock()}
@@ -419,7 +421,7 @@ function htmlForRefund(data: OrderEmailData & { reason?: string | null }): strin
 </div></body></html>`;
 }
 
-function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_usd: number; commission_percent: number }): string {
+function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_usd: number; commission_ars: number; commission_percent: number }): string {
   return `
 <!doctype html>
 <html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
@@ -429,7 +431,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Tu incentivo por recomendación</p>
     <div style="${baseStyles.row}"><span>Valor de la venta</span><strong>${fmtArs(data.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">${arsOf(data.commission_usd, data.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación (${data.commission_percent}%)</span><strong style="color:#c8a85a;font-size:18px">${fmtArs(data.commission_ars)}</strong></div>
   </div>
   <div style="${baseStyles.card}">
     <p style="${baseStyles.eyebrow}">Datos de la reserva</p>
@@ -439,7 +441,7 @@ function htmlForSeller(data: OrderEmailData & { seller_name: string; commission_
     ${emailRow('Experiencia', escapeHtml(data.option_name))}
     ${emailRow('Fecha', data.service_date)}
     ${emailRow('Pasajeros', `${data.adults} adulto(s)${data.children > 0 ? ` · ${data.children} menor(es)` : ''}`)}
-    ${data.transfer_qty != null && data.transfer_qty > 0 ? emailRow('Traslado', `${data.transfer_qty >= data.adults + data.children ? 'Incluido' : `${data.transfer_qty} de ${data.adults + data.children} pasajeros`}${data.transfer_hotel ? ` — retiro en ${escapeHtml(data.transfer_hotel)}` : ''}`) : ''}
+    ${data.transfer_qty != null && data.transfer_qty > 0 ? emailRow('Traslado', `Para los ${data.adults + data.children + (data.infants ?? 0)} pasajero(s) de la reserva${data.transfer_hotel ? ` — retiro en ${escapeHtml(data.transfer_hotel)}` : ''}`) : ''}
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
   <p>Vamos a procesar el pago de tu incentivo por recomendación junto con los del próximo período. Cualquier consulta sobre tus ventas o pagos, escribinos.</p>
@@ -467,8 +469,10 @@ export const ORDER_EMAIL_SELECT = `
        oi.unit_price_adult_usd::float AS unit_price_adult_usd,
        oi.unit_price_child_usd::float AS unit_price_child_usd,
        oi.transfer_qty, oi.transfer_hotel, oi.infants,
-       opt.pickup_window_es, opt.dinner_time_es, opt.show_time_es, opt.includes_es,
+       opt.has_dinner, opt.show_only_time_enabled, opt.includes_es,
        p.address_es, p.children_age_label, p.infant_age_label,
+       p.dinner_show_time_es, p.show_only_time_es,
+       p.dinner_transfer_window_es, p.show_only_transfer_window_es,
        s.id AS seller_id, s.name AS seller_name, s.code AS seller_code, s.contact_email AS seller_email,
        a.commission_amount_usd::float AS commission_usd,
        a.commission_amount_ars::float AS commission_ars,
@@ -484,6 +488,18 @@ export const ORDER_EMAIL_SELECT = `
 
 // Mapea una fila (con los alias de ORDER_EMAIL_SELECT) al OrderEmailData completo.
 export function toOrderData(data: Record<string, unknown>): OrderEmailData {
+  const schedule = resolveOptionSchedule(
+    {
+      dinner_show_time_es: (data.dinner_show_time_es as string) ?? null,
+      show_only_time_es: (data.show_only_time_es as string) ?? null,
+      dinner_transfer_window_es: (data.dinner_transfer_window_es as string) ?? null,
+      show_only_transfer_window_es: (data.show_only_transfer_window_es as string) ?? null,
+    },
+    {
+      has_dinner: Boolean(data.has_dinner),
+      show_only_time_enabled: Boolean(data.show_only_time_enabled),
+    },
+  );
   return {
     public_id: data.public_id as string,
     customer_name: data.customer_name as string,
@@ -508,9 +524,9 @@ export function toOrderData(data: Record<string, unknown>): OrderEmailData {
     children_age_label: (data.children_age_label as string) ?? null,
     infant_age_label: (data.infant_age_label as string) ?? null,
     transfer_hotel: (data.transfer_hotel as string) ?? null,
-    pickup_window: (data.pickup_window_es as string) ?? null,
-    dinner_time: (data.dinner_time_es as string) ?? null,
-    show_time: (data.show_time_es as string) ?? null,
+    pickup_window: schedule.pickup_window_es,
+    dinner_time: schedule.dinner_time_es,
+    show_time: schedule.show_time_es,
     includes: (data.includes_es as string[]) ?? null,
     address: (data.address_es as string) ?? null,
     seller_name: (data.seller_name as string) ?? null,
@@ -587,6 +603,7 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
         seller_name: data.seller_name,
         seller_code: data.seller_code,
         commission_usd: data.commission_usd,
+        commission_ars: data.commission_ars,
       }),
       'ADMIN',
     );
@@ -596,11 +613,12 @@ export async function sendOrderPaidNotifications(orderId: number): Promise<void>
   if (data.seller_name && data.seller_email && data.commission_usd != null) {
     await send(
       data.seller_email,
-      `¡Nueva venta tuya! +${arsOf(data.commission_usd, orderData.exchange_rate_used)} de incentivo por recomendación`,
+      `¡Nueva venta tuya! +${fmtArs(data.commission_ars ?? 0)} de incentivo por recomendación`,
       htmlForSeller({
         ...orderData,
         seller_name: data.seller_name,
         commission_usd: data.commission_usd,
+        commission_ars: data.commission_ars,
         commission_percent: data.commission_percent ?? 0,
       }),
       'VENDEDOR',
@@ -1024,6 +1042,7 @@ export async function sendOrderRefundedNotifications(
         ...orderData,
         seller_name: data.seller_name,
         commission_usd: data.commission_usd,
+        commission_ars: data.commission_ars,
         is_partial: isPartial,
       }),
       'VENDEDOR',
@@ -1113,7 +1132,7 @@ export async function sendOrderModifiedNotifications(
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${fmtArs(data.commission_ars ?? 0)}</strong></div>
   </div>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
@@ -1188,7 +1207,7 @@ export async function sendOrderIncreasedNotifications(
     <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Nueva composición</span><strong>${orderData.adults} ad · ${orderData.children} men</strong></div>
     <div style="${baseStyles.row}"><span>Nuevo total</span><strong>${fmtArs(orderData.total_ars)}</strong></div>
-    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${arsOf(data.commission_usd, orderData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Tu incentivo por recomendación ajustado</span><strong style="color:#c8a85a">${fmtArs(data.commission_ars ?? 0)}</strong></div>
   </div>
   ${supportBlock()}
   <p style="${baseStyles.footer}">Tango QR · Programa de incentivos por recomendación</p>
@@ -1372,7 +1391,7 @@ export async function sendSellerCancelledNotifications(
     <div style="${baseStyles.row}"><span>Nombre</span><strong>${escapeHtml(data.seller_name)}</strong></div>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     ${data.seller_email ? `<div style="${baseStyles.row}"><span>Email</span><span>${escapeHtml(data.seller_email)}</span></div>` : ''}
-    <div style="${baseStyles.row}"><span>Incentivo por recomendación que no aplica</span><strong>${arsOf(data.commission_usd ?? 0, orderData.exchange_rate_used)}</strong></div>
+    <div style="${baseStyles.row}"><span>Incentivo por recomendación que no aplica</span><strong>${fmtArs(data.commission_ars ?? 0)}</strong></div>
   </div>` : ''}
   ${reason ? `<p style="color:rgba(245,239,230,0.7)"><strong>Motivo:</strong> ${escapeHtml(reason)}</p>` : ''}
   <p style="color:rgba(245,239,230,0.55);font-size:13px;">${wasCollected

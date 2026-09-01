@@ -19,6 +19,10 @@ const empty = {
   address_es: '', address_en: '',
   neighborhood_es: '', tagline_es: '', badge_es: '',
   schedule_summary_es: '', schedule_summary_en: '',
+  dinner_show_time_es: null as string | null,
+  show_only_time_es: null as string | null,
+  dinner_transfer_window_es: null as string | null,
+  show_only_transfer_window_es: null as string | null,
   video_url: '',
   starting_price_usd: null as number | null,
   is_active: true, display_order: 0,
@@ -203,6 +207,45 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
           className="input"
         />
       </Field>
+
+      {/* Horarios estructurados de la casa: se cargan una sola vez acá y cada tier
+          elige cuáles mostrar (con un check, en su propio editor) en vez de
+          tipearlos de nuevo por tier — así todos los tiers de cena quedan siempre
+          coherentes entre sí, y lo mismo para los de solo show. */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        <Field label="Horario show con cena" hint="Ej: 'Cena desde 20:00. Show desde 22:00.'">
+          <input
+            type="text" maxLength={200}
+            value={form.dinner_show_time_es ?? ''}
+            onChange={(e) => update('dinner_show_time_es', e.target.value || null)}
+            className="input"
+          />
+        </Field>
+        <Field label="Horario traslado a la cena" hint="Ej: 'Traslado 19:30–20:00'">
+          <input
+            type="text" maxLength={200}
+            value={form.dinner_transfer_window_es ?? ''}
+            onChange={(e) => update('dinner_transfer_window_es', e.target.value || null)}
+            className="input"
+          />
+        </Field>
+        <Field label="Horario solo show" hint="Ej: 'Show desde 22:30.'">
+          <input
+            type="text" maxLength={200}
+            value={form.show_only_time_es ?? ''}
+            onChange={(e) => update('show_only_time_es', e.target.value || null)}
+            className="input"
+          />
+        </Field>
+        <Field label="Horario traslado al solo show" hint="Ej: 'Traslado 22:00–22:30'">
+          <input
+            type="text" maxLength={200}
+            value={form.show_only_transfer_window_es ?? ''}
+            onChange={(e) => update('show_only_transfer_window_es', e.target.value || null)}
+            className="input"
+          />
+        </Field>
+      </div>
 
       <Field label="Video (YouTube)" hint="Pegá el link del video de YouTube de esta casa — se muestra en el detalle público">
         <input
