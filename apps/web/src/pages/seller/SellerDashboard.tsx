@@ -117,10 +117,10 @@ export default function SellerDashboard() {
       {/* Stats */}
       <section className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5 md:mb-8">
         <StatCard label="Ventas" value={String(me.orders_paid)} sub="órdenes cobradas" />
-        <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="ventas por Mercado Pago" />
+        <StatCard label="Facturación" value={fmt(me.revenue_paid_ars)} sub="ventas por tarjeta" />
         <StatCard label="Incentivo ganado" value={fmt(earned)} sub="según tu perfil y cada servicio" />
         <StatCard label="Ya cobrado" value={fmt(paid)} sub="liquidado a tu cuenta" />
-        <StatCard label="Pendiente (MP)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
+        <StatCard label="Pendiente (Tarjeta)" value={fmt(pending)} sub={pending > 0 ? 'a cobrar del operador' : 'al día'} />
         <StatCard label="Neto a rendir" value={fmt(netToSettle)} sub={netToSettle > 0 ? 'de ventas en efectivo' : 'al día'} />
       </section>
 
@@ -128,7 +128,7 @@ export default function SellerDashboard() {
         <div className="rounded-xl border border-gold/20 bg-gold/5 p-4 text-sm text-cream/80 mb-5 md:mb-8">
           <p className="font-medium text-gold mb-1">Tenés incentivo por recomendación pendiente de liquidación</p>
           <p className="text-xs md:text-sm">
-            {fmt(pending)} (ventas por Mercado Pago) no te fue transferido aún. Cuando el equipo procese el pago lo verás en <strong>Liquidaciones</strong>.
+            {fmt(pending)} (ventas por tarjeta) no te fue transferido aún. Cuando el equipo procese el pago lo verás en <strong>Liquidaciones</strong>.
           </p>
         </div>
       )}

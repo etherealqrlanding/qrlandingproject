@@ -169,7 +169,7 @@
     "secure_payment_cash_only": "Instant booking confirmation. Cash payment is arranged with your recommender.",
     "back_to_list": "Back to list",
     "error": "We couldn't load this experience",
-    "currency_notice_card": "By card (Mercado Pago) charges are processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). USD prices are for reference and are converted at the current exchange rate.",
+    "currency_notice_card": "By card, charges are processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). USD prices are for reference and are converted at the current exchange rate.",
     "currency_notice_cash_only": "USD prices are for reference. The final cash amount is arranged directly with your recommender.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
@@ -220,7 +220,7 @@
     "cutoff_notice": "Same-day bookings accepted until {{time}} (Buenos Aires time)",
     "horizon_notice": "We're currently selling tickets through {{date}}",
     "capacity_max_reached": "Maximum capacity reached for this date",
-    "currency_notice_card": "Prices are shown in US dollars (USD) as a reference. By card (Mercado Pago) the charge is processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). The local-currency amount is an estimate until the payment is confirmed.",
+    "currency_notice_card": "Prices are shown in US dollars (USD) as a reference. By card, the charge is processed in Argentine pesos (ARS); with PIX, in Brazilian reais (BRL). The local-currency amount is an estimate until the payment is confirmed.",
     "currency_notice_cash_only": "Prices are shown in US dollars (USD) as a reference. The final cash amount is arranged directly with your recommender.",
     "ars_estimate": "≈ ARS {{amount}} (estimated at current rate)"
   },
@@ -251,7 +251,7 @@
   },
   "payment_methods": {
     "secure_note": "100% secure payments",
-    "currency_note_card": "Prices are shown in USD as a reference. Charges are processed in Argentine pesos (ARS) by card/Mercado Pago, or in Brazilian reais (BRL) with PIX.",
+    "currency_note_card": "Prices are shown in USD as a reference. Charges are processed in Argentine pesos (ARS) by card, or in Brazilian reais (BRL) with PIX.",
     "currency_note_cash_only": "Prices are shown in USD as a reference. Cash payment is arranged directly with your recommender.",
     "mp_credit": "Credit",
     "mp_debit": "Debit",

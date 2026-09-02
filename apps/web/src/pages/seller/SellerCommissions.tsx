@@ -141,7 +141,7 @@ function DetailTable({ d }: Readonly<{ d: DetailState | undefined }>) {
               </td>
               <td className="px-3 py-2.5 text-cream/70 whitespace-nowrap">{fmtDate(o.service_date)}</td>
               <td className="px-3 py-2.5 text-cream/50 whitespace-nowrap">
-                {o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'pix' ? 'PIX' : 'MP'}
+                {o.payment_method === 'cash' ? 'Efectivo' : o.payment_method === 'pix' ? 'PIX' : 'Tarjeta'}
               </td>
               <td className="px-3 py-2.5 text-right font-mono text-cream/80 whitespace-nowrap">{fmt(o.total_ars)}</td>
               <td className="px-3 py-2.5 text-right font-mono text-gold whitespace-nowrap">{fmt(o.commission_amount_ars)}</td>

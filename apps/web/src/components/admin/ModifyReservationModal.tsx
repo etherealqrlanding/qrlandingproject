@@ -349,7 +349,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
             {rescheduleBlocked && (
               <p className="text-sm text-bordeaux-light">
-                Las reservas de Mercado Pago las reprograma el administrador. Pedile al cliente que se contacte con nosotros.
+                Las reservas pagadas con tarjeta las reprograma el administrador. Pedile al cliente que se contacte con nosotros.
               </p>
             )}
             {preview.direction === 'reduce' && !reduceBlocked && (
@@ -361,12 +361,12 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
             {reduceBlocked && (
               <p className="text-sm text-bordeaux-light">
-                El reintegro de reservas por Mercado Pago lo realiza el administrador. Pedile que lo procese.
+                El reintegro de reservas pagadas con tarjeta lo realiza el administrador. Pedile que lo procese.
               </p>
             )}
             {preview.direction === 'increase' && !increaseBlocked && (
               <p className="text-sm text-cream/80">
-                {isMp ? 'Se generará un link de MP por ' : 'Se registra una ampliación pendiente de cobro por '}
+                {isMp ? 'Se generará un link de pago con tarjeta por ' : 'Se registra una ampliación pendiente de cobro por '}
                 <strong className="text-cream">{fmtArs(preview.deltaArs)}</strong>.
                 Nuevo total: <strong className="text-cream">{fmtArs(preview.newSubtotalArs)}</strong>.
                 {isMp ? ' El pasajero paga con su cuenta.' : ' Confirmás el cobro después, cuando recibas el dinero.'}
@@ -374,7 +374,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
             {increaseBlocked && (
               <p className="text-sm text-bordeaux-light">
-                Las ampliaciones de reservas de Mercado Pago las gestiona el administrador. Pedile al cliente que se contacte con nosotros.
+                Las ampliaciones de reservas pagadas con tarjeta las gestiona el administrador. Pedile al cliente que se contacte con nosotros.
               </p>
             )}
           </div>

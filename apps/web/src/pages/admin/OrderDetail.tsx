@@ -408,7 +408,7 @@ export default function OrderDetail() {
             </Section>
           ))}
 
-          <Section title={order.payment_method === 'pix' ? 'PIX (Nautt)' : 'Mercado Pago'} twoColumn>
+          <Section title={order.payment_method === 'pix' ? 'PIX (Nautt)' : 'Tarjeta'} twoColumn>
             <Row label={order.payment_method === 'pix' ? 'Orden Nautt' : 'Payment ID'}>{order.mp_payment_id ?? '—'}</Row>
             <Row label="Estado">{order.mp_payment_status ?? '—'}</Row>
             <Row label="Método">{order.mp_payment_method ?? '—'}</Row>
@@ -468,7 +468,7 @@ export default function OrderDetail() {
                   <p className="text-sm text-cream/90">
                     +{ad.extra_adults} ad{ad.extra_children > 0 ? ` · +${ad.extra_children} men` : ''} —
                     <strong className="text-gold"> {fmtArs(ad.charge_ars)}</strong>
-                    <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</span>
+                    <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Tarjeta'}</span>
                   </p>
                   {ad.payment_method === 'cash' ? (
                     <div className="mt-3 flex gap-2">
@@ -511,7 +511,7 @@ export default function OrderDetail() {
               <p className="text-xs text-gold-soft font-mono">{order.seller_code}</p>
 
               <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-cream/15 px-2.5 py-0.5 text-[11px] text-cream/70">
-                {order.payment_method === 'cash' ? 'Pago en efectivo' : order.payment_method === 'pix' ? 'Pago por PIX (reales)' : 'Pago por Mercado Pago'}
+                {order.payment_method === 'cash' ? 'Pago en efectivo' : order.payment_method === 'pix' ? 'Pago por PIX (reales)' : 'Pago con tarjeta'}
               </div>
 
               {order.payment_method === 'cash' ? (
@@ -555,7 +555,7 @@ export default function OrderDetail() {
                     <Row label="Le liquidamos" highlight>{fmtArs(order.commission_amount_ars ?? 0)}</Row>
                   </div>
                   <p className="mt-3 rounded-md bg-ink/40 px-3 py-2 text-xs text-cream/70">
-                    ➜ Cobramos por Mercado Pago y <strong>le liquidamos su incentivo por recomendación ({fmtArs(order.commission_amount_ars ?? 0)})</strong> al recomendador.
+                    ➜ Cobramos por tarjeta y <strong>le liquidamos su incentivo por recomendación ({fmtArs(order.commission_amount_ars ?? 0)})</strong> al recomendador.
                   </p>
                   <div className="mt-2">
                     <Row label="Pago al recomendador">

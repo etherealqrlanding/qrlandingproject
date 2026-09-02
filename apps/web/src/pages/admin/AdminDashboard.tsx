@@ -12,13 +12,13 @@ const MODULES = [
     icon: '✦',
     label: 'Recomendadores',
     href: '/admin/sellers',
-    body: 'Cada recomendador tiene un código QR único y un % de incentivo por recomendación. Pueden cobrar en efectivo o generar links de Mercado Pago. Desde el listado podés contactarlos directo por WhatsApp.',
+    body: 'Cada recomendador tiene un código QR único y un % de incentivo por recomendación. Pueden cobrar en efectivo o generar links de pago con tarjeta. Desde el listado podés contactarlos directo por WhatsApp.',
   },
   {
     icon: '◆',
     label: 'Órdenes',
     href: '/admin/orders',
-    body: 'Todas las reservas del sistema. Podés modificar pax, reintegrar por MP, cancelar, reprogramar fecha y ver el historial completo de eventos de cada orden.',
+    body: 'Todas las reservas del sistema. Podés modificar pax, reintegrar pagos con tarjeta, cancelar, reprogramar fecha y ver el historial completo de eventos de cada orden.',
   },
   {
     icon: '⬡',
@@ -95,9 +95,9 @@ export default function AdminDashboard() {
       href: '/admin/orders',
     },
     {
-      label: 'Facturación Mercado Pago',
+      label: 'Facturación con Tarjeta',
       value: fmtArs(me.stats.mp_revenue_ars),
-      hint: 'Total histórico cobrado por MP',
+      hint: 'Total histórico cobrado por tarjeta',
       href: '/admin/orders',
     },
     {

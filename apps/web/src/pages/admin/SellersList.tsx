@@ -304,9 +304,9 @@ export default function SellersList() {
           </button>
 
           <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-            <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por Mercado Pago · afiliados externos" />
+            <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por tarjeta · afiliados externos" />
             <SummaryCard label="Incentivos" value={`ARS ${totals.paid.toLocaleString()}`} hint="Incentivos de afiliados externos" />
-            <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de MP a liquidar a recomendadores" highlight />
+            <SummaryCard label="A pagar (Tarjeta)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de tarjeta a liquidar a recomendadores" highlight />
             <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los recomendadores nos deben rendir" />
           </div>
         </>
@@ -331,9 +331,9 @@ export default function SellersList() {
             </button>
             <p className="text-xs uppercase tracking-[0.3em] text-gold-soft mb-4">Estadísticas</p>
             <div className="grid grid-cols-1 gap-3">
-              <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por Mercado Pago · afiliados externos" showHintOnMobile />
+              <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por tarjeta · afiliados externos" showHintOnMobile />
               <SummaryCard label="Incentivos" value={`ARS ${totals.paid.toLocaleString()}`} hint="Incentivos de afiliados externos" showHintOnMobile />
-              <SummaryCard label="A pagar (MP)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de MP a liquidar a recomendadores" highlight showHintOnMobile />
+              <SummaryCard label="A pagar (Tarjeta)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de tarjeta a liquidar a recomendadores" highlight showHintOnMobile />
               <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los recomendadores nos deben rendir" showHintOnMobile />
             </div>
           </div>

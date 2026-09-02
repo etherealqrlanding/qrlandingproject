@@ -22,7 +22,7 @@ function PaymentMethodBadge({ method }: Readonly<{ method: AdminHoldRow['payment
     <span className={`text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap ${
       method === 'pix' ? 'border-gold/40 text-gold bg-gold/10' : 'border-cream/20 text-cream/70 bg-cream/5'
     }`}>
-      {method === 'pix' ? 'PIX' : 'Mercado Pago'}
+      {method === 'pix' ? 'PIX' : 'Tarjeta'}
     </span>
   );
 }
@@ -99,7 +99,7 @@ export default function HoldsList() {
         <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Checkout público</p>
         <h1 className="mt-1 font-display text-3xl md:text-4xl text-cream">Cupos en espera</h1>
         <p className="mt-2 text-sm text-cream/50">
-          Checkouts de Mercado Pago o PIX en curso, con el cupo congelado hasta que se confirme
+          Checkouts con tarjeta o PIX en curso, con el cupo congelado hasta que se confirme
           el pago o venza el link/QR. Se actualiza solo cada 10s.
         </p>
       </header>

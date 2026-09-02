@@ -73,7 +73,7 @@ export async function createAddonForOrder(params: {
     return { ok: false, httpStatus: 404, error: 'Reserva no encontrada' };
   }
   if (row.payment_method !== 'mercadopago') {
-    return { ok: false, httpStatus: 400, error: 'Esta vía es solo para reservas de Mercado Pago. En efectivo se cobra en el momento.' };
+    return { ok: false, httpStatus: 400, error: 'Esta vía es solo para reservas pagadas con tarjeta. En efectivo se cobra en el momento.' };
   }
   if (row.status !== 'paid') {
     return { ok: false, httpStatus: 400, error: `Solo se pueden ampliar reservas pagadas. Estado actual: ${row.status}` };

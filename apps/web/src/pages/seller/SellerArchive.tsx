@@ -27,7 +27,7 @@ const STATUS_COLOR: Record<string, string> = {
   failed: 'text-bordeaux-light border-bordeaux-light/30',
 };
 const PAYMENT_LABEL: Record<string, string> = {
-  mercadopago: 'Mercado Pago',
+  mercadopago: 'Tarjeta',
   cash: 'Efectivo',
 };
 const CANCELLED_BY_LABEL: Record<string, string> = {

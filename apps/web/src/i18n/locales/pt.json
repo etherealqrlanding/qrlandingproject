@@ -169,7 +169,7 @@
     "secure_payment_cash_only": "Confirmação instantânea da reserva. O pagamento em dinheiro é combinado com seu recomendador.",
     "back_to_list": "Voltar à lista",
     "error": "Não foi possível carregar este serviço",
-    "currency_notice_card": "Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). Os preços em USD são de referência e convertidos pela taxa de câmbio vigente.",
+    "currency_notice_card": "Com cartão, a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). Os preços em USD são de referência e convertidos pela taxa de câmbio vigente.",
     "currency_notice_cash_only": "Os preços em USD são de referência. O valor final em dinheiro é combinado diretamente com seu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
@@ -220,7 +220,7 @@
     "cutoff_notice": "Reservas para hoje são aceitas até as {{time}} h (horário de Buenos Aires)",
     "horizon_notice": "No momento vendemos ingressos até {{date}}",
     "capacity_max_reached": "Capacidade máxima atingida para esta data",
-    "currency_notice_card": "Os preços são exibidos em dólares (USD) como referência. Com cartão (Mercado Pago) a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
+    "currency_notice_card": "Os preços são exibidos em dólares (USD) como referência. Com cartão, a cobrança é processada em pesos argentinos (ARS); com PIX, em reais (BRL). O valor na moeda local é estimado até a confirmação do pagamento.",
     "currency_notice_cash_only": "Os preços são exibidos em dólares (USD) como referência. O valor final em dinheiro é combinado diretamente com seu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (estimado pela taxa atual)"
   },
@@ -251,7 +251,7 @@
   },
   "payment_methods": {
     "secure_note": "Pagamentos 100% seguros",
-    "currency_note_card": "Os preços são exibidos em USD como referência. A cobrança é processada em pesos argentinos (ARS) com cartão/Mercado Pago, ou em reais (BRL) com PIX.",
+    "currency_note_card": "Os preços são exibidos em USD como referência. A cobrança é processada em pesos argentinos (ARS) com cartão, ou em reais (BRL) com PIX.",
     "currency_note_cash_only": "Os preços são exibidos em USD como referência. O pagamento em dinheiro é combinado diretamente com seu recomendador.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",

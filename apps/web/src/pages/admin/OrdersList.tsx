@@ -76,7 +76,7 @@ function orderTotalDisplay(o: AdminOrderListItem): string {
 // Detalle inline de la orden — solo lectura. Las acciones (reintegrar, modificar,
 // confirmar cobro, etc.) siguen viviendo únicamente en el detalle completo ("Ver →");
 // esto es para monitorear sin salir del listado.
-const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo', pix: 'PIX' };
+const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Tarjeta', cash: 'Efectivo', pix: 'PIX' };
 
 function OrderExtraDetails({ o, twoColumns }: Readonly<{ o: AdminOrderListItem; twoColumns?: boolean }>) {
   return (
@@ -632,18 +632,18 @@ export default function OrdersList() {
 
           <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
             <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" />
-            <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, MP o efectivo" />
+            <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, tarjeta o efectivo" />
             <SummaryCard
-              label="Facturación MP"
+              label="Facturación con Tarjeta"
               value={summary.revenue}
               format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-              sub="cobrado por Mercado Pago (no incluye efectivo)"
+              sub="cobrado con tarjeta (no incluye efectivo)"
             />
             <SummaryCard
               label="Incentivos"
               value={summary.commission}
               format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-              sub="a liquidar, solo ventas por MP"
+              sub="a liquidar, solo ventas por tarjeta"
               highlight
             />
             <SummaryCard
@@ -677,19 +677,19 @@ export default function OrdersList() {
             <p className="text-xs uppercase tracking-[0.3em] text-gold-soft mb-4">Estadísticas</p>
             <div className="grid grid-cols-1 gap-3">
               <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" showSubOnMobile />
-              <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, MP o efectivo" showSubOnMobile />
+              <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, tarjeta o efectivo" showSubOnMobile />
               <SummaryCard
-                label="Facturación MP"
+                label="Facturación con Tarjeta"
                 value={summary.revenue}
                 format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-                sub="cobrado por Mercado Pago (no incluye efectivo)"
+                sub="cobrado con tarjeta (no incluye efectivo)"
                 showSubOnMobile
               />
               <SummaryCard
                 label="Incentivos"
                 value={summary.commission}
                 format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-                sub="a liquidar, solo ventas por MP"
+                sub="a liquidar, solo ventas por tarjeta"
                 highlight
                 showSubOnMobile
               />

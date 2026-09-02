@@ -169,7 +169,7 @@
     "secure_payment_cash_only": "Reserva confirmada al instante. El pago en efectivo lo coordinás con tu recomendador.",
     "back_to_list": "Volver al listado",
     "error": "No pudimos cargar este servicio",
-    "currency_notice_card": "Con tarjeta (Mercado Pago) el cobro se procesa en pesos argentinos (ARS); con PIX, en reales (BRL). Los precios en USD son de referencia y se convierten al tipo de cambio vigente.",
+    "currency_notice_card": "Con tarjeta el cobro se procesa en pesos argentinos (ARS); con PIX, en reales (BRL). Los precios en USD son de referencia y se convierten al tipo de cambio vigente.",
     "currency_notice_cash_only": "Los precios en USD son de referencia. El monto final en efectivo lo coordinás directamente con tu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (est.)"
   },
@@ -220,7 +220,7 @@
     "cutoff_notice": "Reservas para hoy se toman hasta las {{time}} hs (hora Buenos Aires)",
     "horizon_notice": "Por ahora vendemos entradas hasta el {{date}}",
     "capacity_max_reached": "Cupo máximo alcanzado para esta fecha",
-    "currency_notice_card": "Los precios se muestran en dólares (USD) como referencia. Con tarjeta (Mercado Pago) el cobro se procesa en pesos (ARS); con PIX, en reales (BRL). El monto en la moneda local es estimativo hasta confirmar el pago.",
+    "currency_notice_card": "Los precios se muestran en dólares (USD) como referencia. Con tarjeta el cobro se procesa en pesos (ARS); con PIX, en reales (BRL). El monto en la moneda local es estimativo hasta confirmar el pago.",
     "currency_notice_cash_only": "Los precios se muestran en dólares (USD) como referencia. El monto final en efectivo lo coordinás directamente con tu recomendador.",
     "ars_estimate": "≈ ARS {{amount}} (estimado a tasa actual)"
   },
@@ -251,7 +251,7 @@
   },
   "payment_methods": {
     "secure_note": "Pagos 100% seguros",
-    "currency_note_card": "Los precios se muestran en USD como referencia. El cobro se procesa en pesos (ARS) con tarjeta/Mercado Pago, o en reales (BRL) con PIX.",
+    "currency_note_card": "Los precios se muestran en USD como referencia. El cobro se procesa en pesos (ARS) con tarjeta, o en reales (BRL) con PIX.",
     "currency_note_cash_only": "Los precios se muestran en USD como referencia. El pago en efectivo se coordina directamente con tu recomendador.",
     "mp_credit": "Crédito",
     "mp_debit": "Débito",

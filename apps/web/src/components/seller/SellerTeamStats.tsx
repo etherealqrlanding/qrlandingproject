@@ -171,14 +171,14 @@ export default function SellerTeamStats() {
           {stats && (
             <section className={`grid grid-cols-2 sm:grid-cols-3 gap-3 transition-opacity ${loadingStats ? 'opacity-50' : ''}`}>
               <StatCard label="Ventas" value={String(stats.orders_paid)} sub="órdenes cobradas" />
-              <StatCard label="Facturación" value={fmt(stats.revenue_paid_ars)} sub="ventas por Mercado Pago" />
+              <StatCard label="Facturación" value={fmt(stats.revenue_paid_ars)} sub="ventas por tarjeta" />
               <StatCard
                 label="Incentivo ganado"
                 value={fmt(stats.commission_earned_ars)}
                 sub="según el perfil y cada servicio"
               />
               <StatCard label="Ya cobrado" value={fmt(stats.commission_paid_ars)} sub="liquidado a la cuenta" />
-              <StatCard label="Pendiente (MP)" value={fmt(stats.commission_pending_ars)} sub={stats.commission_pending_ars > 0 ? 'a cobrar del operador' : 'al día'} />
+              <StatCard label="Pendiente (Tarjeta)" value={fmt(stats.commission_pending_ars)} sub={stats.commission_pending_ars > 0 ? 'a cobrar del operador' : 'al día'} />
               <StatCard label="Neto a rendir" value={fmt(stats.net_pending_settlement_ars)} sub={stats.net_pending_settlement_ars > 0 ? 'de ventas en efectivo' : 'al día'} />
             </section>
           )}

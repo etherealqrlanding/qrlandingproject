@@ -72,7 +72,7 @@ export default function SellerBooking() {
           <strong className="text-cream/90">Reservas manuales:</strong> elegí el show y la opción, completá los datos
           del pasajero y seleccioná la forma de pago.
           Usá <strong className="text-cream/80">Pago al recomendador</strong> si el pasajero paga en el momento (efectivo),
-          o <strong className="text-cream/80">Mercado Pago</strong> para enviarle el link de pago online.
+          o <strong className="text-cream/80">tarjeta</strong> para enviarle el link de pago online.
           La reserva quedará marcada como <em>ingresada manualmente por el recomendador</em>.
         </div>
       </div>

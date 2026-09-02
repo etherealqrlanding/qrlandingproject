@@ -344,7 +344,7 @@ function htmlForCustomer(data: OrderEmailData): string {
   ${reservationCard(data, { showContact: true })}
   ${voucherButtonBlock(data.public_id)}
   <div style="background:rgba(200,168,90,0.08);border:1px solid rgba(200,168,90,0.25);border-radius:10px;padding:16px 18px;margin:20px 0">
-    <p style="margin:0;font-size:13px;line-height:1.6"><strong style="color:#c8a85a">¿Necesitás cancelar o modificar tu reserva?</strong> Como pagaste online (${isPixOrder(data) ? 'PIX' : 'Mercado Pago'}), cualquier gestión relacionada con tu cobro (cancelación, cambio de fecha, sumar o quitar pasajeros, reintegros) la manejamos nosotros directamente — escribinos por WhatsApp con tu número de referencia y te ayudamos al instante.</p>
+    <p style="margin:0;font-size:13px;line-height:1.6"><strong style="color:#c8a85a">¿Necesitás cancelar o modificar tu reserva?</strong> Como pagaste online (${isPixOrder(data) ? 'PIX' : 'Tarjeta'}), cualquier gestión relacionada con tu cobro (cancelación, cambio de fecha, sumar o quitar pasajeros, reintegros) la manejamos nosotros directamente — escribinos por WhatsApp con tu número de referencia y te ayudamos al instante.</p>
   </div>
   <p>Guardá este email como comprobante. Si tenés cualquier consulta, respondé este mismo correo o escribinos por WhatsApp con tu número de referencia.</p>
   ${supportBlock()}
@@ -366,7 +366,7 @@ function htmlForAdmin(data: OrderEmailData & { seller_name?: string | null; sell
     <div style="${baseStyles.row}"><span>Fecha</span><strong>${data.service_date}</strong></div>
     <div style="${baseStyles.row}"><span>Pax</span><strong>${data.adults} ad · ${data.children} men</strong></div>
     <div style="${baseStyles.row}"><span>Total</span><strong style="color:#c8a85a">${chargedTotalStr(data)}${isPixOrder(data) ? ` <span style="opacity:.55;font-size:11px">(≈ ${fmtArs(data.total_ars)})</span>` : ''}</strong></div>
-    <div style="${baseStyles.row}"><span>Método</span><strong>${data.payment_method === 'pix' ? 'PIX (reales)' : data.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</strong></div>
+    <div style="${baseStyles.row}"><span>Método</span><strong>${data.payment_method === 'pix' ? 'PIX (reales)' : data.payment_method === 'cash' ? 'Efectivo' : 'Tarjeta'}</strong></div>
     <div style="${baseStyles.row}"><span>${isPixOrder(data) ? 'Orden Nautt' : 'MP Payment'}</span><span style="font-family:monospace;font-size:11px">${data.mp_payment_id ?? '—'}</span></div>
     <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${data.public_id}</span></div>
   </div>
@@ -552,7 +552,7 @@ export async function sendPaymentLinkEmail(orderId: number, initPoint: string): 
   // El medio surge de la orden (PIX o MP): así el email dice el método correcto sin que el
   // caller tenga que pasarlo. Para PIX el link va a la página con el QR/clave en reales.
   const isPix = orderData.payment_method === 'pix';
-  const payLabel = isPix ? 'PIX' : 'Mercado Pago';
+  const payLabel = isPix ? 'PIX' : 'Tarjeta';
   const payColor = isPix ? '#32BCAD' : '#009ee3';
   const html = `
 <!doctype html>

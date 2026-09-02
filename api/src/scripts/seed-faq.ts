@@ -30,14 +30,14 @@ const ITEMS: FaqItem[] = [
   {
     q_es: '¿Qué métodos de pago aceptan?',
     q_en: 'What payment methods do you accept?',
-    a_es: 'Podés pagar con tarjeta de crédito, débito o dinero en cuenta (procesado en pesos argentinos vía Mercado Pago), con PIX en reales, o en efectivo directamente con quien te recomendó la experiencia.',
-    a_en: 'You can pay by credit card, debit card or account balance (processed in Argentine pesos via Mercado Pago), with PIX in Brazilian reais, or in cash directly with whoever referred you to the experience.',
+    a_es: 'Podés pagar con tarjeta de crédito, débito o dinero en cuenta (procesado en pesos argentinos), con PIX en reales, o en efectivo directamente con quien te recomendó la experiencia.',
+    a_en: 'You can pay by credit card, debit card or account balance (processed in Argentine pesos), with PIX in Brazilian reais, or in cash directly with whoever referred you to the experience.',
   },
   {
     q_es: 'Los precios están en dólares (USD), ¿en qué moneda se cobra realmente?',
     q_en: 'Prices are shown in US dollars (USD) — what currency am I actually charged in?',
-    a_es: 'Los precios en USD son de referencia. Con tarjeta (Mercado Pago) el cobro se procesa en pesos argentinos (ARS) al tipo de cambio del momento; con PIX, en reales brasileños (BRL). Si pagás en efectivo, coordinás el monto directamente con quien te recomendó la experiencia.',
-    a_en: 'USD prices are for reference. With a card (Mercado Pago), the charge is processed in Argentine pesos (ARS) at the current exchange rate; with PIX, in Brazilian reais (BRL). For cash payments, you coordinate the amount directly with whoever referred you.',
+    a_es: 'Los precios en USD son de referencia. Con tarjeta el cobro se procesa en pesos argentinos (ARS) al tipo de cambio del momento; con PIX, en reales brasileños (BRL). Si pagás en efectivo, coordinás el monto directamente con quien te recomendó la experiencia.',
+    a_en: 'USD prices are for reference. By card, the charge is processed in Argentine pesos (ARS) at the current exchange rate; with PIX, in Brazilian reais (BRL). For cash payments, you coordinate the amount directly with whoever referred you.',
   },
   {
     q_es: 'Soy de Brasil, ¿puedo pagar con PIX en reales?',
@@ -54,8 +54,8 @@ const ITEMS: FaqItem[] = [
   {
     q_es: '¿Es seguro pagar en la plataforma?',
     q_en: 'Is it safe to pay on the platform?',
-    a_es: 'Sí. Los pagos con tarjeta se procesan a través de Mercado Pago y los pagos con PIX a través de nuestro proveedor de reales, ambos con cifrado de extremo a extremo. Nunca ingresás los datos de tu tarjeta directamente en nuestro sitio.',
-    a_en: 'Yes. Card payments are processed through Mercado Pago and PIX payments through our BRL payment provider, both with end-to-end encryption. You\'ll never enter your card details directly on our site.',
+    a_es: 'Sí. Los pagos con tarjeta se procesan de forma segura y los pagos con PIX a través de nuestro proveedor de reales, ambos con cifrado de extremo a extremo. Nunca ingresás los datos de tu tarjeta directamente en nuestro sitio.',
+    a_en: 'Yes. Card payments are processed securely and PIX payments through our BRL payment provider, both with end-to-end encryption. You\'ll never enter your card details directly on our site.',
   },
   {
     q_es: '¿Cómo me pongo en contacto con ustedes?',

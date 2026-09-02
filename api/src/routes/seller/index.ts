@@ -424,7 +424,7 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
     // Pago en efectivo solo permitido para vendedores permanentes (is_permanent = true)
     if (input.payment_method === 'cash' && !seller.is_permanent) {
       return res.status(403).json({
-        error: 'Tu perfil no tiene habilitado el cobro en efectivo. Usá Mercado Pago para procesar el pago.',
+        error: 'Tu perfil no tiene habilitado el cobro en efectivo. Usá tarjeta para procesar el pago.',
       });
     }
     // Tarjeta (Mercado Pago/Pix) deshabilitada para esta cuenta -- lo apaga solo el
@@ -1148,7 +1148,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
     const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Reserva no encontrada' });
     if (row.payment_method !== 'cash') {
-      return res.status(400).json({ error: 'Solo podés reducir reservas en efectivo. Las de Mercado Pago las reintegra el administrador.' });
+      return res.status(400).json({ error: 'Solo podés reducir reservas en efectivo. Las pagadas con tarjeta las reintegra el administrador.' });
     }
     if (row.status !== 'paid' && row.status !== 'pending') {
       return res.status(400).json({ error: `No se puede reducir una reserva en estado ${row.status}` });
@@ -1231,7 +1231,7 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
 // sobre órdenes de Mercado Pago. El admin gestiona los links de diferencia.
 sellerRouter.post('/me/orders/:publicId/add-mp', async (_req, res) => {
   res.status(403).json({
-    error: 'Las reservas de Mercado Pago las gestiona el administrador. Si el cliente necesita sumar pasajeros, coordinalo con nosotros.',
+    error: 'Las reservas pagadas con tarjeta las gestiona el administrador. Si el cliente necesita sumar pasajeros, coordinalo con nosotros.',
   });
 });
 

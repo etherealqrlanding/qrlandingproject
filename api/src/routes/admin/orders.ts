@@ -82,7 +82,7 @@ adminOrdersRouter.post('/', async (req, res, next) => {
     // Mismo gate que el portal del vendedor: efectivo solo si es permanente.
     if (input.payment_method === 'cash' && !seller.is_permanent) {
       return res.status(403).json({
-        error: 'Ese recomendador no tiene habilitado el cobro en efectivo. Usá Mercado Pago para esta reserva.',
+        error: 'Ese recomendador no tiene habilitado el cobro en efectivo. Usá tarjeta para esta reserva.',
       });
     }
     // Idem tarjeta: solo si el admin de la plataforma la dejó habilitada para esa cuenta.
@@ -1003,7 +1003,7 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
     const row = rows[0];
     if (!row) return res.status(404).json({ error: 'Not found' });
     if (row.payment_method !== 'cash') {
-      return res.status(400).json({ error: 'Esta vía es solo para reservas en efectivo. Para Mercado Pago usá el reintegro.' });
+      return res.status(400).json({ error: 'Esta vía es solo para reservas en efectivo. Para tarjeta usá el reintegro.' });
     }
     if (row.status !== 'paid' && row.status !== 'pending') {
       return res.status(400).json({ error: `No se puede reducir una reserva en estado ${row.status}` });

@@ -8,7 +8,7 @@ const BENEFITS = [
   {
     icon: '◆',
     title: 'Incentivo por cada venta',
-    body: 'Ganás un porcentaje fijo de cada reserva generada con tu código, ya sea que el pasajero pague en efectivo o por Mercado Pago.',
+    body: 'Ganás un porcentaje fijo de cada reserva generada con tu código, ya sea que el pasajero pague en efectivo o con tarjeta.',
   },
   {
     icon: '◈',
@@ -17,7 +17,7 @@ const BENEFITS = [
   },
   {
     icon: '✦',
-    title: 'Efectivo o Mercado Pago',
+    title: 'Efectivo o Tarjeta',
     body: 'Podés cobrar vos mismo en efectivo o generar un link de pago online para que el pasajero abone cuando quiera. Vos elegís según la situación.',
   },
   {

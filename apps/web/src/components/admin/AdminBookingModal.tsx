@@ -423,7 +423,7 @@ export default function AdminBookingModal({ onClose, onCreated }: Props) {
                       ? 'Efectivo (lo cobra el recomendador)'
                       : pending.payload.payment_method === 'pix'
                         ? 'PIX en reales (link al pasajero)'
-                        : 'Mercado Pago (link al pasajero)'}
+                        : 'Tarjeta (link al pasajero)'}
                   />
                   <SummaryRow label="Total" value={`USD ${pending.totals.totalUsd}`} strong />
                 </dl>

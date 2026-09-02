@@ -476,7 +476,7 @@ export default function SettingsPage() {
       <section className="rounded-lg border border-gold/15 bg-ink-soft/50 p-6 max-w-2xl">
         <h2 className="font-display text-2xl text-cream">Tipo de cambio USD → ARS</h2>
         <p className="mt-2 text-sm text-cream/60">
-          Se aplica al crear cada preference de Mercado Pago. El precio se muestra en USD pero el cobro se procesa en pesos argentinos.
+          Se aplica al generar cada cobro con tarjeta. El precio se muestra en USD pero el cobro se procesa en pesos argentinos.
         </p>
 
         <div className="mt-5 flex items-center justify-between gap-4 rounded-md border border-gold/10 bg-ink/30 p-4">
@@ -592,7 +592,7 @@ export default function SettingsPage() {
           <p className="text-xs uppercase tracking-widest text-gold-soft">Ejemplo de conversión</p>
           <p className="mt-2 text-sm text-cream/70">
             Una venta de <span className="text-cream">USD 140</span> se cobraría como{' '}
-            <span className="text-gold">ARS {(140 * rateNum).toLocaleString('es-AR')}</span> en Mercado Pago.
+            <span className="text-gold">ARS {(140 * rateNum).toLocaleString('es-AR')}</span> con tarjeta.
           </p>
         </section>
       )}
@@ -617,12 +617,12 @@ export default function SettingsPage() {
             <span>nos rinde USD 120 · gana USD {(150 - 120).toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-gold">
-            <span>Mercado Pago → le liquidamos su incentivo (% × venta)</span>
+            <span>Tarjeta → le liquidamos su incentivo (% × venta)</span>
             <span>USD {(150 * 0.15).toFixed(2)}</span>
           </div>
         </div>
         <p className="mt-3 text-xs text-cream/40">
-          En efectivo el incentivo del recomendador es total − neto (ya se la queda al cobrar). En Mercado Pago nosotros cobramos y le pagamos su incentivo.
+          En efectivo el incentivo del recomendador es total − neto (ya se la queda al cobrar). Con tarjeta nosotros cobramos y le pagamos su incentivo.
         </p>
       </section>
 

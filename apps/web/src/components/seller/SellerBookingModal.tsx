@@ -223,7 +223,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
               initialDate={initialDate}
               initialAdults={initialAdults}
               initialChildren={initialChildren}
-              submitLabels={{ cash: 'Confirmar reserva manual', mercadopago: 'Enviar link de Mercado Pago', pix: 'Enviar link de PIX' }}
+              submitLabels={{ cash: 'Confirmar reserva manual', mercadopago: 'Enviar link de Tarjeta', pix: 'Enviar link de PIX' }}
               onValidSubmit={handleValidSubmit}
               contextBanner={(
                 <div className="rounded-lg border border-gold/20 bg-gold/5 p-3 md:p-4 flex gap-3">
@@ -232,7 +232,7 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                     <strong className="text-cream/90">Estás ingresando esta reserva como recomendador.</strong>{' '}
                     La orden quedará marcada como <em>ingresada manualmente</em>.
                     Elegí <strong>Efectivo</strong> si el pasajero paga en el momento,
-                    o <strong>Mercado Pago</strong> para redirigir al pago online.
+                    o <strong>Tarjeta</strong> para redirigir al pago online.
                   </div>
                 </div>
               )}

@@ -124,7 +124,7 @@ export default function SellerOrdersSection({ seller }: Props) {
     const totalArs = Math.round(selectedTotal.mpArs + selectedTotal.cashArs).toLocaleString('es-AR');
     if (!confirm(
       `Liquidar ${selectedOrderIds.length} venta(s) por un total de ARS ${totalArs}?\n` +
-      `• ${mpIds.length} por Mercado Pago (ARS ${Math.round(selectedTotal.mpArs).toLocaleString('es-AR')}): marcamos el incentivo como pagado al recomendador.\n` +
+      `• ${mpIds.length} por Tarjeta (ARS ${Math.round(selectedTotal.mpArs).toLocaleString('es-AR')}): marcamos el incentivo como pagado al recomendador.\n` +
       `• ${cashIds.length} en efectivo (ARS ${Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}): marcamos el neto como rendido por el recomendador.`,
     )) return;
     try {
@@ -145,9 +145,9 @@ export default function SellerOrdersSection({ seller }: Props) {
     <div className="space-y-6">
       {summary && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card label="Incentivo total (MP)" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} sub="todas las ventas pagadas por Mercado Pago" />
-          <Card label="Ya pagado (MP)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} sub="incentivo ya liquidado al recomendador" />
-          <Card label="A pagar (MP)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} sub="incentivo pendiente de liquidar" highlight />
+          <Card label="Incentivo total (Tarjeta)" value={`ARS ${Math.round(summary.totalCommission).toLocaleString('es-AR')}`} sub="todas las ventas pagadas por tarjeta" />
+          <Card label="Ya pagado (Tarjeta)" value={`ARS ${Math.round(summary.paid).toLocaleString('es-AR')}`} sub="incentivo ya liquidado al recomendador" />
+          <Card label="A pagar (Tarjeta)" value={`ARS ${Math.round(summary.pending).toLocaleString('es-AR')}`} sub="incentivo pendiente de liquidar" highlight />
           <Card label="A cobrar neto (efectivo)" value={`ARS ${Math.round(summary.netToCollect).toLocaleString('es-AR')}`} sub="lo que el recomendador todavía nos tiene que rendir" />
         </div>
       )}
@@ -176,7 +176,7 @@ export default function SellerOrdersSection({ seller }: Props) {
               {' '}total a liquidar
               {selectedTotal.mpCount > 0 && selectedTotal.cashCount > 0 && (
                 <span className="block text-[11px] text-cream/40">
-                  MP: ARS {Math.round(selectedTotal.mpArs).toLocaleString('es-AR')} · Efectivo: ARS {Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}
+                  Tarjeta: ARS {Math.round(selectedTotal.mpArs).toLocaleString('es-AR')} · Efectivo: ARS {Math.round(selectedTotal.cashArs).toLocaleString('es-AR')}
                 </span>
               )}
             </div>
@@ -438,7 +438,7 @@ function Card({ label, value, sub, highlight }: { label: string; value: string; 
 }
 
 
-const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Mercado Pago', cash: 'Efectivo' };
+const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Tarjeta', cash: 'Efectivo' };
 
 // Detalle para reconocer la orden al momento de liquidar — solo lectura, no repite
 // lo que ya se ve en la fila/tarjeta (cliente, servicio, monto, estado).

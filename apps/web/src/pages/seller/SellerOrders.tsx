@@ -50,7 +50,7 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'pending', label: 'Pendientes' },
   { value: 'collected', label: 'Cobradas' },
   { value: 'settled', label: 'Rendidas' },
-  { value: 'paid', label: 'Pagadas (MP)' },
+  { value: 'paid', label: 'Pagadas (Tarjeta)' },
   { value: 'expired', label: 'Caducadas' },
   { value: 'cancelled', label: 'Canceladas' },
 ];
@@ -109,7 +109,7 @@ function topExtraBadge(o: SellerOrder, includePayment: boolean): ExtraBadgeKey |
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
-  mercadopago: 'Mercado Pago',
+  mercadopago: 'Tarjeta',
   cash: 'Efectivo',
   pix: 'PIX',
 };
@@ -410,7 +410,7 @@ export default function SellerOrders() {
             <p className="text-sm text-cream/90">
               +{ad.extra_adults} ad{ad.extra_children > 0 ? ` · +${ad.extra_children} men` : ''} —
               <strong className="text-gold"> {fmtArs(ad.charge_ars)}</strong>
-              <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Mercado Pago'}</span>
+              <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Tarjeta'}</span>
             </p>
             {ad.payment_method === 'cash' ? (
               <div className="mt-2 flex gap-2">

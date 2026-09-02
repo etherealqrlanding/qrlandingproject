@@ -234,7 +234,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
           />
           <span className="text-cream/80">
             Tarjeta habilitada
-            <span className="ml-2 text-xs text-cream/50">(Mercado Pago + Pix — lo controla solo el admin de la plataforma)</span>
+            <span className="ml-2 text-xs text-cream/50">(Tarjeta + Pix — lo controla solo el admin de la plataforma)</span>
           </span>
         </label>
         <label className="inline-flex items-center gap-2">
@@ -289,7 +289,7 @@ export default function SellerDataSection({ seller, isNew, onCreated, onUpdated,
         {form.is_house && (
           <p className="text-xs text-gold-soft bg-gold/5 border border-gold/15 rounded-md px-3 py-2">
             💡 Las cuentas propias (agencia) nunca generan comisión -- se ignora la comisión base del perfil y el
-            ajuste de cada producto automáticamente. Si solo querés cobrar por Mercado Pago (sin efectivo), dejá
+            ajuste de cada producto automáticamente. Si solo querés cobrar con tarjeta (sin efectivo), dejá
             <strong> "Recomendador permanente"</strong> sin marcar.
           </p>
         )}

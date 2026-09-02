@@ -468,8 +468,8 @@ export default function BookingForm({
                     : 'border-gold/20 text-cream/50 hover:border-gold/40'
                 }`}
               >
-                <span className="block font-medium">Mercado Pago</span>
-                <span className="text-xs opacity-70">Tarjeta, transferencia</span>
+                <span className="block font-medium">Tarjeta</span>
+                <span className="text-xs opacity-70">Visa / Mastercard / Amex</span>
               </button>
             )}
             {allowCard && (
@@ -494,7 +494,7 @@ export default function BookingForm({
           )}
           {paymentMethod === 'mercadopago' && (
             <p className="text-xs text-cream/50 pt-1">
-              Se le envía al pasajero por email el link de Mercado Pago para completar el pago online.
+              Se le envía al pasajero por email el link de pago con tarjeta para completar el pago online.
             </p>
           )}
           {paymentMethod === 'pix' && (
