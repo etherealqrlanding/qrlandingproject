@@ -326,7 +326,7 @@ function OptionFormFields({ option, onChange, product }: {
           <input
             type="number" required min={0} step={0.01}
             value={option.price_adult_usd ?? ''} onChange={(e) => update('price_adult_usd', Number(e.target.value))}
-            className="input"
+            className="input no-spinner"
           />
         </Field>
         <Field
@@ -337,7 +337,7 @@ function OptionFormFields({ option, onChange, product }: {
             type="number" min={0} step={0.01}
             value={option.price_child_usd ?? ''}
             onChange={(e) => update('price_child_usd', e.target.value ? Number(e.target.value) : null)}
-            className="input"
+            className="input no-spinner"
           />
         </Field>
         <Field label="Cupo por defecto" required hint="Personas máximas por noche (sin override)">
@@ -385,7 +385,7 @@ function OptionFormFields({ option, onChange, product }: {
                 type="number" min={0} step={0.01}
                 value={option.net_price_adult_usd ?? ''}
                 onChange={(e) => update('net_price_adult_usd', e.target.value ? Number(e.target.value) : null)}
-                className="input"
+                className="input no-spinner"
                 placeholder="Ej: 120"
               />
             </Field>
@@ -394,7 +394,7 @@ function OptionFormFields({ option, onChange, product }: {
                 type="number" min={0} step={0.01}
                 value={option.net_price_child_usd ?? ''}
                 onChange={(e) => update('net_price_child_usd', e.target.value ? Number(e.target.value) : null)}
-                className="input"
+                className="input no-spinner"
                 placeholder="Ej: 80"
               />
             </Field>
@@ -403,7 +403,7 @@ function OptionFormFields({ option, onChange, product }: {
                 type="number" min={0} step={0.01}
                 value={option.net_transfer_price_usd ?? ''}
                 onChange={(e) => update('net_transfer_price_usd', e.target.value ? Number(e.target.value) : null)}
-                className="input"
+                className="input no-spinner"
                 placeholder="Ej: 15"
               />
             </Field>
@@ -541,7 +541,7 @@ function OptionFormFields({ option, onChange, product }: {
                   type="number" min={0} step={0.01}
                   value={option.transfer_price_usd ?? 0}
                   onChange={(e) => update('transfer_price_usd', Number(e.target.value))}
-                  className="input w-28 text-sm"
+                  className="input no-spinner w-28 text-sm"
                 />
               </label>
               <label className="block">
@@ -551,7 +551,7 @@ function OptionFormFields({ option, onChange, product }: {
                   placeholder="Igual"
                   value={option.transfer_price_usd_palermo ?? ''}
                   onChange={(e) => update('transfer_price_usd_palermo', e.target.value === '' ? null : Number(e.target.value))}
-                  className="input w-28 text-sm"
+                  className="input no-spinner w-28 text-sm"
                 />
               </label>
             </div>

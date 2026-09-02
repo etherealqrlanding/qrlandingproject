@@ -179,7 +179,7 @@ function OptionCommissionBlock({
                 type="number" step={0.1} min={-100} max={100}
                 value={generalDraft}
                 onChange={(e) => setGeneralDraft(e.target.value)}
-                className="input"
+                className="input no-spinner"
               />
             </label>
             <button
@@ -216,7 +216,7 @@ function OptionCommissionBlock({
                       value={drafts[k.value] ?? ''}
                       onChange={(e) => setDrafts((prev) => ({ ...prev, [k.value]: e.target.value }))}
                       placeholder="sin override"
-                      className="input flex-1"
+                      className="input no-spinner flex-1"
                     />
                     <span className="text-cream/40 text-xs shrink-0">%</span>
                   </div>
@@ -275,7 +275,7 @@ function OptionCommissionBlock({
                             value={drafts[k.value] ?? ''}
                             onChange={(e) => setDrafts((prev) => ({ ...prev, [k.value]: e.target.value }))}
                             placeholder="sin override"
-                            className="input w-24 text-right"
+                            className="input no-spinner w-24 text-right"
                           />
                           <span className="text-cream/40 text-xs">%</span>
                         </div>

@@ -628,6 +628,10 @@ function OptionCard({
         </div>
 
         {option.transfer_mode === 'optional' && (
+          <p className="mt-2 text-[11px] text-cream/40 italic">{t('product.infant_transfer_note')}</p>
+        )}
+
+        {option.transfer_mode === 'optional' && (
           <div className="mt-2.5 pt-2.5 border-t border-gold/10 flex items-center justify-between gap-3 flex-wrap">
             <div>
               <p className="text-xs text-cream/80">
@@ -682,19 +686,13 @@ function OptionCard({
           {transferUsd > 0 && (
             <div className="flex items-center justify-between text-xs text-cream/60">
               <span>
-                {t('checkout.transfer')} ({transferQty} × USD {zoneRange.hasZonePricing ? `${t('product.transfer_from')} ${zoneRange.min}` : option.transfer_price_usd})
+                {t('checkout.transfer')} ({transferQty + (infantTransferUsd > 0 ? infants : 0)} × USD {zoneRange.hasZonePricing ? `${t('product.transfer_from')} ${zoneRange.min}` : option.transfer_price_usd})
               </span>
-              <span className="text-cream/80">+ USD {transferUsd}</span>
+              <span className="text-cream/80">+ USD {round2(transferUsd + infantTransferUsd)}</span>
             </div>
           )}
           {transferUsd > 0 && zoneRange.hasZonePricing && (
             <p className="text-[10px] text-cream/40 italic">{t('product.transfer_zone_note')}</p>
-          )}
-          {infantTransferUsd > 0 && (
-            <div className="flex items-center justify-between text-xs text-cream/60">
-              <span>{t('checkout.transfer')} ({t('checkout.infants').toLowerCase()})</span>
-              <span className="text-cream/80">+ USD {infantTransferUsd}</span>
-            </div>
           )}
         </div>
 

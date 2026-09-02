@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { HOTELS_BY_NEIGHBORHOOD, ALL_HOTELS } from '../lib/hotels';
+import { HOTELS_BY_NEIGHBORHOOD, ALL_HOTELS, type TransferZone } from '../lib/hotels';
 import Collapse from './Collapse';
 
 interface Props {
@@ -22,12 +22,18 @@ interface Props {
   wanted?: boolean;
   onWantedChange?: (v: boolean) => void;
   // Precio por pasajero a mostrar junto al toggle (solo cuando included=false).
+  // Ya resuelto para la zona del hotel elegido (o la base, si todavía no eligió).
   pricePerPax?: number;
+  // Si la casa distingue precio de traslado por zona (Palermo vs. el resto) y cuál
+  // le tocó al hotel ya elegido -- para avisar explícitamente que se aplicó la
+  // tarifa de Palermo y evitar sorpresas/errores de cobro.
+  hasZonePricing?: boolean;
+  zone?: TransferZone;
 }
 
 export default function TransferSection({
   totalPax, hotel, room, onHotelChange, onRoomChange, pickupWindow, lang = 'es',
-  included = false, wanted = false, onWantedChange, pricePerPax,
+  included = false, wanted = false, onWantedChange, pricePerPax, hasZonePricing = false, zone,
 }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -143,7 +149,22 @@ export default function TransferSection({
                 {isEs ? 'Cambiar' : 'Change'}
               </button>
             </div>
-          ) : (
+          ) : null}
+
+          {hotel && hasZonePricing && zone === 'palermo' && (
+            <div className="rounded-md border border-gold/40 bg-gold/10 px-3 py-2 flex items-start gap-2">
+              <span aria-hidden className="shrink-0">📍</span>
+              <p className="text-xs text-cream/80">
+                {isEs ? (
+                  <>Tu hotel está en <strong className="text-gold">Palermo</strong> — se aplica la tarifa de traslado de esa zona{pricePerPax != null ? ` (USD ${pricePerPax}/pax)` : ''}, distinta de la de zona céntrica.</>
+                ) : (
+                  <>Your hotel is in <strong className="text-gold">Palermo</strong> — the transfer rate for that zone applies{pricePerPax != null ? ` (USD ${pricePerPax}/pax)` : ''}, different from the downtown zone.</>
+                )}
+              </p>
+            </div>
+          )}
+
+          {!hotel && (
             <div className="relative">
               <input
                 ref={inputRef}

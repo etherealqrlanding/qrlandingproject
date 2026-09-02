@@ -10,7 +10,7 @@ import Spinner from './Spinner';
 import AvailabilityCalendar from './AvailabilityCalendar';
 import Checkbox from './Checkbox';
 import NumberStepper from './NumberStepper';
-import { computeBookingTotals, transferPriceRange, transferUnitPrice } from '../lib/pricing';
+import { computeBookingTotals, transferPriceRange, transferUnitPrice, round2 } from '../lib/pricing';
 import { zoneForHotel } from '../lib/hotels';
 
 interface Props {
@@ -439,6 +439,9 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                 />
               </Field>
             </div>
+            {option.transfer_mode === 'optional' && (
+              <p className="mt-2 text-[11px] text-cream/40 italic">{t('product.infant_transfer_note')}</p>
+            )}
           </div>
 
           <div className="rounded-lg bg-gold/5 border border-gold/20 p-5">
@@ -450,16 +453,10 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                 </div>
                 <div className="flex items-baseline justify-between text-sm">
                   <span className="text-cream/60">
-                    {t('checkout.transfer')} ({transferQty} pax{zoneRange.hasZonePricing && transferHotel ? ` · ${transferZone === 'palermo' ? 'Palermo' : 'Centro'}` : ''})
+                    {t('checkout.transfer')} ({transferQty + (infantTransferUsd > 0 ? form.infants : 0)} pax{zoneRange.hasZonePricing && transferHotel ? ` · ${transferZone === 'palermo' ? 'Palermo' : 'Centro'}` : ''})
                   </span>
-                  <span className="text-cream/80">+ USD {transferUsd}</span>
+                  <span className="text-cream/80">+ USD {round2(transferUsd + infantTransferUsd)}</span>
                 </div>
-                {infantTransferUsd > 0 && (
-                  <div className="flex items-baseline justify-between text-sm">
-                    <span className="text-cream/60">{t('checkout.transfer')} ({t('checkout.infants').toLowerCase()})</span>
-                    <span className="text-cream/80">+ USD {infantTransferUsd}</span>
-                  </div>
-                )}
                 {zoneRange.hasZonePricing && !transferHotel && (
                   <p className="text-[11px] text-cream/40 italic pt-1">{t('product.transfer_zone_note')}</p>
                 )}
@@ -502,6 +499,8 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               wanted={transferWanted}
               onWantedChange={(v) => { setTransferWanted(v); if (!v) { setTransferHotel(''); setTransferRoom(''); } }}
               pricePerPax={transferUnitPrice(option, transferZone)}
+              hasZonePricing={zoneRange.hasZonePricing}
+              zone={transferZone}
             />
           )}
 

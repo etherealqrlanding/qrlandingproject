@@ -759,7 +759,7 @@ export default function OrderDetail() {
                     value={refundAmount}
                     onChange={(e) => setRefundAmount(e.target.value)}
                     placeholder={`Ej: ${(order.total_usd / 2).toFixed(2)}`}
-                    className="input"
+                    className="input no-spinner"
                     autoFocus
                   />
                   {refundAmount && Number(refundAmount) > 0 && Number(refundAmount) <= order.total_usd && (

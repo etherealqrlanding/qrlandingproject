@@ -40,6 +40,18 @@
 }
 
 @layer utilities {
+  /* Saca las flechitas nativas de +/- en inputs numéricos con step decimal (precios,
+     porcentajes) -- incrementan de a centavos/décimas, incómodo y nadie las usa.
+     Los inputs numéricos de step entero (cupos, orden, etc.) las conservan. */
+  .no-spinner::-webkit-inner-spin-button,
+  .no-spinner::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .no-spinner {
+    -moz-appearance: textfield;
+  }
+
   @keyframes kenburns {
     from { transform: scale(1); }
     to { transform: scale(1.09); }

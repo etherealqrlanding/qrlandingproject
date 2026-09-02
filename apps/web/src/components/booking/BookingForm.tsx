@@ -6,7 +6,7 @@ import TransferSection from '../TransferSection';
 import Spinner from '../Spinner';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import NumberStepper from '../NumberStepper';
-import { computeBookingTotals, transferPriceRange, transferUnitPrice } from '../../lib/pricing';
+import { computeBookingTotals, transferPriceRange, transferUnitPrice, round2 } from '../../lib/pricing';
 import { zoneForHotel } from '../../lib/hotels';
 
 // Núcleo del formulario de reserva manual: datos del pasajero, disponibilidad en vivo,
@@ -347,6 +347,11 @@ export default function BookingForm({
               />
             </Field>
           </div>
+          {option.transfer_mode === 'optional' && (
+            <p className="mt-2 text-[11px] text-cream/40 italic">
+              Los infantes no pagan entrada, pero sí pagan traslado si se suma.
+            </p>
+          )}
         </div>
 
         {/* Total */}
@@ -359,16 +364,10 @@ export default function BookingForm({
               </div>
               <div className="flex items-baseline justify-between text-sm">
                 <span className="text-cream/60">
-                  Traslado ({form.adults + form.children} pax{zoneRange.hasZonePricing && transferHotel ? ` · ${transferZone === 'palermo' ? 'Palermo' : 'Centro'}` : ''})
+                  Traslado ({form.adults + form.children + (infantTransferUsd > 0 ? form.infants : 0)} pax{zoneRange.hasZonePricing && transferHotel ? ` · ${transferZone === 'palermo' ? 'Palermo' : 'Centro'}` : ''})
                 </span>
-                <span className="text-cream/80">+USD {transferUsd}</span>
+                <span className="text-cream/80">+USD {round2(transferUsd + infantTransferUsd)}</span>
               </div>
-              {infantTransferUsd > 0 && (
-                <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-cream/60">Traslado (infantes)</span>
-                  <span className="text-cream/80">+USD {infantTransferUsd}</span>
-                </div>
-              )}
               {zoneRange.hasZonePricing && !transferHotel && (
                 <p className="text-[11px] text-cream/40 italic pt-1">
                   El precio final del traslado depende de la zona del hotel del pasajero — se confirma al elegirlo.
@@ -397,7 +396,7 @@ export default function BookingForm({
                     type="number" min={0} step="0.01" inputMode="decimal"
                     value={chargedAmount}
                     onChange={(e) => setChargedAmount(e.target.value)}
-                    className="input"
+                    className="input no-spinner"
                     placeholder={`Sugerido: ${totalUsd}`}
                   />
                 </label>
@@ -426,6 +425,8 @@ export default function BookingForm({
             wanted={transferWanted}
             onWantedChange={(v) => { setTransferWanted(v); if (!v) { setTransferHotel(''); setTransferRoom(''); } }}
             pricePerPax={transferUnitPrice(option, transferZone)}
+            hasZonePricing={zoneRange.hasZonePricing}
+            zone={transferZone}
           />
         )}
 

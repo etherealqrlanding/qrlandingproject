@@ -65,7 +65,7 @@ function SellerKindCommissionForm({
                 type="number" min={0} max={100} step={0.1}
                 value={form[k.value] ?? ''}
                 onChange={(e) => setForm((prev) => ({ ...prev, [k.value]: e.target.value }))}
-                className="input w-24 text-right"
+                className="input no-spinner w-24 text-right"
               />
               <span className="text-cream/50 text-sm">%</span>
             </div>
@@ -533,7 +533,7 @@ export default function SettingsPage() {
                     type="number" step={0.1} min={-50} max={200}
                     value={rateMarkup}
                     onChange={(e) => setRateMarkup(e.target.value)}
-                    className="input w-28"
+                    className="input no-spinner w-28"
                   />
                   <span className="text-cream/50 text-sm">%</span>
                 </div>
@@ -562,7 +562,7 @@ export default function SettingsPage() {
                 type="number" required min={0} step={0.01}
                 value={rate}
                 onChange={(e) => setRate(e.target.value)}
-                className="input"
+                className="input no-spinner"
               />
               <span className="text-cream/60">ARS</span>
             </div>

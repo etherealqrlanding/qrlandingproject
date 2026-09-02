@@ -285,7 +285,7 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
             type="number" min={0} step={0.01}
             value={form.starting_price_usd ?? ''}
             onChange={(e) => update('starting_price_usd', e.target.value ? Number(e.target.value) : null)}
-            className="input"
+            className="input no-spinner"
           />
         </Field>
         <Field label="Orden de display" hint="Menor número aparece primero en el listado público">
