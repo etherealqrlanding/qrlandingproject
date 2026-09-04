@@ -99,7 +99,7 @@ export default function SellerWelcomeModal({ code, onClose }: Props) {
   return (
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-50 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
+      className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-modal-backdrop"
       onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
     >
       <div className="relative w-full sm:max-w-sm rounded-2xl border border-gold/20 bg-[#0d0a0a] shadow-2xl overflow-hidden animate-modal-panel">
