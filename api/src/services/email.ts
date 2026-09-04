@@ -635,11 +635,27 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
   if (!data) return;
 
   const baseData: OrderEmailData = toOrderData(data);
+  const sellerLabel = escapeHtml(data.seller_name ?? 'quien te recomendó la experiencia');
 
-  // El cliente NO recibe email aquí — se envía recién cuando el vendedor confirma el cobro
-  // (ver sendCashCollectedNotifications)
+  // 1) Cliente — la reserva queda PENDIENTE hasta que el recomendador confirme que
+  // cobró: este email solo avisa que se registró y guía el siguiente paso (pagar).
+  // La confirmación real (con el voucher/entrada) llega recién con
+  // sendCashCollectedNotifications -- por eso acá NO va ticketBadge() ni
+  // voucherButtonBlock() (el endpoint del voucher exige la orden "paid").
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Reserva registrada — falta el pago</h1>
+  <p>Hola ${escapeHtml(baseData.customer_name)}, registramos tu reserva para pago en efectivo. Todavía <strong>no está confirmada</strong>: para confirmarla, acercate a <strong style="color:#e0c787">${sellerLabel}</strong> y coordiná el pago del servicio con esa persona.</p>
+  ${reservationCard(baseData, { showContact: true, showAmounts: false })}
+  <p>Ni bien se confirme el pago te vamos a enviar otro email con la reserva confirmada y tu comprobante — ese es el que tenés que presentar en la casa de tango, no este.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Reserva registrada — falta el pago (${baseData.option_name})`, customerHtml, 'CLIENTE');
 
-  // 1) Admin
+  // 2) Admin
   if (config.ADMIN_NOTIFICATION_EMAIL) {
     const adminHtml = `
 <!doctype html>
@@ -663,7 +679,7 @@ export async function sendCashOrderNotifications(orderId: number): Promise<void>
     <div style="${baseStyles.row}"><span>Código</span><span style="font-family:monospace">${escapeHtml(data.seller_code ?? '')}</span></div>
     <div style="${baseStyles.row}"><span>Neto a rendir</span><strong style="color:#c8a85a">${fmtArs(cashNetArs(data, baseData))}</strong></div>
   </div>` : ''}
-  <p style="color:rgba(245,239,230,0.7);">⚠ El email al pasajero se enviará <strong>automáticamente</strong> cuando el recomendador confirme el cobro desde su portal.</p>
+  <p style="color:rgba(245,239,230,0.7);">⚠ El pasajero ya recibió un aviso de que su reserva quedó pendiente de pago. El email con la <strong>confirmación</strong> se enviará automáticamente cuando el recomendador confirme el cobro desde su portal.</p>
   <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
 </div></body></html>`;
     await send(config.ADMIN_NOTIFICATION_EMAIL, `[Efectivo] Nueva reserva — ${baseData.option_name} (${fmtArs(baseData.total_ars)})`, adminHtml, 'ADMIN');

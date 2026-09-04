@@ -28,8 +28,6 @@ export interface AdminProductInput {
   tagline_en?: string | null;
   badge_es?: string | null;
   badge_en?: string | null;
-  schedule_summary_es?: string | null;
-  schedule_summary_en?: string | null;
   // Horarios estructurados de la casa (una sola carga, compartida por todos sus
   // tiers) -- ver product_options.has_dinner / show_only_time_enabled.
   dinner_show_time_es?: string | null;
@@ -37,7 +35,6 @@ export interface AdminProductInput {
   dinner_transfer_window_es?: string | null;
   show_only_transfer_window_es?: string | null;
   video_url?: string | null;
-  starting_price_usd?: number | null;
   is_active?: boolean;
   display_order?: number;
   available_days?: number[];
@@ -139,12 +136,11 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
        neighborhood_es, neighborhood_en,
        tagline_es, tagline_en,
        badge_es, badge_en,
-       schedule_summary_es, schedule_summary_en,
        dinner_show_time_es, show_only_time_es, dinner_transfer_window_es, show_only_transfer_window_es,
        video_url,
-       starting_price_usd, is_active, display_order, available_days, accepts_children, children_age_label,
+       is_active, display_order, available_days, accepts_children, children_age_label,
        logo_url, infant_age_label
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)
      RETURNING id`,
     [
       input.slug, input.category_id, input.name, input.venue_name,
@@ -154,11 +150,9 @@ export async function adminCreateProduct(input: AdminProductInput): Promise<numb
       input.neighborhood_es ?? null, input.neighborhood_en ?? null,
       input.tagline_es ?? null, input.tagline_en ?? null,
       input.badge_es ?? null, input.badge_en ?? null,
-      input.schedule_summary_es ?? null, input.schedule_summary_en ?? null,
       input.dinner_show_time_es ?? null, input.show_only_time_es ?? null,
       input.dinner_transfer_window_es ?? null, input.show_only_transfer_window_es ?? null,
       input.video_url ?? null,
-      input.starting_price_usd ?? null,
       input.is_active ?? true,
       input.display_order ?? 0,
       input.available_days ?? [1, 2, 3, 4, 5, 6, 7],
@@ -249,6 +243,21 @@ export interface AdminOptionInput {
   is_active?: boolean;
 }
 
+// El "precio desde" de la casa ya no se tipea a mano: se recalcula acá cada vez
+// que se crea/edita/borra un tier, tomando el menor price_adult_usd entre los
+// tiers activos (si no queda ninguno activo, vuelve a NULL -- "sin precio").
+async function recomputeStartingPrice(productId: number): Promise<void> {
+  await pool.query(
+    `UPDATE products
+        SET starting_price_usd = (
+          SELECT MIN(price_adult_usd) FROM product_options
+           WHERE product_id = $1 AND is_active = TRUE
+        )
+      WHERE id = $1`,
+    [productId],
+  );
+}
+
 export async function adminCreateOption(productId: number, input: AdminOptionInput): Promise<number> {
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO product_options (
@@ -280,6 +289,7 @@ export async function adminCreateOption(productId: number, input: AdminOptionInp
       input.commission_adjustment_percent ?? 0,
     ],
   );
+  await recomputeStartingPrice(productId);
   return rows[0].id;
 }
 
@@ -293,23 +303,36 @@ export async function adminUpdateOption(id: number, input: Partial<AdminOptionIn
   if (fields.length === 0) return true;
   const sets = fields.map((f, i) => `${f} = $${i + 1}`).join(', ');
   const values = fields.map((f) => (safeInput as Record<string, unknown>)[f]);
-  const result = await pool.query(
-    `UPDATE product_options SET ${sets} WHERE id = $${fields.length + 1}`,
+  const result = await pool.query<{ product_id: number }>(
+    `UPDATE product_options SET ${sets} WHERE id = $${fields.length + 1} RETURNING product_id`,
     [...values, id],
   );
-  return (result.rowCount ?? 0) > 0;
+  const row = result.rows[0];
+  if (!row) return false;
+  await recomputeStartingPrice(row.product_id);
+  return true;
 }
 
 export async function adminDeleteOption(id: number): Promise<boolean> {
   // Hard delete: las opciones pueden borrarse si no tienen órdenes asociadas.
   // Si fallara por FK, hacer soft delete con is_active = FALSE.
+  let productId: number | undefined;
   try {
-    const result = await pool.query(`DELETE FROM product_options WHERE id = $1`, [id]);
-    return (result.rowCount ?? 0) > 0;
+    const result = await pool.query<{ product_id: number }>(
+      `DELETE FROM product_options WHERE id = $1 RETURNING product_id`,
+      [id],
+    );
+    productId = result.rows[0]?.product_id;
   } catch {
-    const result = await pool.query(`UPDATE product_options SET is_active = FALSE WHERE id = $1`, [id]);
-    return (result.rowCount ?? 0) > 0;
+    const result = await pool.query<{ product_id: number }>(
+      `UPDATE product_options SET is_active = FALSE WHERE id = $1 RETURNING product_id`,
+      [id],
+    );
+    productId = result.rows[0]?.product_id;
   }
+  if (productId == null) return false;
+  await recomputeStartingPrice(productId);
+  return true;
 }
 
 // ─── Ajustes de comisión por perfil (override puntual tier+kind) ────────────

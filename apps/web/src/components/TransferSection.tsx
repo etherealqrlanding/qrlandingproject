@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { HOTELS_BY_NEIGHBORHOOD, ALL_HOTELS, type TransferZone } from '../lib/hotels';
 import Collapse from './Collapse';
 
@@ -38,6 +39,27 @@ export default function TransferSection({
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // El dropdown se porta a document.body (position: fixed) porque vive dentro de un
+  // <Collapse>, que necesita overflow-hidden para animar su alto -- eso recortaría
+  // cualquier menú posicionado absoluto que se salga de esa caja.
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const updateRect = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setDropdownRect({ top: r.bottom, left: r.left, width: r.width });
+    };
+    updateRect();
+    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('resize', updateRect);
+    return () => {
+      window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('resize', updateRect);
+    };
+  }, [open]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return HOTELS_BY_NEIGHBORHOOD;
@@ -135,6 +157,17 @@ export default function TransferSection({
               : 'Search your hotel so we can coordinate pickup:'}
           </p>
 
+          {!hotel && (
+            <div className="rounded-md border border-gold/20 bg-ink/40 px-3 py-2 flex items-start gap-2">
+              <span aria-hidden className="shrink-0">ℹ️</span>
+              <p className="text-xs text-cream/70">
+                {isEs
+                  ? 'El traslado pasa a buscar únicamente por los hoteles de este listado. Si no estás hospedado en ninguno de ellos, acercate al más cercano y usalo como punto de encuentro.'
+                  : 'The transfer only picks up at the hotels on this list. If you\'re not staying at one of them, walk to the nearest one and use it as your meeting point.'}
+              </p>
+            </div>
+          )}
+
           {hotel ? (
             <div className="flex items-center justify-between rounded-md border border-gold/30 bg-gold/5 px-3 py-2">
               <div>
@@ -177,8 +210,11 @@ export default function TransferSection({
                 className="input w-full text-sm"
                 autoComplete="off"
               />
-              {open && (
-                <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-gold/20 bg-ink-soft shadow-xl">
+              {open && dropdownRect && createPortal(
+                <div
+                  style={{ position: 'fixed', top: dropdownRect.top + 4, left: dropdownRect.left, width: dropdownRect.width }}
+                  className="z-50 max-h-64 overflow-y-auto rounded-lg border border-gold/20 bg-ink-soft shadow-xl"
+                >
                   {filtered.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <p className="text-sm text-cream/50">
@@ -212,17 +248,10 @@ export default function TransferSection({
                       {allFiltered.length} resultado{allFiltered.length !== 1 ? 's' : ''}
                     </p>
                   )}
-                </div>
+                </div>,
+                document.body,
               )}
             </div>
-          )}
-
-          {!hotel && (
-            <p className="text-xs text-cream/40">
-              {isEs
-                ? 'Si tu hotel no aparece, elegí el más cercano como punto de encuentro e informalo al confirmar.'
-                : "If your hotel isn't listed, choose the nearest one as a meeting point and let us know when confirming."}
-            </p>
           )}
 
           <label className="block">

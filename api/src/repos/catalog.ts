@@ -145,7 +145,6 @@ export async function getProductBySlug(slug: string): Promise<ProductDetail | nu
        p.neighborhood_es, p.neighborhood_en,
        p.tagline_es, p.tagline_en,
        p.badge_es, p.badge_en,
-       p.schedule_summary_es, p.schedule_summary_en,
        p.dinner_show_time_es, p.show_only_time_es,
        p.dinner_transfer_window_es, p.show_only_transfer_window_es,
        p.video_url,

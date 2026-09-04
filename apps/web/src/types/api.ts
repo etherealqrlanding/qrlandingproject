@@ -81,8 +81,6 @@ export interface ProductSummary {
 export interface ProductDetail extends ProductSummary {
   long_description_es: string | null;
   long_description_en: string | null;
-  schedule_summary_es: string | null;
-  schedule_summary_en: string | null;
   // Horarios estructurados de la casa, usados para resolver pickup_window_es/
   // dinner_time_es/show_time_es de cada tier (ver ProductOption). Se exponen acá
   // por si algún consumidor los necesita crudos, pero el uso normal es a través

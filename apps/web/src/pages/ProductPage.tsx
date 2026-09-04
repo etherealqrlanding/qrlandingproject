@@ -16,6 +16,7 @@ import TransferHotelsInfo from '../components/TransferHotelsInfo';
 import { useExchangeRate } from '../lib/useExchangeRate';
 import NumberStepper from '../components/NumberStepper';
 import { computeBookingTotals, round2, transferPriceRange } from '../lib/pricing';
+import { buildHouseScheduleSummary } from '../lib/schedule';
 import AvailabilityCalendar from '../components/AvailabilityCalendar';
 
 // Convierte un link normal de YouTube (watch?v=, youtu.be/, shorts/) a su URL de embed.
@@ -823,7 +824,7 @@ function HowToBookCard({ showCard, showCash }: { showCard: boolean; showCash: bo
 // tener que bajar hasta las secciones completas (que siguen existiendo más abajo).
 function HouseQuickFacts({ product, lang }: { product: ProductDetail; lang: string | undefined }) {
   const { t } = useTranslation();
-  const schedule = localized(product, 'schedule_summary', lang);
+  const schedule = buildHouseScheduleSummary(product);
   const neighborhood = localized(product, 'neighborhood', lang);
   const address = localized(product, 'address', lang);
   const anyDinner = product.options.some((o) => o.has_dinner);

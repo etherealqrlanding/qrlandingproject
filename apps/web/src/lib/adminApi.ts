@@ -183,7 +183,6 @@ export interface AdminProductDetail {
   address_es: string | null; address_en: string | null;
   neighborhood_es: string | null; neighborhood_en: string | null;
   tagline_es: string | null; tagline_en: string | null;
-  schedule_summary_es: string | null; schedule_summary_en: string | null;
   // Horarios estructurados de la casa (una sola carga, compartida por todos sus
   // tiers) -- cada tier elige cuáles usar con un check en vez de tipearlos de nuevo.
   dinner_show_time_es: string | null;

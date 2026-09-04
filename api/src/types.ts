@@ -92,8 +92,6 @@ export interface ProductSummary {
 export interface ProductDetail extends ProductSummary {
   long_description_es: string | null;
   long_description_en: string | null;
-  schedule_summary_es: string | null;
-  schedule_summary_en: string | null;
   // Horarios estructurados de la casa, fuente de los campos resueltos de cada
   // tier (ver ProductOption.pickup_window_es/dinner_time_es/show_time_es).
   dinner_show_time_es: string | null;

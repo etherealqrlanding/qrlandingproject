@@ -7,6 +7,7 @@ import { OptionInfoCard } from '../../components/seller/OptionInfoCard';
 import SellerQuickSettings from '../../components/seller/SellerQuickSettings';
 import AvailabilityCheckModal from '../../components/AvailabilityCheckModal';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
+import { buildHouseScheduleSummary } from '../../lib/schedule';
 
 export default function SellerBooking() {
   const { me } = useSellerAuth();
@@ -145,13 +146,13 @@ export default function SellerBooking() {
                 {isExpanded && (
                   <div className="border-t border-gold/10 px-5 py-4 space-y-4">
                     {/* Info rápida del lugar */}
-                    {expandedDetail && (expandedDetail.address_es || expandedDetail.schedule_summary_es) && (
+                    {expandedDetail && (expandedDetail.address_es || buildHouseScheduleSummary(expandedDetail)) && (
                       <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-cream/55 border-b border-gold/10 pb-3">
                         {expandedDetail.address_es && (
                           <span>📍 {expandedDetail.address_es}</span>
                         )}
-                        {expandedDetail.schedule_summary_es && (
-                          <span>🗓 {expandedDetail.schedule_summary_es}</span>
+                        {buildHouseScheduleSummary(expandedDetail) && (
+                          <span>🗓 {buildHouseScheduleSummary(expandedDetail)}</span>
                         )}
                       </div>
                     )}

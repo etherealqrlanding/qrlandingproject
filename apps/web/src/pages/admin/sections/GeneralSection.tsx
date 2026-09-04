@@ -18,12 +18,13 @@ const empty = {
   long_description_es: '', long_description_en: '',
   address_es: '', address_en: '',
   neighborhood_es: '', tagline_es: '', badge_es: '',
-  schedule_summary_es: '', schedule_summary_en: '',
   dinner_show_time_es: null as string | null,
   show_only_time_es: null as string | null,
   dinner_transfer_window_es: null as string | null,
   show_only_transfer_window_es: null as string | null,
   video_url: '',
+  // Se recibe del server (auto-calculado desde los tiers) y se muestra
+  // read-only más abajo -- no se reenvía en el payload de guardado.
   starting_price_usd: null as number | null,
   is_active: true, display_order: 0,
   available_days: [1, 2, 3, 4, 5, 6, 7] as number[],
@@ -68,10 +69,12 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
     setError(null);
     setSaving(true);
     try {
+      // starting_price_usd es read-only (lo calcula el server desde los tiers):
+      // no se reenvía para no pisar el valor real con lo que había en el form.
+      const { starting_price_usd: _starting_price_usd, ...formToSend } = form;
       const payload = {
-        ...form,
+        ...formToSend,
         category_id: Number(form.category_id),
-        starting_price_usd: form.starting_price_usd != null ? Number(form.starting_price_usd) : null,
       };
       if (isNew) {
         const created = await adminApi.products.create(payload);
@@ -199,15 +202,6 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
         </Field>
       </div>
 
-      <Field label="Resumen de horarios" hint="Texto libre — ej: 'Lun a Dom, traslado 19:30-20:00...'">
-        <textarea
-          rows={3} maxLength={800}
-          value={form.schedule_summary_es ?? ''}
-          onChange={(e) => update('schedule_summary_es', e.target.value)}
-          className="input"
-        />
-      </Field>
-
       {/* Horarios estructurados de la casa: se cargan una sola vez acá y cada tier
           elige cuáles mostrar (con un check, en su propio editor) en vez de
           tipearlos de nuevo por tier — así todos los tiers de cena quedan siempre
@@ -280,13 +274,10 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
       </Field>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Field label="Precio mínimo (USD)" hint="Auto-calculado desde los tiers. Editable.">
-          <input
-            type="number" min={0} step={0.01}
-            value={form.starting_price_usd ?? ''}
-            onChange={(e) => update('starting_price_usd', e.target.value ? Number(e.target.value) : null)}
-            className="input no-spinner"
-          />
+        <Field label="Precio mínimo (USD)" hint="Se calcula solo con el tier activo más barato -- se actualiza al editar los tiers.">
+          <div className="input flex items-center text-cream/70">
+            {form.starting_price_usd != null ? `USD ${form.starting_price_usd}` : 'Sin tiers activos'}
+          </div>
         </Field>
         <Field label="Orden de display" hint="Menor número aparece primero en el listado público">
           <input

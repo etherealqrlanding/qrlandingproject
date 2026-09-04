@@ -10,6 +10,7 @@ import ShareButton from '../../components/ShareButton';
 import Collapse from '../../components/Collapse';
 import { useSellerAuth } from '../../hooks/useSellerAuth';
 import { buildShareUrl } from '../../lib/shareLinks';
+import { buildHouseScheduleSummary } from '../../lib/schedule';
 
 export default function SellerCatalog() {
   const { me } = useSellerAuth();
@@ -177,10 +178,10 @@ export default function SellerCatalog() {
                               <p className="text-cream/80 text-sm">{detail.address_es}</p>
                             </div>
                           )}
-                          {detail.schedule_summary_es && (
+                          {buildHouseScheduleSummary(detail) && (
                             <div>
                               <p className="text-[10px] uppercase tracking-wider text-cream/35 mb-1">🗓 Horario general</p>
-                              <p className="text-cream/80 text-sm">{detail.schedule_summary_es}</p>
+                              <p className="text-cream/80 text-sm">{buildHouseScheduleSummary(detail)}</p>
                             </div>
                           )}
                         </div>

@@ -35,8 +35,6 @@ const DEMO_PRODUCT = {
   long_description_en: 'Enjoy an unforgettable evening at one of the most prestigious tango houses in Buenos Aires. À la carte dinner, world-class dancers and the unique atmosphere of porteño tango.',
   address_es: 'Av. Corrientes 1234, Buenos Aires',
   address_en: 'Av. Corrientes 1234, Buenos Aires',
-  schedule_summary_es: 'Lunes a Domingos. Traslado 19:30-20:00. Cena desde 20:00. Show desde 22:00.',
-  schedule_summary_en: 'Monday to Sunday. Transfer 7:30-8:00 PM. Dinner from 8:00 PM. Show from 10:00 PM.',
   dinner_show_time_es: 'Cena desde 20:00. Show desde 22:00.',
   show_only_time_es: 'Show desde 22:00',
   dinner_transfer_window_es: 'Entre 19:30 y 20:00',
@@ -221,10 +219,9 @@ async function seed() {
          short_description_es, short_description_en,
          long_description_es, long_description_en,
          address_es, address_en,
-         schedule_summary_es, schedule_summary_en,
          dinner_show_time_es, show_only_time_es, dinner_transfer_window_es, show_only_transfer_window_es,
          starting_price_usd, display_order
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        ON CONFLICT (slug) DO UPDATE SET updated_at = NOW()
        RETURNING id`,
       [
@@ -232,7 +229,6 @@ async function seed() {
         DEMO_PRODUCT.short_description_es, DEMO_PRODUCT.short_description_en,
         DEMO_PRODUCT.long_description_es, DEMO_PRODUCT.long_description_en,
         DEMO_PRODUCT.address_es, DEMO_PRODUCT.address_en,
-        DEMO_PRODUCT.schedule_summary_es, DEMO_PRODUCT.schedule_summary_en,
         DEMO_PRODUCT.dinner_show_time_es, DEMO_PRODUCT.show_only_time_es,
         DEMO_PRODUCT.dinner_transfer_window_es, DEMO_PRODUCT.show_only_transfer_window_es,
         DEMO_PRODUCT.starting_price_usd, 1,
