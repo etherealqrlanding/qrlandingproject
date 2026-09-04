@@ -30,7 +30,14 @@ export async function createAddonForOrder(params: {
   orderPublicId: string;
   adults: number;
   children: number;
+  infants?: number;
   restrictSellerId?: number;
+  // Solo si el traslado se activa por primera vez (la orden tenía transfer_qty = 0)
+  // -- si ya tenía traslado, se extiende solo, sin pedir nada de esto.
+  addTransfer?: boolean;
+  transferZone?: 'centro' | 'palermo';
+  transferHotel?: string;
+  transferRoom?: string;
 }): Promise<AddonLinkResult> {
   const { rows } = await pool.query<{
     order_id: number; status: string; payment_method: string;
@@ -39,9 +46,11 @@ export async function createAddonForOrder(params: {
     item_id: number; option_id: number; service_date: string;
     default_capacity_per_day: number;
     option_name: string; product_slug: string; product_name: string;
-    adults: number; children: number;
+    adults: number; children: number; infants: number;
     unit_price_adult_usd: number; unit_price_child_usd: number | null;
-    subtotal_usd: number; transfer_qty: number;
+    subtotal_usd: number; transfer_qty: number; infant_transfer_usd: number;
+    transfer_mode: 'none' | 'optional' | 'included';
+    transfer_price_usd: number; transfer_price_usd_palermo: number | null;
     seller_id: number | null; seller_code: string | null;
   }>(
     `SELECT o.id AS order_id, o.status::text AS status, o.payment_method,
@@ -51,10 +60,14 @@ export async function createAddonForOrder(params: {
             to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
             po.default_capacity_per_day, po.name_es AS option_name,
             p.slug AS product_slug, p.name AS product_name,
-            oi.adults, oi.children,
+            oi.adults, oi.children, oi.infants,
             oi.unit_price_adult_usd::float AS unit_price_adult_usd,
             oi.unit_price_child_usd::float AS unit_price_child_usd,
             oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty,
+            oi.infant_transfer_usd::float AS infant_transfer_usd,
+            po.transfer_mode,
+            po.transfer_price_usd::float AS transfer_price_usd,
+            po.transfer_price_usd_palermo::float AS transfer_price_usd_palermo,
             a.seller_id, s.code AS seller_code
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
@@ -79,16 +92,31 @@ export async function createAddonForOrder(params: {
     return { ok: false, httpStatus: 400, error: `Solo se pueden ampliar reservas pagadas. Estado actual: ${row.status}` };
   }
 
+  const addTransfer = Boolean(params.addTransfer) && row.transfer_qty === 0;
+  // Precio ACTUAL por pax para la zona elegida -- solo se usa si se activa el
+  // traslado recién ahora (si ya existía, se extiende al precio ya congelado).
+  const transferPriceUsd = addTransfer
+    ? (params.transferZone === 'palermo' && row.transfer_price_usd_palermo != null
+        ? row.transfer_price_usd_palermo
+        : row.transfer_price_usd)
+    : 0;
+
   const snap: OrderIncreaseSnapshot = {
     origAdults: row.adults,
     origChildren: row.children,
+    origInfants: row.infants,
     unitPriceAdultUsd: row.unit_price_adult_usd,
     unitPriceChildUsd: row.unit_price_child_usd,
     subtotalUsd: row.subtotal_usd,
     transferQty: row.transfer_qty,
+    infantTransferUsd: row.infant_transfer_usd,
+    transferMode: row.transfer_mode,
+    transferPriceUsd,
     exchangeRateUsed: row.exchange_rate_used,
   };
-  const calc = computeOrderIncrease(snap, { adults: params.adults, children: params.children });
+  const calc = computeOrderIncrease(snap, {
+    adults: params.adults, children: params.children, infants: params.infants ?? row.infants, addTransfer,
+  });
   if (!calc.ok) return { ok: false, httpStatus: 400, error: calc.error ?? 'No se puede ampliar' };
 
   // Reserva de cupo + creación del addon pendiente (puede lanzar AvailabilityError → 409).
@@ -99,12 +127,18 @@ export async function createAddonForOrder(params: {
     defaultCapacityPerDay: row.default_capacity_per_day,
     extraAdults: calc.extraAdults,
     extraChildren: calc.extraChildren,
+    extraInfants: calc.extraInfants,
     chargeUsd: calc.chargeUsd,
     chargeArs: calc.chargeArs,
     newSubtotalUsd: calc.newSubtotalUsd,
     newTotalArs: calc.newTotalArs,
     exchangeRateUsed: row.exchange_rate_used,
     paymentMethod: 'mercadopago',
+    addTransfer: calc.transferAdded,
+    transferZone: calc.transferAdded ? (params.transferZone ?? null) : null,
+    transferHotel: calc.transferAdded ? (params.transferHotel ?? null) : null,
+    transferRoom: calc.transferAdded ? (params.transferRoom ?? null) : null,
+    transferUnitPriceUsd: calc.transferAdded ? transferPriceUsd : null,
   });
 
   // Link de MP por la DIFERENCIA (charge_ars). external_reference = public_id del addon,
@@ -158,6 +192,8 @@ export type CashAddonResult =
       serviceDate: string;
       extraAdults: number;
       extraChildren: number;
+      extraInfants: number;
+      newTransferQty: number;
       data: { addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number };
     }
   | { ok: false; httpStatus: number; error: string };
@@ -171,7 +207,14 @@ export async function createCashAddonForOrder(params: {
   orderPublicId: string;
   adults: number;
   children: number;
+  infants?: number;
   restrictSellerId?: number;
+  // Solo si el traslado se activa por primera vez (la orden tenía transfer_qty = 0)
+  // -- si ya tenía traslado, se extiende solo, sin pedir nada de esto.
+  addTransfer?: boolean;
+  transferZone?: 'centro' | 'palermo';
+  transferHotel?: string;
+  transferRoom?: string;
   // Solo los manda el portal de vendedores — el admin panel no los pasa, así que
   // ahí sigue sin guardarse nada (como hasta ahora).
   actor?: 'admin' | 'seller';
@@ -181,9 +224,11 @@ export async function createCashAddonForOrder(params: {
   const { rows } = await pool.query<{
     order_id: number; status: string; payment_method: string; exchange_rate_used: number;
     item_id: number; option_id: number; service_date: string; default_capacity_per_day: number;
-    adults: number; children: number;
+    adults: number; children: number; infants: number;
     unit_price_adult_usd: number; unit_price_child_usd: number | null;
-    subtotal_usd: number; transfer_qty: number;
+    subtotal_usd: number; transfer_qty: number; infant_transfer_usd: number;
+    transfer_mode: 'none' | 'optional' | 'included';
+    transfer_price_usd: number; transfer_price_usd_palermo: number | null;
     seller_id: number | null; net_settled_at: string | null;
     customer_name: string; option_name: string;
   }>(
@@ -193,10 +238,14 @@ export async function createCashAddonForOrder(params: {
             to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
             oi.option_name_snapshot AS option_name,
             po.default_capacity_per_day,
-            oi.adults, oi.children,
+            oi.adults, oi.children, oi.infants,
             oi.unit_price_adult_usd::float AS unit_price_adult_usd,
             oi.unit_price_child_usd::float AS unit_price_child_usd,
             oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty,
+            oi.infant_transfer_usd::float AS infant_transfer_usd,
+            po.transfer_mode,
+            po.transfer_price_usd::float AS transfer_price_usd,
+            po.transfer_price_usd_palermo::float AS transfer_price_usd_palermo,
             a.seller_id, a.net_settled_at
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
@@ -223,16 +272,29 @@ export async function createCashAddonForOrder(params: {
     return { ok: false, httpStatus: 409, error: 'Esta orden ya fue rendida al operador. No se puede modificar una vez liquidada.' };
   }
 
+  const addTransfer = Boolean(params.addTransfer) && row.transfer_qty === 0;
+  const transferPriceUsd = addTransfer
+    ? (params.transferZone === 'palermo' && row.transfer_price_usd_palermo != null
+        ? row.transfer_price_usd_palermo
+        : row.transfer_price_usd)
+    : 0;
+
   const snap: OrderIncreaseSnapshot = {
     origAdults: row.adults,
     origChildren: row.children,
+    origInfants: row.infants,
     unitPriceAdultUsd: row.unit_price_adult_usd,
     unitPriceChildUsd: row.unit_price_child_usd,
     subtotalUsd: row.subtotal_usd,
     transferQty: row.transfer_qty,
+    infantTransferUsd: row.infant_transfer_usd,
+    transferMode: row.transfer_mode,
+    transferPriceUsd,
     exchangeRateUsed: row.exchange_rate_used,
   };
-  const calc = computeOrderIncrease(snap, { adults: params.adults, children: params.children });
+  const calc = computeOrderIncrease(snap, {
+    adults: params.adults, children: params.children, infants: params.infants ?? row.infants, addTransfer,
+  });
   if (!calc.ok) return { ok: false, httpStatus: 400, error: calc.error ?? 'No se puede ampliar' };
 
   const addon = await createOrderAddon({
@@ -242,16 +304,23 @@ export async function createCashAddonForOrder(params: {
     defaultCapacityPerDay: row.default_capacity_per_day,
     extraAdults: calc.extraAdults,
     extraChildren: calc.extraChildren,
+    extraInfants: calc.extraInfants,
     chargeUsd: calc.chargeUsd,
     chargeArs: calc.chargeArs,
     newSubtotalUsd: calc.newSubtotalUsd,
     newTotalArs: calc.newTotalArs,
     exchangeRateUsed: row.exchange_rate_used,
     paymentMethod: 'cash',
+    addTransfer: calc.transferAdded,
+    transferZone: calc.transferAdded ? (params.transferZone ?? null) : null,
+    transferHotel: calc.transferAdded ? (params.transferHotel ?? null) : null,
+    transferRoom: calc.transferAdded ? (params.transferRoom ?? null) : null,
+    transferUnitPriceUsd: calc.transferAdded ? transferPriceUsd : null,
   });
 
   await logPaymentEvent(row.order_id, 'addon_cash_created', null, {
-    addon_id: addon.id, extra_adults: calc.extraAdults, extra_children: calc.extraChildren,
+    addon_id: addon.id, extra_adults: calc.extraAdults, extra_children: calc.extraChildren, extra_infants: calc.extraInfants,
+    transfer_added: calc.transferAdded,
     charge_usd: calc.chargeUsd,
     ...(params.actor ? { actor: params.actor } : {}),
     ...(params.actorMemberId != null ? { seller_member_id: params.actorMemberId, seller_member_name: params.actorMemberName } : {}),
@@ -266,6 +335,8 @@ export async function createCashAddonForOrder(params: {
     serviceDate: row.service_date,
     extraAdults: calc.extraAdults,
     extraChildren: calc.extraChildren,
+    extraInfants: calc.extraInfants,
+    newTransferQty: calc.newTransferQty,
     data: {
       addon_public_id: addon.public_id,
       charge_usd: calc.chargeUsd,

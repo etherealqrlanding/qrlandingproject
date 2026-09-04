@@ -226,6 +226,12 @@ export interface SellerOrder {
   unit_price_adult_usd: number;
   unit_price_child_usd: number | null;
   subtotal_usd: number;
+  transfer_qty: number;
+  infants: number;
+  infant_transfer_usd: number;
+  transfer_mode: 'none' | 'optional' | 'included';
+  transfer_price_usd: number;
+  transfer_price_usd_palermo: number | null;
   service_date: string;
   option_id: number;
   product_name: string;
@@ -311,6 +317,8 @@ export async function listSellerOrders(
        oi.subtotal_usd::float AS subtotal_usd,
        oi.transfer_qty,
        oi.infants, oi.infant_transfer_usd::float AS infant_transfer_usd,
+       po.transfer_mode, po.transfer_price_usd::float AS transfer_price_usd,
+       po.transfer_price_usd_palermo::float AS transfer_price_usd_palermo,
        to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
        oi.option_id,
        oi.product_name_snapshot AS product_name,
@@ -330,6 +338,7 @@ export async function listSellerOrders(
        FROM order_attributions a
        JOIN orders o ON o.id = a.order_id
        LEFT JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN product_options po ON po.id = oi.option_id
        LEFT JOIN seller_members m ON m.id = a.seller_member_id
        LEFT JOIN order_attribution_requests r ON r.order_id = o.id AND r.status = 'pending'
        LEFT JOIN seller_members rm ON rm.id = r.seller_member_id

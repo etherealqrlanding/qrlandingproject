@@ -141,7 +141,7 @@
     "transfer_added": "Transfer added for the whole group",
     "transfer_not_added": "No transfer",
     "transfer_from": "from",
-    "transfer_zone_note": "The final transfer price depends on your hotel's zone — confirmed once you pick it at checkout.",
+    "transfer_zone_note": "Transfer price depends on your hotel's zone: USD {{centro}}/pax in the downtown area (Recoleta, Puerto Madero, San Telmo, Constitución) or USD {{palermo}}/pax in Palermo — confirmed once you pick your hotel at checkout.",
     "infant_transfer_note": "Infants don't pay for entry, but they do pay for transfer if you add it.",
     "includes_title": "Includes",
     "menu_view": "View menu",

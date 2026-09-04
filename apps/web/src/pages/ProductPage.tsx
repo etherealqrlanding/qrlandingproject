@@ -693,7 +693,7 @@ function OptionCard({
             </div>
           )}
           {transferUsd > 0 && zoneRange.hasZonePricing && (
-            <p className="text-[10px] text-cream/40 italic">{t('product.transfer_zone_note')}</p>
+            <p className="text-[10px] text-cream/40 italic">{t('product.transfer_zone_note', { centro: option.transfer_price_usd, palermo: option.transfer_price_usd_palermo })}</p>
           )}
         </div>
 

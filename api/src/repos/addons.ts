@@ -16,12 +16,21 @@ export interface CreateAddonInput {
   defaultCapacityPerDay: number;
   extraAdults: number;
   extraChildren: number;
+  extraInfants: number;
   chargeUsd: number;
   chargeArs: number;
   newSubtotalUsd: number;
   newTotalArs: number;
   exchangeRateUsed: number;
   paymentMethod: 'mercadopago' | 'cash';
+  // Solo si esta ampliación activa el traslado por primera vez (ver orderIncrease.ts
+  // `transferAdded`) -- si el traslado ya estaba activo, se extiende solo y estos
+  // campos quedan en null (no hace falta pedir hotel/habitación de nuevo).
+  addTransfer?: boolean;
+  transferZone?: 'centro' | 'palermo' | null;
+  transferHotel?: string | null;
+  transferRoom?: string | null;
+  transferUnitPriceUsd?: number | null;
 }
 
 export interface CreatedAddon {
@@ -46,15 +55,17 @@ export async function createOrderAddon(input: CreateAddonInput): Promise<Created
 
     const { rows } = await client.query<{ id: number; public_id: string }>(
       `INSERT INTO order_addons (
-         order_id, option_id, service_date, extra_adults, extra_children,
+         order_id, option_id, service_date, extra_adults, extra_children, extra_infants,
          charge_usd, charge_ars, new_subtotal_usd, new_total_ars, exchange_rate_used,
-         payment_method
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         payment_method, add_transfer, transfer_zone, transfer_hotel, transfer_room,
+         transfer_unit_price_usd
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING id, public_id`,
       [
-        input.orderId, input.optionId, input.serviceDate, input.extraAdults, input.extraChildren,
+        input.orderId, input.optionId, input.serviceDate, input.extraAdults, input.extraChildren, input.extraInfants,
         input.chargeUsd, input.chargeArs, input.newSubtotalUsd, input.newTotalArs, input.exchangeRateUsed,
-        input.paymentMethod,
+        input.paymentMethod, input.addTransfer ?? false, input.transferZone ?? null,
+        input.transferHotel ?? null, input.transferRoom ?? null, input.transferUnitPriceUsd ?? null,
       ],
     );
 
@@ -111,6 +122,13 @@ export interface ApplyAddonResult {
   orderId?: number;
   chargeUsd?: number;
   chargeArs?: number;
+  // Desglose de qué cambió -- solo viene en el merge exitoso (no en alreadyApplied,
+  // closedOrder ni mismatch), para el email de confirmación al cliente.
+  extraAdults?: number;
+  extraChildren?: number;
+  extraInfants?: number;
+  origTransferQty?: number;
+  newTransferQty?: number;
 }
 
 /**
@@ -132,11 +150,15 @@ export async function applyAddonPayment(
 
     const { rows: addonRows } = await client.query<{
       id: number; order_id: number; status: string; payment_method: string;
-      extra_adults: number; extra_children: number;
+      extra_adults: number; extra_children: number; extra_infants: number;
       charge_usd: number; charge_ars: number;
+      add_transfer: boolean; transfer_hotel: string | null; transfer_room: string | null;
+      transfer_unit_price_usd: number | null;
     }>(
-      `SELECT id, order_id, status, payment_method, extra_adults, extra_children,
-              charge_usd::float AS charge_usd, charge_ars::float AS charge_ars
+      `SELECT id, order_id, status, payment_method, extra_adults, extra_children, extra_infants,
+              charge_usd::float AS charge_usd, charge_ars::float AS charge_ars,
+              add_transfer, transfer_hotel, transfer_room,
+              transfer_unit_price_usd::float AS transfer_unit_price_usd
          FROM order_addons WHERE public_id = $1 FOR UPDATE`,
       [publicId],
     );
@@ -160,23 +182,27 @@ export async function applyAddonPayment(
     // segundo ve el estado ya committeado, no el de antes.
     const { rows: orderRows } = await client.query<{
       order_id: number; status: string; exchange_rate_used: number; commission_exchange_rate_used: number; payment_method: string;
-      item_id: number; adults: number; children: number;
+      item_id: number; adults: number; children: number; infants: number;
       unit_price_adult_usd: number; unit_price_child_usd: number | null;
-      subtotal_usd: number; transfer_qty: number;
+      subtotal_usd: number; transfer_qty: number; infant_transfer_usd: number;
+      transfer_mode: 'none' | 'optional' | 'included';
       commission_percent: number | null; seller_id: number | null; net_total_usd: number | null;
     }>(
       `SELECT o.id AS order_id, o.status::text AS status,
               o.exchange_rate_used::float AS exchange_rate_used,
               COALESCE(o.commission_exchange_rate_used, o.exchange_rate_used)::float AS commission_exchange_rate_used,
               o.payment_method,
-              oi.id AS item_id, oi.adults, oi.children,
+              oi.id AS item_id, oi.adults, oi.children, oi.infants,
               oi.unit_price_adult_usd::float AS unit_price_adult_usd,
               oi.unit_price_child_usd::float AS unit_price_child_usd,
               oi.subtotal_usd::float AS subtotal_usd, oi.transfer_qty,
+              oi.infant_transfer_usd::float AS infant_transfer_usd,
+              po.transfer_mode,
               a.commission_percent_snapshot::float AS commission_percent,
               a.seller_id, a.net_total_usd_snapshot::float AS net_total_usd
          FROM orders o
          JOIN order_items oi ON oi.order_id = o.id
+         JOIN product_options po ON po.id = oi.option_id
          LEFT JOIN order_attributions a ON a.order_id = o.id
         WHERE o.id = $1
         ORDER BY oi.id
@@ -211,15 +237,22 @@ export async function applyAddonPayment(
     const snap: OrderIncreaseSnapshot = {
       origAdults: cur.adults,
       origChildren: cur.children,
+      origInfants: cur.infants,
       unitPriceAdultUsd: cur.unit_price_adult_usd,
       unitPriceChildUsd: cur.unit_price_child_usd,
       subtotalUsd: cur.subtotal_usd,
       transferQty: cur.transfer_qty,
+      infantTransferUsd: cur.infant_transfer_usd,
+      transferMode: cur.transfer_mode,
+      transferPriceUsd: addon.transfer_unit_price_usd ?? 0,
       exchangeRateUsed: cur.exchange_rate_used,
     };
     const newAdults = cur.adults + addon.extra_adults;
     const newChildren = cur.children + addon.extra_children;
-    const calc = computeOrderIncrease(snap, { adults: newAdults, children: newChildren });
+    const newInfants = cur.infants + addon.extra_infants;
+    const calc = computeOrderIncrease(snap, {
+      adults: newAdults, children: newChildren, infants: newInfants, addTransfer: addon.add_transfer,
+    });
     if (!calc.ok) {
       // La orden cambió de forma incompatible: no fusionamos automáticamente. Marcamos
       // el addon 'paid' (el cobro se hizo) y dejamos rastro para revisión manual.
@@ -237,8 +270,19 @@ export async function applyAddonPayment(
     }
 
     await client.query(
-      `UPDATE order_items SET adults = $1, children = $2, subtotal_usd = $3 WHERE id = $4`,
-      [newAdults, newChildren, calc.newSubtotalUsd, cur.item_id],
+      `UPDATE order_items
+          SET adults = $1, children = $2, infants = $3, subtotal_usd = $4,
+              transfer_qty = $5, infant_transfer_usd = $6,
+              transfer_hotel = COALESCE($7, transfer_hotel),
+              transfer_room = COALESCE($8, transfer_room)
+        WHERE id = $9`,
+      [
+        newAdults, newChildren, newInfants, calc.newSubtotalUsd,
+        calc.newTransferQty, calc.newInfantTransferUsd,
+        calc.transferAdded ? addon.transfer_hotel : null,
+        calc.transferAdded ? addon.transfer_room : null,
+        cur.item_id,
+      ],
     );
     await client.query(
       `UPDATE orders SET total_usd = $1, total_ars = $2, updated_at = NOW() WHERE id = $3`,
@@ -275,15 +319,20 @@ export async function applyAddonPayment(
        VALUES ($1, $2, $3, $4::jsonb)`,
       [addon.order_id, isCash ? 'addon_cash_collected' : 'addon_paid', mpPaymentId, JSON.stringify({
         addon_id: addon.id,
-        extra_adults: addon.extra_adults, extra_children: addon.extra_children,
-        new_adults: newAdults, new_children: newChildren,
+        extra_adults: addon.extra_adults, extra_children: addon.extra_children, extra_infants: addon.extra_infants,
+        new_adults: newAdults, new_children: newChildren, new_infants: newInfants,
+        transfer_added: calc.transferAdded, new_transfer_qty: calc.newTransferQty,
         charge_usd: addon.charge_usd, charge_ars: addon.charge_ars,
         ...(actorMember ? { seller_member_id: actorMember.id, seller_member_name: actorMember.name } : {}),
       })],
     );
 
     await client.query('COMMIT');
-    return { applied: true, orderId: addon.order_id, chargeUsd: addon.charge_usd, chargeArs: addon.charge_ars };
+    return {
+      applied: true, orderId: addon.order_id, chargeUsd: addon.charge_usd, chargeArs: addon.charge_ars,
+      extraAdults: addon.extra_adults, extraChildren: addon.extra_children, extraInfants: addon.extra_infants,
+      origTransferQty: cur.transfer_qty, newTransferQty: calc.newTransferQty,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

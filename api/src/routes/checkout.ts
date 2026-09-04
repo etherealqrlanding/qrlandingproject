@@ -984,7 +984,10 @@ export async function syncOrderWithMp(publicId: string): Promise<{ found: boolea
 async function applyAddonAndNotify(publicId: string, mpPaymentId: string | null): Promise<void> {
   const r = await applyAddonPayment(publicId, mpPaymentId);
   if (r.applied && !r.alreadyApplied && !r.closedOrder && r.orderId != null) {
-    sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
+    sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0, null, r.extraAdults != null ? {
+      extraAdults: r.extraAdults, extraChildren: r.extraChildren ?? 0, extraInfants: r.extraInfants ?? 0,
+      origTransferQty: r.origTransferQty ?? 0, newTransferQty: r.newTransferQty ?? 0,
+    } : null).catch((e) =>
       console.error('[email] addon increase notification failed for order', r.orderId, e),
     );
   }

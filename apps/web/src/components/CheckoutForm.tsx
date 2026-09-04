@@ -10,6 +10,7 @@ import Spinner from './Spinner';
 import AvailabilityCalendar from './AvailabilityCalendar';
 import Checkbox from './Checkbox';
 import NumberStepper from './NumberStepper';
+import SimpleSelect from './SimpleSelect';
 import { computeBookingTotals, transferPriceRange, transferUnitPrice, round2 } from '../lib/pricing';
 import { zoneForHotel } from '../lib/hotels';
 
@@ -366,14 +367,15 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
               <p className="text-xs text-cream/70 leading-relaxed">{t('checkout.contact_info_notice')}</p>
             </div>
             <Field label={t('checkout.nationality')} required>
-              <select
-                value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
-                onBlur={() => markTouched('nationality')}
-                className={`input ${touched.nationality && nationalityError ? 'border-bordeaux-light/60' : ''}`}
-              >
-                <option value="">{t('checkout.select')}</option>
-                {NATIONALITIES.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <SimpleSelect
+                value={form.nationality}
+                onChange={(v) => { updateField('nationality', v); markTouched('nationality'); }}
+                error={touched.nationality && Boolean(nationalityError)}
+                options={[
+                  { value: '', label: t('checkout.select') },
+                  ...NATIONALITIES.map((n) => ({ value: n, label: n })),
+                ]}
+              />
               {touched.nationality && nationalityError && (
                 <p className="mt-1 text-xs text-bordeaux-light">⚠ {nationalityError}</p>
               )}
@@ -458,7 +460,7 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
                   <span className="text-cream/80">+ USD {round2(transferUsd + infantTransferUsd)}</span>
                 </div>
                 {zoneRange.hasZonePricing && !transferHotel && (
-                  <p className="text-[11px] text-cream/40 italic pt-1">{t('product.transfer_zone_note')}</p>
+                  <p className="text-[11px] text-cream/40 italic pt-1">{t('product.transfer_zone_note', { centro: option.transfer_price_usd, palermo: option.transfer_price_usd_palermo })}</p>
                 )}
               </div>
             )}

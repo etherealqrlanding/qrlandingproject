@@ -176,6 +176,9 @@ export interface SellerOrder {
   transfer_qty: number;
   infants: number;
   infant_transfer_usd: number;
+  transfer_mode: 'none' | 'optional' | 'included';
+  transfer_price_usd: number;
+  transfer_price_usd_palermo: number | null;
   service_date: string;
   option_id: number;
   product_name: string;
@@ -493,7 +496,7 @@ export const sellerApi = {
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reduce-cash`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  increaseCash: (publicId: string, body: { adults: number; children: number; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
+  increaseCash: (publicId: string, body: { adults: number; children: number; infants?: number; add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/increase-cash`,
       { method: 'POST', body: JSON.stringify(body) },

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { sellerApi, SellerApiError, type SellerBookingInput, type SellerBookingResult, type SellerMember } from '../../lib/sellerApi';
 import type { ProductDetail, ProductOption } from '../../types/api';
 import BookingForm from '../booking/BookingForm';
+import SimpleSelect from '../SimpleSelect';
 import { getLastMemberId, setLastMemberId } from '../../lib/lastMember';
 
 interface Props {
@@ -192,14 +193,15 @@ export default function SellerBookingModal({ product, option, onClose, isPermane
                   </p>
                 )}
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={memberId}
-                    onChange={(e) => setMemberId(e.target.value ? Number(e.target.value) : '')}
-                    className="flex-1 rounded-lg border border-gold/20 bg-ink/60 px-3 py-2 text-sm text-cream focus:outline-none focus:border-gold/40"
-                  >
-                    <option value="">— Sin especificar —</option>
-                    {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
+                  <SimpleSelect
+                    className="flex-1"
+                    value={memberId === '' ? '' : String(memberId)}
+                    onChange={(v) => setMemberId(v === '' ? '' : Number(v))}
+                    options={[
+                      { value: '', label: '— Sin especificar —' },
+                      ...members.map((m) => ({ value: String(m.id), label: m.name })),
+                    ]}
+                  />
                   {pinRequired && memberId !== '' && (
                     <input
                       value={memberPin}

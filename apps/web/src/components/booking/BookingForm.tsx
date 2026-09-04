@@ -6,6 +6,7 @@ import TransferSection from '../TransferSection';
 import Spinner from '../Spinner';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import NumberStepper from '../NumberStepper';
+import SimpleSelect from '../SimpleSelect';
 import { computeBookingTotals, transferPriceRange, transferUnitPrice, round2 } from '../../lib/pricing';
 import { zoneForHotel } from '../../lib/hotels';
 
@@ -282,14 +283,15 @@ export default function BookingForm({
             />
           </Field>
           <Field label="Nacionalidad" required>
-            <select
+            <SimpleSelect
               id="bf-nationality"
-              value={form.nationality} onChange={(e) => updateField('nationality', e.target.value)}
-              className="input"
-            >
-              <option value="">Seleccionar...</option>
-              {NATIONALITIES.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+              value={form.nationality}
+              onChange={(v) => updateField('nationality', v)}
+              options={[
+                { value: '', label: 'Seleccionar...' },
+                ...NATIONALITIES.map((n) => ({ value: n, label: n })),
+              ]}
+            />
           </Field>
           <div className="sm:col-span-2" id="bf-date">
             <Field label="Fecha del servicio" required>
@@ -370,7 +372,7 @@ export default function BookingForm({
               </div>
               {zoneRange.hasZonePricing && !transferHotel && (
                 <p className="text-[11px] text-cream/40 italic pt-1">
-                  El precio final del traslado depende de la zona del hotel del pasajero — se confirma al elegirlo.
+                  El precio del traslado depende de la zona del hotel: USD {option.transfer_price_usd}/pax en zona céntrica (Recoleta, Puerto Madero, San Telmo, Constitución) o USD {option.transfer_price_usd_palermo}/pax en Palermo — se confirma al elegir el hotel.
                 </p>
               )}
             </div>

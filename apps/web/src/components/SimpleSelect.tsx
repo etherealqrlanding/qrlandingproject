@@ -15,6 +15,12 @@ interface Props {
   // botones chicos (gates de identificación); 'md' (default) = tamaño estándar de
   // filtro, igual que siempre.
   size?: 'sm' | 'md';
+  // Borde en rojo/bordeaux para reflejar un campo obligatorio sin completar --
+  // mismo criterio visual que los <input> de validación del resto de los forms.
+  error?: boolean;
+  // Para scrollIntoView + foco al saltar a un campo con error de validación (ver
+  // scrollToField en BookingForm/CheckoutForm) -- va en el wrapper, no en el botón.
+  id?: string;
 }
 
 /**
@@ -23,18 +29,18 @@ interface Props {
  * oscura/dorada del resto de los filtros. Mismo look que los otros controles de
  * filtro (SellerFilterSelect, DateRangePicker): trigger con clase `.input`.
  */
-export default function SimpleSelect({ value, onChange, options, className, disabled, size = 'md' }: Props) {
+export default function SimpleSelect({ value, onChange, options, className, disabled, size = 'md', error = false, id }: Props) {
   const selected = options.find((o) => o.value === value) ?? options[0];
   const isSm = size === 'sm';
 
   return (
     <Listbox value={value} onChange={onChange} disabled={disabled}>
-      <div className={`relative ${className ?? ''}`}>
+      <div id={id} className={`relative ${className ?? ''}`}>
         <ListboxButton
           className={
             isSm
-              ? `w-full flex items-center justify-between gap-1.5 rounded-md border border-gold/20 bg-ink/60 px-2 py-1.5 text-xs text-cream text-left focus:outline-none focus:border-gold/40 transition ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
-              : `input flex items-center justify-between gap-2 text-left text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
+              ? `w-full flex items-center justify-between gap-1.5 rounded-md border bg-ink/60 px-2 py-1.5 text-xs text-cream text-left focus:outline-none transition ${error ? 'border-bordeaux-light/60' : 'border-gold/20 focus:border-gold/40'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
+              : `input flex items-center justify-between gap-2 text-left text-sm ${error ? 'border-bordeaux-light/60' : ''} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`
           }
         >
           {({ open }) => (

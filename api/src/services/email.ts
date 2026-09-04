@@ -333,6 +333,30 @@ function reservationCard(d: OrderEmailData, opts?: { showAmounts?: boolean; show
   return `<div style="${baseStyles.card}"><p style="${baseStyles.eyebrow}">Detalles de tu reserva</p>${rows.join('')}</div>${includesBlock}${contactBlock}`;
 }
 
+// Desglose "qué cambió" (pax + traslado, antes → después) para las notificaciones de
+// modificación de reserva (reducción o ampliación) -- mismo criterio que el preview
+// del modal de admin/vendedor, para que el email y la pantalla digan lo mismo. Solo
+// muestra las filas que realmente cambiaron.
+function modificationBreakdown(params: {
+  origAdults: number; newAdults: number;
+  origChildren: number; newChildren: number;
+  origInfants: number; newInfants: number;
+  origTransferQty: number; newTransferQty: number;
+}): string {
+  const rows: string[] = [];
+  if (params.newAdults !== params.origAdults) rows.push(emailRow('Adultos', `${params.origAdults} → ${params.newAdults}`));
+  if (params.newChildren !== params.origChildren) rows.push(emailRow('Menores', `${params.origChildren} → ${params.newChildren}`));
+  if (params.newInfants !== params.origInfants) rows.push(emailRow('Infantes', `${params.origInfants} → ${params.newInfants}`));
+  if (params.newTransferQty !== params.origTransferQty) {
+    const label = params.newTransferQty === 0
+      ? 'Cancelado'
+      : params.origTransferQty === 0 ? 'Activado para todo el grupo' : 'Extendido a los nuevos pasajeros';
+    rows.push(emailRow('Traslado', label));
+  }
+  if (rows.length === 0) return '';
+  return `<div style="${baseStyles.card}"><p style="${baseStyles.eyebrow}">Qué cambió</p>${rows.join('')}</div>`;
+}
+
 function htmlForCustomer(data: OrderEmailData): string {
   return `
 <!doctype html>
@@ -1080,6 +1104,14 @@ export async function sendOrderModifiedNotifications(
   // un segundo email aparte (sendOrderRescheduledNotifications queda sin usar en ese
   // caso — ver ModifyReservationModal, que suprime esa notificación cuando hay reduce).
   dateChange?: { prevDate: string; newDate: string } | null,
+  // Composición antes/después para el desglose "qué cambió" -- opcional para no
+  // romper al script de test-emails, que no lo pasa.
+  breakdown?: {
+    origAdults: number; newAdults: number;
+    origChildren: number; newChildren: number;
+    origInfants: number; newInfants: number;
+    origTransferQty: number; newTransferQty: number;
+  } | null,
 ): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
@@ -1089,12 +1121,14 @@ export async function sendOrderModifiedNotifications(
 
   const orderData = toOrderData(data);
   const arsStr = refundedArs.toLocaleString('es-AR');
+  const sellerLabel = escapeHtml(data.seller_name ?? 'quien te recomendó la experiencia');
   const refundLine = viaCash
-    ? `<p><strong style="color:#c8a85a">El recomendador te devuelve ARS ${arsStr}</strong> en efectivo.</p>`
+    ? `<p>Acercate a <strong style="color:#e0c787">${sellerLabel}</strong> para que te devuelva <strong style="color:#c8a85a">ARS ${arsStr}</strong> en efectivo.</p>`
     : `<p><strong style="color:#c8a85a">Te reintegramos ARS ${arsStr}</strong> al mismo medio de pago. El reintegro puede tardar entre 2 y 5 días hábiles en aparecer.</p>`;
   const dateChangeLine = dateChange
     ? `<p style="color:rgba(245,239,230,0.8)">También reprogramamos tu fecha de servicio: de <strong style="color:#e0c787">${dateChange.prevDate}</strong> a <strong style="color:#e0c787">${dateChange.newDate}</strong>.</p>`
     : '';
+  const breakdownBlock = breakdown ? modificationBreakdown(breakdown) : '';
 
   // 1) Cliente
   const customerHtml = `
@@ -1104,6 +1138,7 @@ export async function sendOrderModifiedNotifications(
   <h1 style="${baseStyles.title}">Actualizamos tu reserva</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, modificamos tu reserva según lo acordado${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  ${breakdownBlock}
   ${refundLine}
   ${dateChangeLine}
   <p style="color:rgba(245,239,230,0.7)">Así queda tu reserva actualizada:</p>
@@ -1157,6 +1192,79 @@ export async function sendOrderModifiedNotifications(
   }
 }
 
+// ─── Ampliación en efectivo PENDIENTE de cobro ──────────────
+// Se dispara al CREAR la ampliación (antes de que el vendedor confirme el cobro) --
+// avisa al cliente que hay un cambio pendiente y cuánto debe acercarle al
+// recomendador. La reserva base sigue vigente tal cual estaba; lo pendiente es
+// solo la diferencia. La confirmación real (con los nuevos totales ya aplicados y
+// el comprobante) llega recién con sendOrderIncreasedNotifications, cuando se
+// confirma el cobro -- por eso acá NO va ticketBadge() ni voucherButtonBlock().
+export async function sendCashAddonPendingNotifications(
+  orderId: number,
+  extraAdults: number,
+  extraChildren: number,
+  extraInfants: number,
+  chargeArs: number,
+  newTransferQty: number,
+): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const sellerLabel = escapeHtml(data.seller_name ?? 'quien te recomendó la experiencia');
+  const arsStr = chargeArs.toLocaleString('es-AR');
+  const origTransferQty = orderData.transfer_qty ?? 0;
+  const breakdownBlock = modificationBreakdown({
+    origAdults: orderData.adults, newAdults: orderData.adults + extraAdults,
+    origChildren: orderData.children, newChildren: orderData.children + extraChildren,
+    origInfants: orderData.infants ?? 0, newInfants: (orderData.infants ?? 0) + extraInfants,
+    origTransferQty, newTransferQty,
+  });
+
+  // 1) Cliente
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">Ampliamos tu reserva — falta el pago</h1>
+  <p>Hola ${escapeHtml(orderData.customer_name)}, registramos cambios en tu reserva para pago en efectivo. Tu reserva original sigue vigente tal cual estaba; esta ampliación todavía <strong>no está confirmada</strong>: para confirmarla, acercate a <strong style="color:#e0c787">${sellerLabel}</strong> y coordiná el pago de la diferencia (<strong style="color:#c8a85a">ARS ${arsStr}</strong>).</p>
+  ${breakdownBlock}
+  <p>Ni bien se confirme el pago te vamos a enviar otro email con la reserva actualizada y tu comprobante — ese es el que tenés que presentar en la casa de tango.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `Ampliación pendiente de pago — ${orderData.option_name}`, customerHtml, 'CLIENTE');
+
+  // 2) Admin
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const changeSummary = [
+      extraAdults > 0 ? `+${extraAdults} ad` : null,
+      extraChildren > 0 ? `+${extraChildren} men` : null,
+      extraInfants > 0 ? `+${extraInfants} inf` : null,
+      newTransferQty !== origTransferQty ? 'traslado' : null,
+    ].filter(Boolean).join(' · ');
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
+  <h1 style="${baseStyles.title}">Ampliación en efectivo registrada</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Se agrega</span><strong>${changeSummary || '—'}</strong></div>
+    <div style="${baseStyles.row}"><span>A cobrar</span><strong style="color:#c8a85a">ARS ${arsStr}</strong></div>
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  <p style="color:rgba(245,239,230,0.7);">⚠ El pasajero ya recibió un aviso de que la ampliación está pendiente de pago. El email con la <strong>confirmación</strong> se enviará automáticamente cuando el recomendador confirme el cobro.</p>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[Ampliación efectivo] ${orderData.customer_name} — ARS ${arsStr}`, adminHtml, 'ADMIN');
+  }
+}
+
 // ─── Aumento de reserva (pasajeros agregados) ───────────────
 // La orden ya tiene la composición nueva al enviarse. `charged` = lo cobrado de más.
 export async function sendOrderIncreasedNotifications(
@@ -1164,6 +1272,10 @@ export async function sendOrderIncreasedNotifications(
   _chargedUsd: number,
   chargedArs: number,
   reason?: string | null,
+  // Desglose de qué se agregó -- opcional para no romper al script de test-emails ni
+  // al webhook de MP (que hoy no lo calcula). orderData ya tiene los totales NUEVOS
+  // (el merge ya se aplicó), así que el "antes" se deriva restando lo agregado.
+  breakdown?: { extraAdults: number; extraChildren: number; extraInfants: number; origTransferQty: number; newTransferQty: number } | null,
 ): Promise<void> {
   if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
 
@@ -1173,6 +1285,12 @@ export async function sendOrderIncreasedNotifications(
 
   const orderData = toOrderData(data);
   const arsStr = chargedArs.toLocaleString('es-AR');
+  const breakdownBlock = breakdown ? modificationBreakdown({
+    origAdults: orderData.adults - breakdown.extraAdults, newAdults: orderData.adults,
+    origChildren: orderData.children - breakdown.extraChildren, newChildren: orderData.children,
+    origInfants: (orderData.infants ?? 0) - breakdown.extraInfants, newInfants: orderData.infants ?? 0,
+    origTransferQty: breakdown.origTransferQty, newTransferQty: breakdown.newTransferQty,
+  }) : '';
 
   // 1) Cliente
   const customerHtml = `
@@ -1182,6 +1300,7 @@ export async function sendOrderIncreasedNotifications(
   <h1 style="${baseStyles.title}">Sumamos pasajeros a tu reserva</h1>
   ${ticketBadge()}
   <p>Hola ${escapeHtml(orderData.customer_name)}, actualizamos tu reserva con los pasajeros que agregaste${reason ? ` — ${escapeHtml(reason)}` : ''}.</p>
+  ${breakdownBlock}
   <p>Cargo adicional: <strong style="color:#c8a85a">ARS ${arsStr}</strong>.</p>
   ${reservationCard(orderData, { showContact: true })}
   ${voucherButtonBlock(orderData.public_id)}

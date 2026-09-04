@@ -99,7 +99,10 @@ export function computeOrderReduction(
   const clampedTransferQty = Math.min(target.transferQty, newPax);
   const newTickets = round2(target.adults * unitAdult + target.children * unitChild);
   const newTransferPortion = round2(transferPerPax * clampedTransferQty);
-  const newInfantTransferUsd = round2(infantTransferPerInfant * target.infants);
+  // Si se cancela el traslado del grupo (clampedTransferQty === 0), el de infantes se
+  // cancela junto -- reusa el mismo traslado del grupo, no puede quedar huérfano
+  // cobrándose por un traslado que ya no existe.
+  const newInfantTransferUsd = clampedTransferQty > 0 ? round2(infantTransferPerInfant * target.infants) : 0;
   const newSubtotalUsd = round2(newTickets + newTransferPortion + newInfantTransferUsd);
 
   const refundUsd = round2(snap.subtotalUsd - newSubtotalUsd);

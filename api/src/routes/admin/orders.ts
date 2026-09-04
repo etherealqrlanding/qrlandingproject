@@ -5,7 +5,7 @@ import { pool } from '../../db.js';
 import { RouteValidationError } from '../../errors.js';
 import { refundPayment, createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendPaymentLinkEmail } from '../../services/email.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendCashAddonPendingNotifications, sendPaymentLinkEmail } from '../../services/email.js';
 import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId, setOrderPixCharge } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
@@ -492,8 +492,13 @@ adminOrdersRouter.get('/:publicId', async (req, res, next) => {
 
     const [items, events] = await Promise.all([
       pool.query(
-        `SELECT *, to_char(service_date, 'YYYY-MM-DD') AS service_date
-           FROM order_items WHERE order_id = $1 ORDER BY id`,
+        `SELECT oi.*, to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
+                po.transfer_mode, po.transfer_price_usd::float AS transfer_price_usd,
+                po.transfer_price_usd_palermo::float AS transfer_price_usd_palermo
+           FROM order_items oi
+           JOIN product_options po ON po.id = oi.option_id
+          WHERE oi.order_id = $1
+          ORDER BY oi.id`,
         [order.id],
       ),
       pool.query(
@@ -866,7 +871,12 @@ adminOrdersRouter.post('/:publicId/modify', async (req, res, next) => {
       const dateChange = parsed.data.reschedule_from && parsed.data.reschedule_to
         ? { prevDate: parsed.data.reschedule_from, newDate: parsed.data.reschedule_to }
         : null;
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, false, dateChange).catch((e) =>
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, false, dateChange, {
+        origAdults: row.adults, newAdults: parsed.data.adults,
+        origChildren: row.children, newChildren: parsed.data.children,
+        origInfants: row.infants, newInfants: calc.newInfants,
+        origTransferQty: row.transfer_qty, newTransferQty,
+      }).catch((e) =>
         console.error('[email] modify notification failed for order', row.order_id, e),
       );
     }
@@ -1089,7 +1099,12 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
       const dateChange = parsed.data.reschedule_from && parsed.data.reschedule_to
         ? { prevDate: parsed.data.reschedule_from, newDate: parsed.data.reschedule_to }
         : null;
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, true, dateChange).catch((e) =>
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason, true, dateChange, {
+        origAdults: row.adults, newAdults: parsed.data.adults,
+        origChildren: row.children, newChildren: parsed.data.children,
+        origInfants: row.infants, newInfants: calc.newInfants,
+        origTransferQty: row.transfer_qty, newTransferQty,
+      }).catch((e) =>
         console.error('[email] cash reduce notification failed for order', row.order_id, e),
       );
     }
@@ -1118,6 +1133,12 @@ adminOrdersRouter.post('/:publicId/reduce-cash', async (req, res, next) => {
 const increaseSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  infants: z.number().int().min(0).max(20).optional(),
+  // Solo si la reserva nunca tuvo traslado -- si ya lo tenía, se extiende solo.
+  add_transfer: z.boolean().optional(),
+  transfer_zone: z.enum(['centro', 'palermo']).optional(),
+  transfer_hotel: z.string().max(200).optional(),
+  transfer_room: z.string().max(80).optional(),
 });
 
 adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
@@ -1129,6 +1150,9 @@ adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
 
     const result = await createCashAddonForOrder({
       orderPublicId: publicId, adults: parsed.data.adults, children: parsed.data.children,
+      infants: parsed.data.infants, addTransfer: parsed.data.add_transfer,
+      transferZone: parsed.data.transfer_zone, transferHotel: parsed.data.transfer_hotel,
+      transferRoom: parsed.data.transfer_room,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
 
@@ -1147,6 +1171,11 @@ adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
         chargeArs: result.data.charge_ars,
       }).catch((e) => console.error('[notif] createCashAddonCreatedByAdminNotification failed:', e));
     }
+
+    sendCashAddonPendingNotifications(
+      result.orderId, result.extraAdults, result.extraChildren, result.extraInfants,
+      result.data.charge_ars, result.newTransferQty,
+    ).catch((e) => console.error('[email] cash addon pending notification failed for order', result.orderId, e));
 
     res.json({ data: result.data });
   } catch (err) { next(err); }
@@ -1178,7 +1207,10 @@ adminOrdersRouter.post('/addons/:addonPublicId/collect', async (req, res, next) 
       return res.status(409).json({ error: 'La reserva ya se había cerrado (reintegrada/cancelada) antes de este cobro — no se sumó el pasajero extra. Queda registrado para revisión manual.' });
     }
     if (!r.alreadyApplied && r.orderId != null) {
-      sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
+      sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0, null, r.extraAdults != null ? {
+        extraAdults: r.extraAdults, extraChildren: r.extraChildren ?? 0, extraInfants: r.extraInfants ?? 0,
+        origTransferQty: r.origTransferQty ?? 0, newTransferQty: r.newTransferQty ?? 0,
+      } : null).catch((e) =>
         console.error('[email] cash addon collect notification failed', e));
     }
     res.json({ data: { ok: true, charge_usd: r.chargeUsd, charge_ars: r.chargeArs } });
@@ -1203,6 +1235,11 @@ adminOrdersRouter.post('/addons/:addonPublicId/cancel', async (req, res, next) =
 const addMpSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  infants: z.number().int().min(0).max(20).optional(),
+  add_transfer: z.boolean().optional(),
+  transfer_zone: z.enum(['centro', 'palermo']).optional(),
+  transfer_hotel: z.string().max(200).optional(),
+  transfer_room: z.string().max(80).optional(),
 });
 
 adminOrdersRouter.post('/:publicId/add-mp', async (req, res, next) => {
@@ -1216,6 +1253,9 @@ adminOrdersRouter.post('/:publicId/add-mp', async (req, res, next) => {
       orderPublicId: publicId,
       adults: parsed.data.adults,
       children: parsed.data.children,
+      infants: parsed.data.infants, addTransfer: parsed.data.add_transfer,
+      transferZone: parsed.data.transfer_zone, transferHotel: parsed.data.transfer_hotel,
+      transferRoom: parsed.data.transfer_room,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
     res.json({ data: result.data });

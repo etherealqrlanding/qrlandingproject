@@ -18,7 +18,7 @@ import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail, sendSellerAdminPinReset } from '../../services/email.js';
+import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendCashAddonPendingNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail, sendSellerAdminPinReset } from '../../services/email.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -993,6 +993,11 @@ sellerRouter.patch('/me/attribution-requests/:id', async (req, res, next) => {
 const sellerIncreaseSchema = z.object({
   adults: z.number().int().min(1).max(20),
   children: z.number().int().min(0).max(20),
+  infants: z.number().int().min(0).max(20).optional(),
+  add_transfer: z.boolean().optional(),
+  transfer_zone: z.enum(['centro', 'palermo']).optional(),
+  transfer_hotel: z.string().max(200).optional(),
+  transfer_room: z.string().max(80).optional(),
   seller_member_id: z.number().int().positive().optional(),
   seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
   admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
@@ -1010,11 +1015,20 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
 
     const result = await createCashAddonForOrder({
       orderPublicId: publicId, adults: parsed.data.adults, children: parsed.data.children,
+      infants: parsed.data.infants, addTransfer: parsed.data.add_transfer,
+      transferZone: parsed.data.transfer_zone, transferHotel: parsed.data.transfer_hotel,
+      transferRoom: parsed.data.transfer_room,
       restrictSellerId: req.seller!.sellerId,
       actor: memberCheck.byAdmin ? 'admin' : 'seller',
       actorMemberId: memberCheck.memberId, actorMemberName: memberCheck.memberName,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+
+    sendCashAddonPendingNotifications(
+      result.orderId, result.extraAdults, result.extraChildren, result.extraInfants,
+      result.data.charge_ars, result.newTransferQty,
+    ).catch((e) => console.error('[email] cash addon pending notification failed for order', result.orderId, e));
+
     res.json({ data: result.data });
   } catch (err) { next(err); }
 });
@@ -1060,7 +1074,10 @@ sellerRouter.post('/me/addons/:addonPublicId/collect', async (req, res, next) =>
       return res.status(409).json({ error: 'La reserva ya se había cerrado (reintegrada/cancelada) antes de este cobro — no se sumó el pasajero extra. Queda registrado para revisión manual.' });
     }
     if (!r.alreadyApplied && r.orderId != null) {
-      sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0).catch((e) =>
+      sendOrderIncreasedNotifications(r.orderId, r.chargeUsd ?? 0, r.chargeArs ?? 0, null, r.extraAdults != null ? {
+        extraAdults: r.extraAdults, extraChildren: r.extraChildren ?? 0, extraInfants: r.extraInfants ?? 0,
+        origTransferQty: r.origTransferQty ?? 0, newTransferQty: r.newTransferQty ?? 0,
+      } : null).catch((e) =>
         console.error('[email] seller cash addon collect notification failed', e));
     }
     res.json({ data: { ok: true, charge_usd: r.chargeUsd, charge_ars: r.chargeArs } });
@@ -1215,7 +1232,12 @@ sellerRouter.post('/me/orders/:publicId/reduce-cash', async (req, res, next) => 
       const dateChange = parsed.data.reschedule_from && parsed.data.reschedule_to
         ? { prevDate: parsed.data.reschedule_from, newDate: parsed.data.reschedule_to }
         : null;
-      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason ?? null, true, dateChange).catch((e) =>
+      sendOrderModifiedNotifications(row.order_id, calc.refundUsd, calc.refundArs, parsed.data.reason ?? null, true, dateChange, {
+        origAdults: row.adults, newAdults: parsed.data.adults,
+        origChildren: row.children, newChildren: parsed.data.children,
+        origInfants: row.infants, newInfants: calc.newInfants,
+        origTransferQty: row.transfer_qty, newTransferQty,
+      }).catch((e) =>
         console.error('[email] seller cash reduce notification failed for order', row.order_id, e),
       );
     }

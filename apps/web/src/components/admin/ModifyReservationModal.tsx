@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import AvailabilityCalendar from '../AvailabilityCalendar';
 import Checkbox from '../Checkbox';
 import NumberStepper from '../NumberStepper';
+import TransferSection from '../TransferSection';
+import { zoneForHotel } from '../../lib/hotels';
 import type { SellerMember } from '../../lib/sellerApi';
 import MemberPinGate, { isMemberPinMissing } from '../seller/MemberPinGate';
 
@@ -12,7 +14,15 @@ type ReduceBody = MemberFields & {
   // manda un único email combinado en vez de uno por la reducción y otro por la fecha.
   reschedule_from?: string; reschedule_to?: string;
 };
-type IncreaseBody = MemberFields & { adults: number; children: number; reason?: string; notify_customer?: boolean };
+type IncreaseBody = MemberFields & {
+  adults: number; children: number; infants?: number; reason?: string; notify_customer?: boolean;
+  // Solo si la reserva nunca tuvo traslado -- si ya lo tenía, se extiende solo.
+  add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string;
+};
+type AddMpBody = {
+  adults: number; children: number; infants?: number;
+  add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string;
+};
 type RescheduleBody = MemberFields & { new_date: string; reason?: string; notify_customer?: boolean };
 
 // Handlers de API — el admin y el vendedor pasan los suyos. Los que falten deshabilitan
@@ -21,7 +31,7 @@ export interface ModifyHandlers {
   reduceMp?: (body: ReduceBody) => Promise<unknown>;
   reduceCash?: (body: ReduceBody) => Promise<unknown>;
   increaseCash?: (body: IncreaseBody) => Promise<unknown>;
-  addMp?: (body: { adults: number; children: number }) => Promise<{ init_point: string }>;
+  addMp?: (body: AddMpBody) => Promise<{ init_point: string }>;
   reschedule?: (body: RescheduleBody) => Promise<unknown>;
 }
 
@@ -48,6 +58,10 @@ interface Props {
     service_date: string;
     option_id: number;
     option_name_snapshot: string;
+    // Del tier -- deciden si se puede activar/extender traslado al aumentar pax.
+    transfer_mode: 'none' | 'optional' | 'included';
+    transfer_price_usd: number;
+    transfer_price_usd_palermo: number | null;
   };
   handlers: ModifyHandlers;
   onClose: () => void;
@@ -82,21 +96,34 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const origTransferQty = item.transfer_qty;
   const origInfants = item.infants;
   const infantTransferUsd = Number(item.infant_transfer_usd);
+  const transferMode = item.transfer_mode;
+  // El traslado nunca existió en esta orden -- se puede activar ahora para todo el
+  // grupo (viejo + nuevo) si el tier lo permite. Si ya existía, siempre se extiende
+  // automático al aumentar (no es opcional, ver orderIncrease.ts).
+  const canActivateTransfer = transferMode === 'optional' && origTransferQty === 0;
+  const transferAlreadyActive = origTransferQty > 0;
   // Porción de traslado = lo que se cobró por encima de las entradas, prorrateada
   // por la cantidad REAL de pax que llevaban traslado (no por el total de pax).
   // El cargo de traslado de infantes se guarda congelado aparte (infant_transfer_usd)
   // y se resta ANTES de prorratear el traslado de adultos/menores — mismo split que
-  // hace el backend en orderReduction.ts, así el preview coincide centavo a centavo.
+  // hace el backend en orderReduction.ts/orderIncrease.ts, así el preview coincide
+  // centavo a centavo.
   const ticketsPortion = round2(origAdults * unitAdult + origChildren * (unitChild ?? 0));
   const transferAndInfantPortion = Math.max(0, round2(subtotal - ticketsPortion));
   const transferPortion = Math.max(0, round2(transferAndInfantPortion - infantTransferUsd));
-  const transferPerPax = origTransferQty > 0 ? transferPortion / origTransferQty : 0;
-  const infantTransferPerInfant = origInfants > 0 ? infantTransferUsd / origInfants : 0;
+  const transferPerPaxFrozen = origTransferQty > 0 ? transferPortion / origTransferQty : 0;
+  const infantTransferPerInfantFrozen = origInfants > 0 ? infantTransferUsd / origInfants : 0;
 
   const [adults, setAdults] = useState(origAdults);
   const [children, setChildren] = useState(origChildren);
   const [infants, setInfants] = useState(origInfants);
-  const [transferQty, setTransferQty] = useState(origTransferQty);
+  // Reduce: traslado es todo (newPax) o nada -- nunca una cantidad parcial (mismo
+  // "todo o nada" que rige desde el booking). Reemplaza el viejo stepper numérico.
+  const [transferOn, setTransferOn] = useState(origTransferQty > 0);
+  // Increase, solo si canActivateTransfer: el admin/vendedor decide activarlo ahora.
+  const [addTransfer, setAddTransfer] = useState(false);
+  const [transferHotel, setTransferHotel] = useState('');
+  const [transferRoom, setTransferRoom] = useState('');
   const [newDate, setNewDate] = useState(item.service_date);
   const [reason, setReason] = useState('');
   const [notify, setNotify] = useState(true);
@@ -130,35 +157,125 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     useAdminOverride ? !/^\d{4,6}$/.test(memberPin) : isMemberPinMissing(teamMembers, memberId, memberPin)
   );
 
+  const origPax = origAdults + origChildren;
   const newPax = adults + children;
-  const isIncreasing = newPax > origAdults + origChildren;
+  const wantsFreshTransfer = canActivateTransfer && addTransfer;
+  // Aumenta si suben pax, suben infantes, o se activa el traslado por primera vez
+  // (esto último puede pasar sin tocar ningún número de pasajeros).
+  const isIncreasing = newPax > origPax || infants > origInfants || wantsFreshTransfer;
   const hasDateChange = newDate !== item.service_date;
-  // Al AGREGAR pax, el traslado queda como estaba (no se puede togglear en la misma
-  // operación — los pax nuevos no lo heredan). Al REDUCIR, no puede quedar por encima
-  // del nuevo total de pax.
-  const effectiveTransferQty = isIncreasing ? origTransferQty : Math.min(transferQty, newPax);
-  // Mismo candado que el traslado: al AGREGAR pax los infantes quedan como estaban
-  // (reduce-only, nunca se amplían desde acá).
-  const effectiveInfants = isIncreasing ? origInfants : Math.min(infants, origInfants);
 
-  // No puede haber más pax con traslado que pax totales — se recorta solo.
+  // Infantes: al REDUCIR no pueden superar los originales; al AUMENTAR no pueden
+  // bajar de los originales (nunca se "pierden" infantes agregando pax).
   useEffect(() => {
-    setTransferQty((v) => Math.min(v, newPax));
-  }, [newPax]);
+    setInfants((v) => (isIncreasing ? Math.max(v, origInfants) : Math.min(v, origInfants)));
+  }, [isIncreasing, origInfants]);
+
+  // Zona resuelta del hotel elegido para activar el traslado -- decide si corresponde
+  // el precio de Palermo o el de zona céntrica.
+  const freshTransferZone = zoneForHotel(transferHotel || null);
+  const freshTransferPriceUsd = freshTransferZone === 'palermo' && item.transfer_price_usd_palermo != null
+    ? item.transfer_price_usd_palermo
+    : item.transfer_price_usd;
+
+  // Tipo de cambio implícito de la orden (coherente con el total ya cobrado) -- se usa
+  // para convertir cada línea del desglose a ARS, igual que el delta total.
+  const arsRate = subtotal > 0 ? order.total_ars / subtotal : 0;
 
   const preview = useMemo(() => {
+    const lines: { label: string; usd: number }[] = [];
+    if (isIncreasing) {
+      const extraAdults = adults - origAdults;
+      const extraChildren = children - origChildren;
+      const extraInfants = infants - origInfants;
+      const newTickets = round2(adults * unitAdult + children * (unitChild ?? 0));
+      let newTransferQty = 0;
+      let transferAdded = false;
+      let transferRatePerPax = 0;
+      if (transferMode === 'optional') {
+        if (transferAlreadyActive) {
+          newTransferQty = newPax;
+          transferRatePerPax = transferPerPaxFrozen;
+        } else if (wantsFreshTransfer) {
+          newTransferQty = newPax;
+          transferRatePerPax = freshTransferPriceUsd;
+          transferAdded = true;
+        }
+      } else if (transferMode === 'included') {
+        newTransferQty = newPax;
+      }
+      const newTransferPortion = transferMode === 'optional' ? round2(transferRatePerPax * newTransferQty) : 0;
+      const oldTransferPortion = transferAlreadyActive ? round2(transferPerPaxFrozen * origTransferQty) : 0;
+      const infantTransferApplies = transferMode === 'optional' && newTransferQty > 0;
+      const newInfantTransfer = infantTransferApplies ? round2(transferRatePerPax * infants) : 0;
+      const newSubtotal = round2(newTickets + newTransferPortion + newInfantTransfer);
+      const delta = round2(newSubtotal - subtotal);
+      const deltaArs = subtotal > 0 ? Math.round((Math.abs(delta) / subtotal) * order.total_ars) : 0;
+      const newSubtotalArs = subtotal > 0 ? Math.round((newSubtotal / subtotal) * order.total_ars) : 0;
+
+      if (extraAdults > 0) lines.push({ label: `Adultos: ${origAdults} → ${adults} (+${extraAdults})`, usd: round2(extraAdults * unitAdult) });
+      if (extraChildren > 0) lines.push({ label: `Menores: ${origChildren} → ${children} (+${extraChildren})`, usd: round2(extraChildren * (unitChild ?? 0)) });
+      if (extraInfants > 0) lines.push({ label: `Infantes: ${origInfants} → ${infants} (+${extraInfants}, sin costo de entrada)`, usd: 0 });
+      // Traslado de grupo + traslado de infantes van en UNA sola línea con un único
+      // total -- desglosarlos aparte confunde más de lo que aclara (el infante
+      // siempre viaja con el mismo traslado del grupo, nunca por separado).
+      const transferDeltaUsd = round2(newTransferPortion - oldTransferPortion);
+      const infantTransferDeltaUsd = round2(newInfantTransfer - infantTransferUsd);
+      const combinedTransferDeltaUsd = round2(transferDeltaUsd + infantTransferDeltaUsd);
+      if (transferAdded) {
+        lines.push({ label: `Traslado: se activa para los ${newPax + infants} pasajero${(newPax + infants) !== 1 ? 's' : ''}`, usd: combinedTransferDeltaUsd });
+      } else if (transferMode === 'optional' && transferAlreadyActive && (newTransferQty > origTransferQty || infantTransferDeltaUsd > 0.005)) {
+        lines.push({ label: `Traslado: se extiende a ${newPax + infants} pasajeros`, usd: combinedTransferDeltaUsd });
+      } else if (transferMode === 'included' && newPax > origPax) {
+        lines.push({ label: `Traslado incluido: se extiende a ${newPax} pasajeros (sin cargo)`, usd: 0 });
+      }
+
+      return {
+        newSubtotal, newSubtotalArs, delta, deltaArs, lines,
+        direction: delta > 0.005 ? ('increase' as const) : ('none' as const),
+        transferAdded,
+      };
+    }
+    const removedAdults = origAdults - adults;
+    const removedChildren = origChildren - children;
+    const removedInfants = origInfants - infants;
+    const effectiveTransferQty = transferOn ? Math.min(origTransferQty || newPax, newPax) : 0;
     const newTickets = round2(adults * unitAdult + children * (unitChild ?? 0));
-    const newTransfer = round2(transferPerPax * effectiveTransferQty);
-    const newInfantTransfer = round2(infantTransferPerInfant * effectiveInfants);
+    const newTransfer = round2(transferPerPaxFrozen * effectiveTransferQty);
+    // Si se cancela el traslado del grupo, el de infantes se cancela junto (no puede
+    // quedar cobrándose un traslado de infante para un grupo que ya no lo tiene).
+    const newInfantTransfer = effectiveTransferQty > 0 ? round2(infantTransferPerInfantFrozen * infants) : 0;
     const newSubtotal = round2(newTickets + newTransfer + newInfantTransfer);
     const delta = round2(newSubtotal - subtotal);
     const deltaArs = subtotal > 0 ? Math.round((Math.abs(delta) / subtotal) * order.total_ars) : 0;
     const newSubtotalArs = subtotal > 0 ? Math.round((newSubtotal / subtotal) * order.total_ars) : 0;
-    let direction: 'none' | 'reduce' | 'increase' = 'none';
-    if (delta < -0.005) direction = 'reduce';
-    else if (delta > 0.005) direction = 'increase';
-    return { newSubtotal, newSubtotalArs, delta, deltaArs, direction };
-  }, [adults, children, effectiveTransferQty, effectiveInfants, unitAdult, unitChild, transferPerPax, infantTransferPerInfant, subtotal, order.total_ars]);
+
+    if (removedAdults > 0) lines.push({ label: `Adultos: ${origAdults} → ${adults} (-${removedAdults})`, usd: -round2(removedAdults * unitAdult) });
+    if (removedChildren > 0) lines.push({ label: `Menores: ${origChildren} → ${children} (-${removedChildren})`, usd: -round2(removedChildren * (unitChild ?? 0)) });
+    if (removedInfants > 0) lines.push({ label: `Infantes: ${origInfants} → ${infants} (-${removedInfants})`, usd: 0 });
+    // Traslado de grupo + traslado de infantes en UNA sola línea con un único total
+    // (el infante siempre viaja con el mismo traslado del grupo, nunca aparte).
+    const transferDeltaUsd = round2(newTransfer - transferPortion);
+    const infantTransferDeltaUsd = round2(newInfantTransfer - infantTransferUsd);
+    const combinedTransferDeltaUsd = round2(transferDeltaUsd + infantTransferDeltaUsd);
+    if (combinedTransferDeltaUsd < -0.005) {
+      lines.push({
+        label: transferOn ? `Traslado: ${origTransferQty} → ${effectiveTransferQty} pasajeros` : `Traslado: cancelado (antes ${origTransferQty} pasajeros)`,
+        usd: combinedTransferDeltaUsd,
+      });
+    }
+
+    return {
+      newSubtotal, newSubtotalArs, delta, deltaArs, lines,
+      direction: delta < -0.005 ? ('reduce' as const) : ('none' as const),
+      transferAdded: false,
+    };
+  }, [
+    isIncreasing, adults, children, infants, unitAdult, unitChild, subtotal, order.total_ars,
+    transferMode, transferAlreadyActive, wantsFreshTransfer, transferPerPaxFrozen, freshTransferPriceUsd,
+    newPax, transferOn, origTransferQty, infantTransferPerInfantFrozen, origAdults, origChildren, origInfants,
+    origPax, transferPortion, infantTransferUsd,
+  ]);
 
   const isMp = order.payment_method === 'mercadopago';
   const phoneDigits = (order.customer_phone ?? '').replace(/\D/g, '');
@@ -196,6 +313,8 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         });
       }
       if (preview.direction === 'reduce') {
+        const effectiveTransferQty = transferOn ? Math.min(origTransferQty || newPax, newPax) : 0;
+        const effectiveInfants = Math.min(infants, origInfants);
         const body: ReduceBody = {
           adults, children, transfer_qty: effectiveTransferQty, infants: effectiveInfants, reason: reason.trim() || undefined, notify_customer: notify,
           ...(combiningWithReduce ? { reschedule_from: item.service_date, reschedule_to: newDate } : {}),
@@ -206,13 +325,21 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         await fn(body);
         onDone();
       } else if (preview.direction === 'increase') {
+        const transferFields = wantsFreshTransfer
+          ? {
+              add_transfer: true as const,
+              transfer_zone: freshTransferZone,
+              transfer_hotel: transferHotel || undefined,
+              transfer_room: transferRoom || undefined,
+            }
+          : {};
         if (isMp) {
           if (!handlers.addMp) { setError('Esta operación no está disponible.'); return; }
-          const r = await handlers.addMp({ adults, children });
+          const r = await handlers.addMp({ adults, children, infants, ...transferFields });
           setMpLink(r.init_point);
         } else {
           if (!handlers.increaseCash) { setError('Esta operación no está disponible.'); return; }
-          await handlers.increaseCash({ adults, children, reason: reason.trim() || undefined, notify_customer: notify, ...memberFields });
+          await handlers.increaseCash({ adults, children, infants, ...transferFields, reason: reason.trim() || undefined, notify_customer: notify, ...memberFields });
           onDone();
         }
       } else if (hasDateChange) {
@@ -305,34 +432,70 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
           </div>
 
-          {origInfants > 0 && (
-            <div className={isIncreasing ? 'opacity-40 pointer-events-none' : ''}>
-              <NumberStepper
-                label="Infantes"
-                value={effectiveInfants}
-                min={0}
-                max={origInfants}
-                onChange={setInfants}
-                decrementLabel="menos"
-                incrementLabel="más"
-              />
-              {isIncreasing && <p className="mt-1 text-xs text-cream/40">No se puede modificar infantes al agregar pax.</p>}
+          {(origInfants > 0 || isIncreasing) && (
+            <NumberStepper
+              label="Infantes"
+              value={infants}
+              min={isIncreasing ? origInfants : 0}
+              max={isIncreasing ? 20 : origInfants}
+              onChange={setInfants}
+              decrementLabel="menos"
+              incrementLabel="más"
+            />
+          )}
+
+          {/* Traslado -- REDUCIR: toggle Sí/No (todo o nada, nunca una cantidad parcial) */}
+          {!isIncreasing && transferAlreadyActive && (
+            <div>
+              <span className="block text-sm text-cream/80 mb-1.5">Traslado</span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setTransferOn(true)}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition ${transferOn ? 'bg-gold text-ink' : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'}`}
+                >
+                  Mantener
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTransferOn(false)}
+                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition ${!transferOn ? 'bg-bordeaux-light text-ink' : 'bg-ink/40 text-cream/60 border border-gold/20 hover:border-gold/40'}`}
+                >
+                  Cancelar traslado
+                </button>
+              </div>
+              {!transferOn && (
+                <p className="mt-1.5 text-xs text-cream/40">
+                  Se cancela el traslado para los {newPax} pasajero{newPax !== 1 ? 's' : ''}{infants > 0 ? ' (incluidos los infantes)' : ''}.
+                </p>
+              )}
             </div>
           )}
 
-          {origTransferQty > 0 && (
-            <div className={isIncreasing ? 'opacity-40 pointer-events-none' : ''}>
-              <NumberStepper
-                label={`Traslado (de ${newPax} pasajero${newPax !== 1 ? 's' : ''})`}
-                value={effectiveTransferQty}
-                min={0}
-                max={Math.min(origTransferQty, newPax)}
-                onChange={setTransferQty}
-                decrementLabel="menos"
-                incrementLabel="más"
-              />
-              {isIncreasing && <p className="mt-1 text-xs text-cream/40">No se puede modificar el traslado al agregar pax.</p>}
-            </div>
+          {/* Traslado -- AUMENTAR: si ya estaba activo se extiende solo; si el tier lo
+              permite y no lo tenía, se puede activar ahora para todo el grupo. */}
+          {isIncreasing && transferAlreadyActive && transferMode === 'optional' && (
+            <p className="text-xs text-gold-soft">
+              🚐 El traslado ya activo se extiende automáticamente a los {newPax} pasajeros del grupo (se cobra la parte de los nuevos).
+            </p>
+          )}
+          {isIncreasing && transferAlreadyActive && transferMode === 'included' && (
+            <p className="text-xs text-cream/40">🚐 El traslado sigue incluido para todo el grupo, sin cargo aparte.</p>
+          )}
+          {isIncreasing && canActivateTransfer && (
+            <TransferSection
+              totalPax={newPax + infants}
+              hotel={transferHotel}
+              room={transferRoom}
+              onHotelChange={setTransferHotel}
+              onRoomChange={setTransferRoom}
+              included={false}
+              wanted={addTransfer}
+              onWantedChange={setAddTransfer}
+              pricePerPax={freshTransferPriceUsd}
+              hasZonePricing={item.transfer_price_usd_palermo != null}
+              zone={freshTransferZone}
+            />
           )}
 
           {/* Preview del delta */}
@@ -376,6 +539,21 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
               <p className="text-sm text-bordeaux-light">
                 Las ampliaciones de reservas pagadas con tarjeta las gestiona el administrador. Pedile al cliente que se contacte con nosotros.
               </p>
+            )}
+
+            {/* Desglose línea por línea de qué cambió y cuánto suma/resta cada cosa --
+                sin esto no queda claro si lo que se movió fue pax, traslado, o ambos. */}
+            {preview.lines.length > 0 && ((preview.direction === 'increase' && !increaseBlocked) || (preview.direction === 'reduce' && !reduceBlocked)) && (
+              <div className="mt-2 pt-2 border-t border-cream/10 space-y-1">
+                {preview.lines.map((line, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="text-cream/60">{line.label}</span>
+                    <span className={line.usd > 0 ? 'text-gold' : line.usd < 0 ? 'text-bordeaux-light' : 'text-cream/40'}>
+                      {line.usd === 0 ? 'sin costo' : `${line.usd > 0 ? '+' : '-'}${fmtArs(Math.round(Math.abs(line.usd) * arsRate))}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 

@@ -66,6 +66,9 @@ interface OrderFull {
     transfer_room: string | null;
     infants: number;
     infant_transfer_usd: string;
+    transfer_mode: 'none' | 'optional' | 'included';
+    transfer_price_usd: number;
+    transfer_price_usd_palermo: number | null;
   }>;
   events: Array<{
     id: number;
