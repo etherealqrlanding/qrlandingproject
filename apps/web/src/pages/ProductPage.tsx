@@ -695,6 +695,15 @@ function OptionCard({
           {transferUsd > 0 && zoneRange.hasZonePricing && (
             <p className="text-[10px] text-cream/40 italic">{t('product.transfer_zone_note', { centro: option.transfer_price_usd, palermo: option.transfer_price_usd_palermo })}</p>
           )}
+          {option.transfer_mode === 'included' && (
+            <div className="flex items-center justify-between text-xs text-cream/60">
+              <span>{t('checkout.transfer')} ({totalPax} pax)</span>
+              <span className="text-emerald-400">{t('product.transfer_included_free')}</span>
+            </div>
+          )}
+          {option.transfer_mode === 'included' && (
+            <p className="text-[10px] text-cream/40 italic">{t('product.transfer_included_note')}</p>
+          )}
         </div>
 
         <div className="mt-2 pt-2 border-t border-gold/10 flex items-end justify-between gap-3">

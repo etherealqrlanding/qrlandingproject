@@ -508,7 +508,9 @@ sellerRouter.post('/me/checkout', async (req, res, next) => {
       : 0;
     const pax = input.adults + input.children;
     // Todo o nada: cualquier transfer_qty > 0 recibido significa "sí quiero traslado".
-    const transferQty = option.transfer_mode === 'included' ? pax
+    // 'included' no cobra distinto, pero el cliente igual puede rechazarlo; si no
+    // manda nada se asume que sí (compatibilidad con clientes viejos).
+    const transferQty = option.transfer_mode === 'included' ? ((input.transfer_qty == null || input.transfer_qty > 0) ? pax : 0)
       : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? pax : 0)
       : 0;
     const transferSubtotal = option.transfer_mode === 'optional'

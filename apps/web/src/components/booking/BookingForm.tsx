@@ -57,9 +57,10 @@ export default function BookingForm({
   );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  // Solo relevante para transfer_mode === 'optional' — 'included' no pregunta
-  // (va gratis para todos) y 'none' no tiene traslado.
-  const [transferWanted, setTransferWanted] = useState(false);
+  // 'none' no tiene traslado. 'optional' arranca en "No" (el pasajero decide si lo
+  // suma, con costo aparte). 'included' arranca en "Sí" (ya viene sin costo, se
+  // puede rechazar si no lo necesita).
+  const [transferWanted, setTransferWanted] = useState(option.transfer_mode === 'included');
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   // Monto que se le cobra al pasajero en efectivo. Es SOLO referencia visual para el
@@ -142,11 +143,10 @@ export default function BookingForm({
 
   const totalPax = form.adults + form.children;
   // El traslado, cuando se suma, es siempre todo o nada: todos los pax de la
-  // reserva, nunca una cantidad parcial. 'included' va gratis para todos sin
-  // preguntar; 'optional' depende del Sí/No que eligió quien reserva.
-  const transferQty = option.transfer_mode === 'included' ? totalPax
-    : option.transfer_mode === 'optional' ? (transferWanted ? totalPax : 0)
-    : 0;
+  // reserva, nunca una cantidad parcial. 'included' no cambia de precio según la
+  // respuesta, pero igual se puede rechazar (no cargar hotel); 'optional' depende
+  // del Sí/No que eligió quien reserva.
+  const transferQty = option.transfer_mode !== 'none' && transferWanted ? totalPax : 0;
 
   // Zona de traslado según el hotel elegido — antes de elegirlo (o si la casa no
   // distingue por zona) se usa la zona base como estimado.

@@ -69,9 +69,10 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
   );
   const [cutoffTime, setCutoffTime] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
-  // Solo relevante para transfer_mode === 'optional' — 'included' no pregunta
-  // (va gratis para todos) y 'none' no tiene traslado.
-  const [transferWanted, setTransferWanted] = useState(initialTransferWanted ?? false);
+  // 'none' no tiene traslado, así que este estado no aplica. 'optional' arranca en
+  // "No" (el cliente decide si lo suma, con costo aparte). 'included' arranca en
+  // "Sí" (ya viene sin costo, el cliente puede rechazarlo si no lo necesita).
+  const [transferWanted, setTransferWanted] = useState(initialTransferWanted ?? (option.transfer_mode === 'included'));
   const [transferHotel, setTransferHotel] = useState('');
   const [transferRoom, setTransferRoom] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -172,11 +173,11 @@ export default function CheckoutForm({ product, option, onClose, initialPaymentM
 
   const totalPax = form.adults + form.children;
   // El traslado, cuando se suma, es siempre todo o nada: todos los pax de la
-  // reserva, nunca una cantidad parcial. 'included' va gratis para todos sin
-  // preguntar; 'optional' depende del Sí/No que eligió el cliente.
-  const transferQty = option.transfer_mode === 'included' ? totalPax
-    : option.transfer_mode === 'optional' ? (transferWanted ? totalPax : 0)
-    : 0;
+  // reserva, nunca una cantidad parcial. 'included' no cambia de precio según la
+  // respuesta, pero el pasajero igual puede no usarlo (no cargar hotel); 'optional'
+  // depende del Sí/No que eligió el cliente. Ambos casos usan el mismo estado
+  // `transferWanted` (arranca en true para included, false para optional).
+  const transferQty = option.transfer_mode !== 'none' && transferWanted ? totalPax : 0;
 
   // Zona de traslado según el hotel elegido — antes de elegirlo (o si la casa no
   // distingue por zona) se usa la zona base como estimado.

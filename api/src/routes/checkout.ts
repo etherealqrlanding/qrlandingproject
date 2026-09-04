@@ -202,11 +202,12 @@ async function prepareCheckoutHold(
         : Number.parseFloat(option.transfer_price_usd ?? '0'))
     : 0;
   const pax = input.adults + input.children;
-  // El traslado es todo o nada, nunca una cantidad parcial: 'included' aplica a
-  // todos los pax sin preguntar; 'optional' depende del Sí/No del cliente
-  // (cualquier transfer_qty > 0 recibido se interpreta como "sí", nunca se toma
-  // el número tal cual — no hay forma de comprar traslado para una parte del grupo).
-  const transferQty = option.transfer_mode === 'included' ? pax
+  // El traslado es todo o nada, nunca una cantidad parcial: 'optional' depende del
+  // Sí/No del cliente (cualquier transfer_qty > 0 recibido se interpreta como "sí",
+  // nunca se toma el número tal cual). 'included' no cobra distinto según la
+  // respuesta, pero el cliente igual puede rechazarlo (no necesita el pickup) --
+  // si no manda nada, se asume que sí lo quiere (compatibilidad con clientes viejos).
+  const transferQty = option.transfer_mode === 'included' ? ((input.transfer_qty == null || input.transfer_qty > 0) ? pax : 0)
     : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? pax : 0)
     : 0;
   const transferSubtotal = option.transfer_mode === 'optional'
@@ -691,7 +692,9 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       : 0;
     const paxCash = input.adults + input.children;
     // Todo o nada: cualquier transfer_qty > 0 recibido significa "sí quiero traslado".
-    const transferQtyCash = option.transfer_mode === 'included' ? paxCash
+    // 'included' no cobra distinto, pero el cliente igual puede rechazarlo; si no
+    // manda nada se asume que sí (compatibilidad con clientes viejos).
+    const transferQtyCash = option.transfer_mode === 'included' ? ((input.transfer_qty == null || input.transfer_qty > 0) ? paxCash : 0)
       : option.transfer_mode === 'optional' ? ((input.transfer_qty ?? 0) > 0 ? paxCash : 0)
       : 0;
     const transferSubtotalCash = option.transfer_mode === 'optional'

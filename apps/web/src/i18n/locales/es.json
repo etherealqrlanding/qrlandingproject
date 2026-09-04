@@ -142,6 +142,8 @@
     "transfer_not_added": "Sin traslado",
     "transfer_from": "desde",
     "transfer_zone_note": "El precio del traslado depende de la zona de tu hotel: USD {{centro}}/pax en zona céntrica (Recoleta, Puerto Madero, San Telmo, Constitución) o USD {{palermo}}/pax en Palermo — se confirma al elegir tu hotel en el checkout.",
+    "transfer_included_free": "Sin costo",
+    "transfer_included_note": "Podés elegir si lo usás al completar la reserva.",
     "infant_transfer_note": "Los infantes no pagan entrada, pero sí pagan traslado si lo sumás.",
     "includes_title": "Incluye",
     "menu_view": "Ver menú",

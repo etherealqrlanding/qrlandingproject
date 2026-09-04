@@ -118,6 +118,7 @@ export async function adminGetProduct(id: number) {
     net_price_child_usd: num(o.net_price_child_usd),
     net_transfer_price_usd: num(o.net_transfer_price_usd),
     transfer_price_usd: num(o.transfer_price_usd),
+    transfer_price_usd_palermo: num(o.transfer_price_usd_palermo),
     net_price_adult_ars: num(o.net_price_adult_ars),
     net_price_child_ars: num(o.net_price_child_ars),
     net_transfer_price_ars: num(o.net_transfer_price_ars),
