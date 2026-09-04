@@ -28,7 +28,7 @@ import { createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
 import { getExchangeRate, getBaseExchangeRate, getExchangeRateMode, convertUsdToArs, getModifyWindow, getCancelWindow, getSameDayCutoff, getArchiveRetentionDays, checkOperationWindow, getSellerKindBaseCommission } from '../../services/settings.js';
 import { computeEffectiveCommissionPercentForCatalog, NULL_KIND_BUCKET } from '../../services/commission.js';
-import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError } from '../../repos/orders.js';
+import { createPendingOrder, setOrderPreferenceId, setOrderPixCharge, logPaymentEvent, applyOrderReduction, listSellerArchive, restoreFromSellerArchive, archiveBySeller, ConcurrentModificationError, updateTransferHotel } from '../../repos/orders.js';
 import { getSellerFaq } from '../../services/content.js';
 import { listNotifications, markAllRead, getUnreadCount, deleteNotification, notifyAdminsNewOrderPaid } from '../../repos/notifications.js';
 import { checkSingleDateAvailability, checkAvailabilityTxLocked } from '../../repos/availability.js';
@@ -1039,6 +1039,35 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
     ).catch((e) => console.error('[email] cash addon pending notification failed for order', result.orderId, e));
 
     res.json({ data: result.data });
+  } catch (err) { next(err); }
+});
+
+// POST /api/seller/me/orders/:publicId/transfer-hotel — corrige el hotel/habitación de un
+// traslado ya activo de una orden suya. No toca precio ni pasajeros.
+const sellerTransferHotelSchema = z.object({
+  hotel: z.string().min(1).max(200),
+  room: z.string().max(80).optional().nullable(),
+  seller_member_id: z.number().int().positive().optional(),
+  seller_member_pin: z.string().regex(/^\d{4,6}$/).optional(),
+  admin_pin: z.string().regex(/^\d{4,6}$/).optional(),
+});
+
+sellerRouter.post('/me/orders/:publicId/transfer-hotel', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'ID inválido' });
+    const parsed = sellerTransferHotelSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Datos inválidos', details: parsed.error.flatten() });
+
+    const memberCheck = await resolveMemberOrAdmin(req.seller!.sellerId, parsed.data);
+    if (!memberCheck.ok) return res.status(memberCheck.httpStatus).json({ error: memberCheck.error });
+
+    const result = await updateTransferHotel({
+      orderPublicId: publicId, hotel: parsed.data.hotel, room: parsed.data.room,
+      restrictSellerId: req.seller!.sellerId,
+    });
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: { ok: true, transfer_hotel: result.hotel, transfer_room: result.room } });
   } catch (err) { next(err); }
 });
 

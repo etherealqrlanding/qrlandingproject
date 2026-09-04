@@ -592,6 +592,9 @@ export interface PendingAddon {
   charge_ars: number;
   mp_init_point: string | null;
   created_at: string;
+  add_transfer: boolean;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
 }
 
 // Devuelve la URL del stream SSE con el token actual como query param (EventSource
@@ -921,6 +924,11 @@ export const adminApi = {
     reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean }) =>
       request<{ ok: true; prev_date: string; new_date: string }>(
         `/api/admin/orders/${encodeURIComponent(publicId)}/reschedule`,
+        { method: 'POST', body: JSON.stringify(body) },
+      ),
+    updateTransferHotel: (publicId: string, body: { hotel: string; room?: string | null }) =>
+      request<{ ok: true; transfer_hotel: string; transfer_room: string | null }>(
+        `/api/admin/orders/${encodeURIComponent(publicId)}/transfer-hotel`,
         { method: 'POST', body: JSON.stringify(body) },
       ),
     addons: (publicId: string) =>

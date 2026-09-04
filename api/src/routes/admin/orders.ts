@@ -6,7 +6,7 @@ import { RouteValidationError } from '../../errors.js';
 import { refundPayment, createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
 import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendCashAddonPendingNotifications, sendFreeOrderUpdateNotifications, sendPaymentLinkEmail } from '../../services/email.js';
-import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId, setOrderPixCharge } from '../../repos/orders.js';
+import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId, setOrderPixCharge, updateTransferHotel } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createAddonForOrder, createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -1295,6 +1295,26 @@ adminOrdersRouter.post('/:publicId/sync-mp', async (req, res, next) => {
       return res.status(404).json({ error: 'No se encontró ningún pago en Mercado Pago para esta orden. Si el cobro no se completó, la orden no debería figurar como pagada.' });
     }
     res.json({ data: { ok: true, status: result.status } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/admin/orders/:publicId/transfer-hotel — corrige el hotel/habitación de un
+// traslado ya activo. No toca precio ni pasajeros.
+const transferHotelSchema = z.object({
+  hotel: z.string().min(1).max(200),
+  room: z.string().max(80).optional().nullable(),
+});
+
+adminOrdersRouter.post('/:publicId/transfer-hotel', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const parsed = transferHotelSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
+
+    const result = await updateTransferHotel({ orderPublicId: publicId, hotel: parsed.data.hotel, room: parsed.data.room });
+    if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+    res.json({ data: { ok: true, transfer_hotel: result.hotel, transfer_room: result.room } });
   } catch (err) { next(err); }
 });
 

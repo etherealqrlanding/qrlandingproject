@@ -289,6 +289,9 @@ export interface SellerPendingAddon {
   charge_usd: number;
   charge_ars: number;
   created_at: string;
+  add_transfer: boolean;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
 }
 
 export interface SellerCommission {
@@ -519,6 +522,11 @@ export const sellerApi = {
   reschedule: (publicId: string, body: { new_date: string; reason?: string; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
     request<{ ok: true; prev_date: string; new_date: string }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/reschedule`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  updateTransferHotel: (publicId: string, body: { hotel: string; room?: string | null; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
+    request<{ ok: true; transfer_hotel: string; transfer_room: string | null }>(
+      `/api/seller/me/orders/${encodeURIComponent(publicId)}/transfer-hotel`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
   cancelOrder: (publicId: string, reason?: string, member?: { seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>

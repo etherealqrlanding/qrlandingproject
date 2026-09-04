@@ -547,6 +547,55 @@ export async function applyFreeOrderChange(input: FreeOrderChangeInput): Promise
   );
 }
 
+export type UpdateTransferHotelResult =
+  | { ok: true; orderId: number; hotel: string; room: string | null }
+  | { ok: false; httpStatus: number; error: string };
+
+/**
+ * Cambia el hotel/habitación de un traslado YA ACTIVO -- no toca precio ni pax, solo
+ * el punto de encuentro. Sirve tanto para corregir un dato mal cargado por el cliente
+ * como para que el vendedor lo actualice si el pasajero cambió de hotel.
+ */
+export async function updateTransferHotel(params: {
+  orderPublicId: string;
+  hotel: string;
+  room?: string | null;
+  restrictSellerId?: number;
+}): Promise<UpdateTransferHotelResult> {
+  const { rows } = await pool.query<{
+    order_id: number; status: string; item_id: number; transfer_qty: number; seller_id: number | null;
+  }>(
+    `SELECT o.id AS order_id, o.status::text AS status, oi.id AS item_id, oi.transfer_qty,
+            a.seller_id
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       LEFT JOIN order_attributions a ON a.order_id = o.id
+      WHERE o.public_id = $1
+      ORDER BY oi.id
+      LIMIT 1`,
+    [params.orderPublicId],
+  );
+  const row = rows[0];
+  if (!row) return { ok: false, httpStatus: 404, error: 'Reserva no encontrada' };
+  if (params.restrictSellerId != null && row.seller_id !== params.restrictSellerId) {
+    return { ok: false, httpStatus: 404, error: 'Reserva no encontrada' };
+  }
+  if (!['pending', 'paid'].includes(row.status)) {
+    return { ok: false, httpStatus: 400, error: `No se puede modificar el hotel de una reserva en estado "${row.status}".` };
+  }
+  if (row.transfer_qty === 0) {
+    return { ok: false, httpStatus: 400, error: 'Esta reserva no tiene traslado activo.' };
+  }
+  const hotel = params.hotel.trim();
+  if (!hotel) return { ok: false, httpStatus: 400, error: 'Elegí un hotel de la lista.' };
+  const room = params.room?.trim() || null;
+
+  await pool.query(`UPDATE order_items SET transfer_hotel = $1, transfer_room = $2 WHERE id = $3`, [hotel, room, row.item_id]);
+  await logPaymentEvent(row.order_id, 'transfer_hotel_updated', null, { hotel, room });
+
+  return { ok: true, orderId: row.order_id, hotel, room };
+}
+
 export interface OrderIncreaseInput {
   orderId: number;
   itemId: number;

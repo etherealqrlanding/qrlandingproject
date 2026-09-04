@@ -350,6 +350,12 @@ export interface PendingAddon {
   charge_ars: number;
   mp_init_point: string | null;
   created_at: string;
+  // Traslado que se activa recién al cobrarse este addon -- hoy no se ve en ningún
+  // lado hasta que se cobra/paga (queda solo en order_addons), así que hay que
+  // mostrarlo acá para que quede claro qué hotel se cargó mientras está pendiente.
+  add_transfer: boolean;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
 }
 
 /** Addons PENDIENTES de una orden (por public_id de la orden), para surface + cobro/cancelación. */
@@ -363,7 +369,8 @@ export async function listPendingAddonsByOrderPublicId(orderPublicId: string, se
   const { rows } = await pool.query<PendingAddon>(
     `SELECT ad.public_id, ad.payment_method, ad.extra_adults, ad.extra_children,
             ad.charge_usd::float AS charge_usd, ad.charge_ars::float AS charge_ars,
-            ad.mp_init_point, ad.created_at
+            ad.mp_init_point, ad.created_at,
+            ad.add_transfer, ad.transfer_hotel, ad.transfer_room
        FROM order_addons ad
        JOIN orders o ON o.id = ad.order_id
        ${sellerJoin}

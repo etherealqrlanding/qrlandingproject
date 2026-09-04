@@ -412,6 +412,11 @@ export default function SellerOrders() {
               <strong className="text-gold"> {fmtArs(ad.charge_ars)}</strong>
               <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Tarjeta'}</span>
             </p>
+            {ad.add_transfer && (
+              <p className="mt-1 text-xs text-gold-soft">
+                🚐 Traslado a activar: {ad.transfer_hotel ?? 'sin hotel elegido'}{ad.transfer_room ? ` · Hab. ${ad.transfer_room}` : ''}
+              </p>
+            )}
             {ad.payment_method === 'cash' ? (
               <div className="mt-2 flex gap-2">
                 <button type="button" onClick={(e) => { e.stopPropagation(); requestAddonAction(o.public_id, ad.public_id, 'collect'); }}
@@ -565,6 +570,8 @@ export default function SellerOrders() {
           unit_price_child_usd: modifyOrder.unit_price_child_usd != null ? String(modifyOrder.unit_price_child_usd) : null,
           subtotal_usd: String(modifyOrder.subtotal_usd),
           transfer_qty: modifyOrder.transfer_qty,
+          transfer_hotel: modifyOrder.transfer_hotel,
+          transfer_room: modifyOrder.transfer_room,
           infants: modifyOrder.infants,
           infant_transfer_usd: String(modifyOrder.infant_transfer_usd),
           transfer_mode: modifyOrder.transfer_mode,
@@ -581,6 +588,7 @@ export default function SellerOrders() {
           ...(modifyOrder.payment_method !== 'mercadopago'
             ? { reschedule: (body) => sellerApi.reschedule(modifyOrder.public_id, body) }
             : {}),
+          updateTransferHotel: (body) => sellerApi.updateTransferHotel(modifyOrder.public_id, body),
         }}
         members={members}
         unlockedMember={unlockedMembers[modifyOrder.public_id] ?? null}

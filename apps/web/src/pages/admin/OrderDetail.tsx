@@ -473,6 +473,11 @@ export default function OrderDetail() {
                     <strong className="text-gold"> {fmtArs(ad.charge_ars)}</strong>
                     <span className="text-cream/40 text-xs"> · {ad.payment_method === 'cash' ? 'Efectivo' : 'Tarjeta'}</span>
                   </p>
+                  {ad.add_transfer && (
+                    <p className="mt-1 text-xs text-gold-soft">
+                      🚐 Traslado a activar: {ad.transfer_hotel ?? 'sin hotel elegido'}{ad.transfer_room ? ` · Hab. ${ad.transfer_room}` : ''}
+                    </p>
+                  )}
                   {ad.payment_method === 'cash' ? (
                     <div className="mt-3 flex gap-2">
                       <button type="button" onClick={() => handleCollectAddon(ad.public_id)} disabled={addonBusy === ad.public_id}
@@ -697,6 +702,7 @@ export default function OrderDetail() {
             increaseCash: (body) => adminApi.orders.increaseCash(order.public_id, body),
             addMp: (body) => adminApi.orders.addMp(order.public_id, body),
             reschedule: (body) => adminApi.orders.reschedule(order.public_id, body),
+            updateTransferHotel: (body) => adminApi.orders.updateTransferHotel(order.public_id, body),
           }}
           onClose={() => setModifyOpen(false)}
           onDone={() => { setModifyOpen(false); load(); }}

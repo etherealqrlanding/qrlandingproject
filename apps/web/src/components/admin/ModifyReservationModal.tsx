@@ -3,6 +3,7 @@ import AvailabilityCalendar from '../AvailabilityCalendar';
 import Checkbox from '../Checkbox';
 import NumberStepper from '../NumberStepper';
 import TransferSection from '../TransferSection';
+import HotelPicker from '../HotelPicker';
 import { zoneForHotel } from '../../lib/hotels';
 import type { SellerMember } from '../../lib/sellerApi';
 import MemberPinGate, { isMemberPinMissing } from '../seller/MemberPinGate';
@@ -24,6 +25,7 @@ type AddMpBody = {
   add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string;
 };
 type RescheduleBody = MemberFields & { new_date: string; reason?: string; notify_customer?: boolean };
+type UpdateHotelBody = MemberFields & { hotel: string; room?: string | null };
 
 // Handlers de API — el admin y el vendedor pasan los suyos. Los que falten deshabilitan
 // esa operación (ej. el vendedor NO puede reintegrar por MP → reduceMp ausente).
@@ -35,6 +37,9 @@ export interface ModifyHandlers {
   // activar un traslado incluido sin costo -- ya se aplicó solo, no hay link que pagar.
   addMp?: (body: AddMpBody) => Promise<{ init_point?: string; appliedImmediately?: boolean }>;
   reschedule?: (body: RescheduleBody) => Promise<unknown>;
+  // Corrige el hotel/habitación de un traslado ya activo -- no toca precio ni pax,
+  // disponible tanto para el admin como para el vendedor (no depende del medio de pago).
+  updateTransferHotel?: (body: UpdateHotelBody) => Promise<unknown>;
 }
 
 interface Props {
@@ -55,6 +60,8 @@ interface Props {
     unit_price_child_usd: string | null;
     subtotal_usd: string;
     transfer_qty: number;
+    transfer_hotel?: string | null;
+    transfer_room?: string | null;
     infants: number;
     infant_transfer_usd: string;
     service_date: string;
@@ -134,6 +141,15 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const [error, setError] = useState<string | null>(null);
   const [mpLink, setMpLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Corregir el hotel de un traslado que YA está activo -- acción aparte del resto
+  // (no toca precio ni pax), así que tiene su propio estado y se guarda al toque,
+  // sin pasar por el flujo de confirmar arriba.
+  const [editingHotel, setEditingHotel] = useState(false);
+  const [editHotel, setEditHotel] = useState(item.transfer_hotel ?? '');
+  const [editRoom, setEditRoom] = useState(item.transfer_room ?? '');
+  const [hotelSaving, setHotelSaving] = useState(false);
+  const [hotelSaveError, setHotelSaveError] = useState<string | null>(null);
 
   // Equipo cargado → hay que identificarse con PIN antes de poder confirmar cualquier
   // cambio, salvo que ya se haya validado antes para esta orden (unlockedMember). Si la
@@ -383,6 +399,22 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     }
   };
 
+  const saveHotel = async () => {
+    if (!handlers.updateTransferHotel) return;
+    if (memberMissing) { setHotelSaveError('Elegí quién sos y tu PIN para confirmar el cambio.'); return; }
+    setHotelSaving(true);
+    setHotelSaveError(null);
+    try {
+      await handlers.updateTransferHotel({ hotel: editHotel.trim(), room: editRoom.trim() || undefined, ...memberFields });
+      setEditingHotel(false);
+      onDone();
+    } catch (err) {
+      setHotelSaveError((err as Error).message);
+    } finally {
+      setHotelSaving(false);
+    }
+  };
+
   const copyLink = async () => {
     if (!mpLink) return;
     try {
@@ -429,7 +461,7 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           <p className="text-xs uppercase tracking-[0.3em] text-gold-soft">Modificar reserva</p>
           <h2 className="mt-2 font-display text-2xl text-cream">{item.option_name_snapshot}</h2>
           <p className="mt-1 text-sm text-cream/50">
-            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origInfants > 0 ? ` · ${origInfants} inf` : ''}{origTransferQty > 0 ? ` · traslado ${origTransferQty}/${origAdults + origChildren}` : ''} — {fmtArs(order.total_ars)}
+            Actual: {origAdults} ad{origChildren > 0 ? ` · ${origChildren} men` : ''}{origInfants > 0 ? ` · ${origInfants} inf` : ''}{origTransferQty > 0 ? ` · traslado ${origTransferQty}/${origAdults + origChildren}${transferMode === 'optional' ? ` (USD ${round2(transferPerPaxFrozen)}/pax)` : ''}` : ''} — {fmtArs(order.total_ars)}
           </p>
         </header>
 
@@ -504,12 +536,61 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
               permite y no lo tenía, se puede activar ahora para todo el grupo. */}
           {isIncreasing && transferAlreadyActive && transferMode === 'optional' && (
             <p className="text-xs text-gold-soft">
-              🚐 El traslado ya activo se extiende automáticamente a los {newPax} pasajeros del grupo (se cobra la parte de los nuevos).
+              🚐 El traslado ya activo se extiende automáticamente a los {newPax} pasajeros del grupo — se cobra la parte de los nuevos a <strong>USD {round2(transferPerPaxFrozen)}/pax</strong> ({fmtArs(Math.round(transferPerPaxFrozen * arsRate))}/pax).
             </p>
           )}
           {isIncreasing && transferAlreadyActive && transferMode === 'included' && (
             <p className="text-xs text-cream/40">🚐 El traslado sigue incluido para todo el grupo, sin cargo aparte.</p>
           )}
+
+          {/* Traslado ya activo: mostrar (y permitir corregir) el hotel/habitación que
+              cargó el cliente -- el vendedor puede necesitar cambiarlo si el pasajero
+              se mudó de hotel o lo tipeó mal. No afecta precio ni pax, se guarda solo. */}
+          {transferAlreadyActive && (
+            <div className="rounded-lg border border-gold/15 bg-ink/30 p-4 space-y-3">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-sm font-medium text-cream/90">🚐 Hotel del traslado</p>
+                  {!editingHotel && (
+                    <p className="text-xs text-cream/60 mt-0.5">
+                      {item.transfer_hotel
+                        ? <>{item.transfer_hotel}{item.transfer_room ? ` · Hab. ${item.transfer_room}` : ''}</>
+                        : 'Sin hotel asignado.'}
+                    </p>
+                  )}
+                </div>
+                {!editingHotel && handlers.updateTransferHotel && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditHotel(item.transfer_hotel ?? ''); setEditRoom(item.transfer_room ?? ''); setHotelSaveError(null); setEditingHotel(true); }}
+                    className="text-xs text-cream/40 hover:text-cream underline underline-offset-2"
+                  >
+                    Cambiar hotel
+                  </button>
+                )}
+              </div>
+              {editingHotel && (
+                <div className="space-y-3">
+                  <HotelPicker hotel={editHotel} room={editRoom} onHotelChange={setEditHotel} onRoomChange={setEditRoom} />
+                  {hotelSaveError && <p className="text-xs text-bordeaux-light">{hotelSaveError}</p>}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={!editHotel.trim() || hotelSaving}
+                      onClick={saveHotel}
+                      className="btn-primary text-xs px-3 py-1.5 disabled:opacity-40"
+                    >
+                      {hotelSaving ? 'Guardando...' : 'Guardar hotel'}
+                    </button>
+                    <button type="button" onClick={() => setEditingHotel(false)} disabled={hotelSaving} className="btn-ghost text-xs px-3 py-1.5 disabled:opacity-40">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* No se gatea con isIncreasing: el toggle de acá ADENTRO (Sí/No de
               TransferSection) es lo único que puede hacer que isIncreasing pase a
               true cuando no se tocó ningún pasajero -- si se gatea con isIncreasing,
