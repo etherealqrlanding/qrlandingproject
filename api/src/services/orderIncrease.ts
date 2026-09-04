@@ -83,7 +83,10 @@ export function computeOrderIncrease(
   const extraAdults = target.adults - snap.origAdults;
   const extraChildren = target.children - snap.origChildren;
   const extraInfants = target.infants - snap.origInfants;
-  const activatesTransfer = snap.transferMode === 'optional' && snap.transferQty === 0 && target.addTransfer;
+  // 'included' también puede estar en 0 (el pasajero lo rechazó al reservar, o se
+  // canceló en una reducción posterior) -- activarlo de nuevo requiere el mismo
+  // flag que 'optional', aunque acá nunca genere cargo aparte.
+  const activatesTransfer = snap.transferMode !== 'none' && snap.transferQty === 0 && target.addTransfer;
   if (extraAdults === 0 && extraChildren === 0 && extraInfants === 0 && !activatesTransfer) {
     return fail('No hay pasajeros nuevos ni traslado para agregar.');
   }
@@ -115,8 +118,16 @@ export function computeOrderIncrease(
       transferAdded = true;
     }
   } else if (snap.transferMode === 'included') {
-    // Ya viene en el precio de cada ticket -- solo se actualiza el contador.
-    newTransferQty = newAdultsChildrenPax;
+    if (snap.transferQty > 0) {
+      // Ya estaba activo → se extiende solo, sin cargo (ya viene en el ticket).
+      newTransferQty = newAdultsChildrenPax;
+    } else if (activatesTransfer) {
+      // Estaba en 0 (el pasajero lo había rechazado) → se reactiva ahora para
+      // TODO el grupo, tampoco genera cargo, pero necesita hotel/habitación
+      // nuevos -- por eso marca transferAdded igual que en 'optional'.
+      newTransferQty = newAdultsChildrenPax;
+      transferAdded = true;
+    }
   }
 
   const newTransferPortion = snap.transferMode === 'optional'
@@ -133,7 +144,12 @@ export function computeOrderIncrease(
   const newSubtotalUsd = round2(newTickets + newTransferPortion + newInfantTransferUsd);
 
   const chargeUsd = round2(newSubtotalUsd - snap.subtotalUsd);
-  if (chargeUsd <= 0) return fail('El aumento no genera ningún cobro adicional.');
+  // chargeUsd === 0 es válido (y esperado) cuando lo único que pasó fue activar un
+  // traslado incluido sin sumar pax -- no genera cobro, pero sí un cambio real que
+  // hay que guardar (el caller lo aplica directo, sin pasar por el circuito de
+  // ampliación pendiente de cobro). El guard de arriba ya descartó el caso de "no
+  // se pidió nada", así que acá chargeUsd nunca puede dar negativo.
+  if (chargeUsd < 0) return fail('El aumento no genera ningún cobro adicional.');
 
   // El delta se cobra al MISMO tipo de cambio congelado, para que la orden quede coherente.
   const newTotalArs = round2(newSubtotalUsd * snap.exchangeRateUsed);

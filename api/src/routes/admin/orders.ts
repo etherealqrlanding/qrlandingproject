@@ -5,7 +5,7 @@ import { pool } from '../../db.js';
 import { RouteValidationError } from '../../errors.js';
 import { refundPayment, createPreference } from '../../services/mercadopago.js';
 import { createPixCharge } from '../../services/nautt.js';
-import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendCashAddonPendingNotifications, sendPaymentLinkEmail } from '../../services/email.js';
+import { sendOrderPaidNotifications, sendOrderRefundedNotifications, sendOrderModifiedNotifications, sendOrderIncreasedNotifications, sendCashCollectedNotifications, sendAdminCancelledNotifications, sendOrderRescheduledNotifications, sendCashOrderNotifications, sendCashAddonPendingNotifications, sendFreeOrderUpdateNotifications, sendPaymentLinkEmail } from '../../services/email.js';
 import { logPaymentEvent, applyOrderReduction, archiveOrders, restoreFromArchive, listAdminArchive, ConcurrentModificationError, createPendingOrder, setOrderPreferenceId, setOrderPixCharge } from '../../repos/orders.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
@@ -1158,6 +1158,13 @@ adminOrdersRouter.post('/:publicId/increase-cash', async (req, res, next) => {
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
 
+    if (result.appliedImmediately) {
+      // Infantes solos y/o traslado incluido activado: ya se aplicó, sin costo.
+      sendFreeOrderUpdateNotifications(result.orderId, result.transferActivated).catch((e) =>
+        console.error('[email] free order update notification failed for order', result.orderId, e));
+      return res.json({ data: result.data });
+    }
+
     // Aviso in-app + push en vivo: el vendedor tiene una ampliación nueva para cobrar
     // que no creó él mismo — necesita enterarse aunque no esté mirando el email.
     if (result.sellerId != null) {
@@ -1260,6 +1267,13 @@ adminOrdersRouter.post('/:publicId/add-mp', async (req, res, next) => {
       transferRoom: parsed.data.transfer_room,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+
+    if (result.appliedImmediately) {
+      // Infantes solos y/o traslado incluido activado: ya se aplicó, sin link que generar.
+      sendFreeOrderUpdateNotifications(result.orderId, result.transferActivated).catch((e) =>
+        console.error('[email] free order update notification failed for order', result.orderId, e));
+    }
+
     res.json({ data: result.data });
   } catch (err) { next(err); }
 });

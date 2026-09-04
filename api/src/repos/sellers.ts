@@ -227,6 +227,8 @@ export interface SellerOrder {
   unit_price_child_usd: number | null;
   subtotal_usd: number;
   transfer_qty: number;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
   infants: number;
   infant_transfer_usd: number;
   transfer_mode: 'none' | 'optional' | 'included';
@@ -315,7 +317,7 @@ export async function listSellerOrders(
        oi.unit_price_adult_usd::float AS unit_price_adult_usd,
        oi.unit_price_child_usd::float AS unit_price_child_usd,
        oi.subtotal_usd::float AS subtotal_usd,
-       oi.transfer_qty,
+       oi.transfer_qty, oi.transfer_hotel, oi.transfer_room,
        oi.infants, oi.infant_transfer_usd::float AS infant_transfer_usd,
        po.transfer_mode, po.transfer_price_usd::float AS transfer_price_usd,
        po.transfer_price_usd_palermo::float AS transfer_price_usd_palermo,

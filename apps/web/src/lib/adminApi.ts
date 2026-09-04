@@ -899,12 +899,17 @@ export const adminApi = {
         { method: 'POST', body: JSON.stringify(body) },
       ),
     increaseCash: (publicId: string, body: { adults: number; children: number; infants?: number; add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string; reason?: string; notify_customer?: boolean }) =>
-      request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+      // Sin addon_public_id/charge_* cuando fue un traslado incluido activado sin
+      // costo (se aplicó directo, no quedó ninguna ampliación pendiente de cobro).
+      request<{ addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number } | { new_total_usd: number }>(
         `/api/admin/orders/${encodeURIComponent(publicId)}/increase-cash`,
         { method: 'POST', body: JSON.stringify(body) },
       ),
     addMp: (publicId: string, body: { adults: number; children: number; infants?: number; add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string }) =>
-      request<{ addon_public_id: string; order_public_id: string; init_point: string; sandbox_init_point: string; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+      request<
+        | { appliedImmediately?: false; addon_public_id: string; order_public_id: string; init_point: string; sandbox_init_point: string; charge_usd: number; charge_ars: number; new_total_usd: number }
+        | { appliedImmediately: true; order_public_id: string; new_total_usd: number }
+      >(
         `/api/admin/orders/${encodeURIComponent(publicId)}/add-mp`,
         { method: 'POST', body: JSON.stringify(body) },
       ),

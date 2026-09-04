@@ -31,7 +31,9 @@ export interface ModifyHandlers {
   reduceMp?: (body: ReduceBody) => Promise<unknown>;
   reduceCash?: (body: ReduceBody) => Promise<unknown>;
   increaseCash?: (body: IncreaseBody) => Promise<unknown>;
-  addMp?: (body: AddMpBody) => Promise<{ init_point: string }>;
+  // appliedImmediately=true (sin init_point) pasa cuando lo único que cambió fue
+  // activar un traslado incluido sin costo -- ya se aplicó solo, no hay link que pagar.
+  addMp?: (body: AddMpBody) => Promise<{ init_point?: string; appliedImmediately?: boolean }>;
   reschedule?: (body: RescheduleBody) => Promise<unknown>;
 }
 
@@ -97,10 +99,11 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
   const origInfants = item.infants;
   const infantTransferUsd = Number(item.infant_transfer_usd);
   const transferMode = item.transfer_mode;
-  // El traslado nunca existió en esta orden -- se puede activar ahora para todo el
-  // grupo (viejo + nuevo) si el tier lo permite. Si ya existía, siempre se extiende
-  // automático al aumentar (no es opcional, ver orderIncrease.ts).
-  const canActivateTransfer = transferMode === 'optional' && origTransferQty === 0;
+  // El traslado está en 0 en esta orden -- nunca se activó, o se rechazó/canceló
+  // antes -- y se puede activar ahora para todo el grupo (viejo + nuevo) si el tier
+  // lo permite ('optional' cobra, 'included' no). Si ya estaba activo, siempre se
+  // extiende automático al aumentar (no es opcional, ver orderIncrease.ts).
+  const canActivateTransfer = transferMode !== 'none' && origTransferQty === 0;
   const transferAlreadyActive = origTransferQty > 0;
   // Porción de traslado = lo que se cobró por encima de las entradas, prorrateada
   // por la cantidad REAL de pax que llevaban traslado (no por el total de pax).
@@ -159,7 +162,10 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
 
   const origPax = origAdults + origChildren;
   const newPax = adults + children;
-  const wantsFreshTransfer = canActivateTransfer && addTransfer;
+  // No alcanza con tocar "Sí": mientras no haya un hotel elegido de la lista, no se
+  // puede activar el traslado (no sabríamos dónde pasar a buscar al pasajero).
+  const wantsFreshTransfer = canActivateTransfer && addTransfer && transferHotel.trim().length > 0;
+  const transferMissingHotel = canActivateTransfer && addTransfer && transferHotel.trim().length === 0;
   // Aumenta si suben pax, suben infantes, o se activa el traslado por primera vez
   // (esto último puede pasar sin tocar ningún número de pasajeros).
   const isIncreasing = newPax > origPax || infants > origInfants || wantsFreshTransfer;
@@ -202,7 +208,12 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           transferAdded = true;
         }
       } else if (transferMode === 'included') {
-        newTransferQty = newPax;
+        if (transferAlreadyActive) {
+          newTransferQty = newPax;
+        } else if (wantsFreshTransfer) {
+          newTransferQty = newPax;
+          transferAdded = true;
+        }
       }
       const newTransferPortion = transferMode === 'optional' ? round2(transferRatePerPax * newTransferQty) : 0;
       const oldTransferPortion = transferAlreadyActive ? round2(transferPerPaxFrozen * origTransferQty) : 0;
@@ -226,13 +237,17 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         lines.push({ label: `Traslado: se activa para los ${newPax + infants} pasajero${(newPax + infants) !== 1 ? 's' : ''}`, usd: combinedTransferDeltaUsd });
       } else if (transferMode === 'optional' && transferAlreadyActive && (newTransferQty > origTransferQty || infantTransferDeltaUsd > 0.005)) {
         lines.push({ label: `Traslado: se extiende a ${newPax + infants} pasajeros`, usd: combinedTransferDeltaUsd });
-      } else if (transferMode === 'included' && newPax > origPax) {
+      } else if (transferMode === 'included' && transferAlreadyActive && newPax > origPax) {
         lines.push({ label: `Traslado incluido: se extiende a ${newPax} pasajeros (sin cargo)`, usd: 0 });
       }
 
       return {
         newSubtotal, newSubtotalArs, delta, deltaArs, lines,
-        direction: delta > 0.005 ? ('increase' as const) : ('none' as const),
+        // Siempre 'increase' acá adentro: para entrar a esta rama, isIncreasing ya
+        // exigió que algo real haya cambiado (pax, infantes, o traslado activado) --
+        // no todos esos casos generan cobro (infantes y el traslado incluido son
+        // gratis), pero igual son un cambio real que hay que guardar.
+        direction: 'increase' as const,
         transferAdded,
       };
     }
@@ -291,6 +306,11 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
     if (!hasPax && !hasDateChange) return 'Sin cambios';
     if (!hasPax && hasDateChange) return rescheduleBlocked ? 'No disponible' : 'Reprogramar fecha';
     if (preview.direction === 'reduce') return hasDateChange ? 'Guardar cambios' : `Reintegrar ${fmtArs(preview.deltaArs)}`;
+    // Infantes solos y/o traslado incluido activado: no genera cobro, se aplica
+    // directo (nada que pagar, ni link que generar).
+    if (preview.direction === 'increase' && preview.deltaArs === 0) {
+      return increaseBlocked ? 'No disponible' : (hasDateChange ? 'Guardar cambios' : (preview.transferAdded ? 'Activar traslado' : 'Guardar cambios'));
+    }
     if (isMp) return increaseBlocked ? 'No disponible' : (hasDateChange ? 'Guardar cambios' : `Generar link · ${fmtArs(preview.deltaArs)}`);
     return hasDateChange ? 'Guardar cambios' : `Registrar ampliación · ${fmtArs(preview.deltaArs)}`;
   })();
@@ -336,7 +356,12 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
         if (isMp) {
           if (!handlers.addMp) { setError('Esta operación no está disponible.'); return; }
           const r = await handlers.addMp({ adults, children, infants, ...transferFields });
-          setMpLink(r.init_point);
+          if (r.appliedImmediately || !r.init_point) {
+            // Traslado incluido activado sin costo: no hay link que mostrar, ya quedó listo.
+            onDone();
+          } else {
+            setMpLink(r.init_point);
+          }
         } else {
           if (!handlers.increaseCash) { setError('Esta operación no está disponible.'); return; }
           await handlers.increaseCash({ adults, children, infants, ...transferFields, reason: reason.trim() || undefined, notify_customer: notify, ...memberFields });
@@ -432,17 +457,20 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
             )}
           </div>
 
-          {(origInfants > 0 || isIncreasing) && (
-            <NumberStepper
-              label="Infantes"
-              value={infants}
-              min={isIncreasing ? origInfants : 0}
-              max={isIncreasing ? 20 : origInfants}
-              onChange={setInfants}
-              decrementLabel="menos"
-              incrementLabel="más"
-            />
-          )}
+          {/* Siempre visible (no gateada por isIncreasing): igual que con el traslado,
+              si dependiera de isIncreasing para mostrarse nunca se podría tocar cuando
+              origInfants=0 -- el propio cambio acá es lo que puede hacer que
+              isIncreasing pase a true. El efecto de abajo corrige el rango apenas
+              cambia de dirección. */}
+          <NumberStepper
+            label="Infantes"
+            value={infants}
+            min={0}
+            max={20}
+            onChange={setInfants}
+            decrementLabel="menos"
+            incrementLabel="más"
+          />
 
           {/* Traslado -- REDUCIR: toggle Sí/No (todo o nada, nunca una cantidad parcial) */}
           {!isIncreasing && transferAlreadyActive && (
@@ -482,20 +510,29 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
           {isIncreasing && transferAlreadyActive && transferMode === 'included' && (
             <p className="text-xs text-cream/40">🚐 El traslado sigue incluido para todo el grupo, sin cargo aparte.</p>
           )}
-          {isIncreasing && canActivateTransfer && (
+          {/* No se gatea con isIncreasing: el toggle de acá ADENTRO (Sí/No de
+              TransferSection) es lo único que puede hacer que isIncreasing pase a
+              true cuando no se tocó ningún pasajero -- si se gatea con isIncreasing,
+              nunca se podría llegar a tocarlo (huevo y gallina). */}
+          {canActivateTransfer && (
             <TransferSection
               totalPax={newPax + infants}
               hotel={transferHotel}
               room={transferRoom}
               onHotelChange={setTransferHotel}
               onRoomChange={setTransferRoom}
-              included={false}
+              included={transferMode === 'included'}
               wanted={addTransfer}
               onWantedChange={setAddTransfer}
               pricePerPax={freshTransferPriceUsd}
               hasZonePricing={item.transfer_price_usd_palermo != null}
               zone={freshTransferZone}
             />
+          )}
+          {transferMissingHotel && (
+            <p className="text-xs text-bordeaux-light">
+              ⚠ Elegí un hotel de la lista para poder activar el traslado.
+            </p>
           )}
 
           {/* Preview del delta */}
@@ -527,7 +564,14 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
                 El reintegro de reservas pagadas con tarjeta lo realiza el administrador. Pedile que lo procese.
               </p>
             )}
-            {preview.direction === 'increase' && !increaseBlocked && (
+            {preview.direction === 'increase' && !increaseBlocked && preview.deltaArs === 0 && (
+              <p className="text-sm text-cream/80">
+                {preview.transferAdded
+                  ? 'No genera ningún cobro — el traslado incluido no tiene costo aparte. Se activa al confirmar, sin pasos pendientes.'
+                  : 'No genera ningún cobro — los infantes no pagan entrada. Se guarda al confirmar, sin pasos pendientes.'}
+              </p>
+            )}
+            {preview.direction === 'increase' && !increaseBlocked && preview.deltaArs > 0 && (
               <p className="text-sm text-cream/80">
                 {isMp ? 'Se generará un link de pago con tarjeta por ' : 'Se registra una ampliación pendiente de cobro por '}
                 <strong className="text-cream">{fmtArs(preview.deltaArs)}</strong>.
@@ -570,7 +614,14 @@ export default function ModifyReservationModal({ order, item, handlers, onClose,
               <span className="text-sm text-cream/80">Notificar por email al cliente</span>
             </label>
           )}
-          {preview.direction === 'increase' && !isMp && (
+          {preview.direction === 'increase' && !isMp && preview.deltaArs === 0 && (
+            <p className="text-xs text-cream/40">
+              {preview.transferAdded
+                ? 'El cliente recibe un email confirmando el traslado apenas confirmás acá.'
+                : 'El cliente recibe un email confirmando el cambio apenas confirmás acá.'}
+            </p>
+          )}
+          {preview.direction === 'increase' && !isMp && preview.deltaArs > 0 && (
             <p className="text-xs text-cream/40">El cliente recibe el email de confirmación cuando confirmás el cobro.</p>
           )}
 

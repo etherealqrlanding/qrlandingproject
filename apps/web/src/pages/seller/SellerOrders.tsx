@@ -965,6 +965,13 @@ export default function SellerOrders() {
                           </>
                         );
                       })()}
+                      {o.transfer_qty > 0 && (
+                        <DetailRow label="Traslado">
+                          {o.transfer_hotel
+                            ? <>{o.transfer_hotel}{o.transfer_room ? ` · Hab. ${o.transfer_room}` : ''}</>
+                            : <span className="text-amber-400">Sin hotel indicado</span>}
+                        </DetailRow>
+                      )}
                       <DetailRow label="Pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
                       <AttributionPicker publicId={o.public_id} currentName={o.seller_member_name} members={members} paymentMethod={o.payment_method}
                         unlockedMember={unlockedMembers[o.public_id] ?? null}
@@ -1220,6 +1227,13 @@ export default function SellerOrders() {
                                     </>
                                   );
                                 })()}
+                                {o.transfer_qty > 0 && (
+                                  <DetailRow label="Traslado">
+                                    {o.transfer_hotel
+                                      ? <>{o.transfer_hotel}{o.transfer_room ? ` · Hab. ${o.transfer_room}` : ''}</>
+                                      : <span className="text-amber-400">Sin hotel indicado</span>}
+                                  </DetailRow>
+                                )}
                                 <DetailRow label="Compra">{fmtDateTime(o.created_at)}</DetailRow>
                               </div>
                               <div className="space-y-1.5">

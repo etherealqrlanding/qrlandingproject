@@ -3,11 +3,12 @@ import { config } from '../config.js';
 import { createPreference } from './mercadopago.js';
 import { computeOrderIncrease, type OrderIncreaseSnapshot } from './orderIncrease.js';
 import { createOrderAddon, setAddonPreferenceId } from '../repos/addons.js';
-import { logPaymentEvent } from '../repos/orders.js';
+import { logPaymentEvent, applyFreeOrderChange } from '../repos/orders.js';
 
 export type AddonLinkResult =
   | {
       ok: true;
+      appliedImmediately: false;
       data: {
         addon_public_id: string;
         order_public_id: string;
@@ -17,6 +18,17 @@ export type AddonLinkResult =
         charge_ars: number;
         new_total_usd: number;
       };
+    }
+  | {
+      // Solo pasa cuando lo único que cambió es gratis -- infantes solos (nunca pagan
+      // entrada) y/o activar un traslado INCLUIDO que estaba en 0. No hay nada que
+      // cobrar, así que no tiene sentido generar un link de pago por $0. Se aplica
+      // directo, sin pasar por MP.
+      ok: true;
+      appliedImmediately: true;
+      orderId: number;
+      transferActivated: boolean;
+      data: { order_public_id: string; new_total_usd: number };
     }
   | { ok: false; httpStatus: number; error: string };
 
@@ -119,6 +131,33 @@ export async function createAddonForOrder(params: {
   });
   if (!calc.ok) return { ok: false, httpStatus: 400, error: calc.error ?? 'No se puede ampliar' };
 
+  // Infantes solos y/o traslado incluido activado sin costo → no hay nada que
+  // cobrar, no tiene sentido generar un link de MP por $0. Se aplica directo.
+  if (calc.chargeUsd === 0) {
+    await applyFreeOrderChange({
+      orderId: row.order_id,
+      itemId: row.item_id,
+      origAdults: row.adults,
+      origChildren: row.children,
+      origInfants: row.infants,
+      origTransferQty: row.transfer_qty,
+      newAdults: params.adults,
+      newChildren: params.children,
+      newInfants: row.infants + calc.extraInfants,
+      newTransferQty: calc.newTransferQty,
+      newInfantTransferUsd: calc.newInfantTransferUsd,
+      newTransferHotel: calc.transferAdded ? (params.transferHotel ?? null) : null,
+      newTransferRoom: calc.transferAdded ? (params.transferRoom ?? null) : null,
+    });
+    return {
+      ok: true,
+      appliedImmediately: true,
+      orderId: row.order_id,
+      transferActivated: calc.transferAdded,
+      data: { order_public_id: params.orderPublicId, new_total_usd: calc.newSubtotalUsd },
+    };
+  }
+
   // Reserva de cupo + creación del addon pendiente (puede lanzar AvailabilityError → 409).
   const addon = await createOrderAddon({
     orderId: row.order_id,
@@ -168,6 +207,7 @@ export async function createAddonForOrder(params: {
 
   return {
     ok: true,
+    appliedImmediately: false,
     data: {
       addon_public_id: addon.public_id,
       order_public_id: params.orderPublicId,
@@ -183,6 +223,7 @@ export async function createAddonForOrder(params: {
 export type CashAddonResult =
   | {
       ok: true;
+      appliedImmediately: false;
       // Contexto para notificar al vendedor cuando quien crea la ampliación es el
       // admin (no expuesto en la respuesta HTTP, solo para uso interno del caller).
       sellerId: number | null;
@@ -195,6 +236,15 @@ export type CashAddonResult =
       extraInfants: number;
       newTransferQty: number;
       data: { addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number };
+    }
+  | {
+      // Infantes solos y/o traslado incluido activado sin costo -- no hay nada que
+      // cobrar, se aplica directo (sin pasar por el circuito de ampliación pendiente).
+      ok: true;
+      appliedImmediately: true;
+      orderId: number;
+      transferActivated: boolean;
+      data: { new_total_usd: number };
     }
   | { ok: false; httpStatus: number; error: string };
 
@@ -297,6 +347,34 @@ export async function createCashAddonForOrder(params: {
   });
   if (!calc.ok) return { ok: false, httpStatus: 400, error: calc.error ?? 'No se puede ampliar' };
 
+  // Infantes solos y/o traslado incluido activado sin costo → no hay nada que
+  // cobrar en efectivo, no tiene sentido crear una ampliación pendiente para $0.
+  // Se aplica directo.
+  if (calc.chargeUsd === 0) {
+    await applyFreeOrderChange({
+      orderId: row.order_id,
+      itemId: row.item_id,
+      origAdults: row.adults,
+      origChildren: row.children,
+      origInfants: row.infants,
+      origTransferQty: row.transfer_qty,
+      newAdults: params.adults,
+      newChildren: params.children,
+      newInfants: row.infants + calc.extraInfants,
+      newTransferQty: calc.newTransferQty,
+      newInfantTransferUsd: calc.newInfantTransferUsd,
+      newTransferHotel: calc.transferAdded ? (params.transferHotel ?? null) : null,
+      newTransferRoom: calc.transferAdded ? (params.transferRoom ?? null) : null,
+    });
+    return {
+      ok: true,
+      appliedImmediately: true,
+      orderId: row.order_id,
+      transferActivated: calc.transferAdded,
+      data: { new_total_usd: calc.newSubtotalUsd },
+    };
+  }
+
   const addon = await createOrderAddon({
     orderId: row.order_id,
     optionId: row.option_id,
@@ -328,6 +406,7 @@ export async function createCashAddonForOrder(params: {
 
   return {
     ok: true,
+    appliedImmediately: false,
     sellerId: row.seller_id,
     orderId: row.order_id,
     customerName: row.customer_name,

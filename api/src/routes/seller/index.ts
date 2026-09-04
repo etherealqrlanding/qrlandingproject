@@ -18,7 +18,7 @@ import { sellerMembersRouter } from './members.js';
 import { sellerBrandingRouter } from './branding.js';
 import { supabaseAdmin } from '../../services/supabase.js';
 import { config } from '../../config.js';
-import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendCashAddonPendingNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail, sendSellerAdminPinReset } from '../../services/email.js';
+import { sendSellerPasswordReset, sendCashOrderNotifications, sendCashCollectedNotifications, sendOrderIncreasedNotifications, sendOrderModifiedNotifications, sendCashAddonPendingNotifications, sendFreeOrderUpdateNotifications, sendSellerCancelledNotifications, sendOrderRescheduledNotifications, sendPaymentLinkEmail, sendSellerAdminPinReset } from '../../services/email.js';
 import { computeOrderReduction, type OrderReductionSnapshot } from '../../services/orderReduction.js';
 import { recomputeCashCommission } from '../../services/orderCommission.js';
 import { createCashAddonForOrder } from '../../services/orderAddon.js';
@@ -1025,6 +1025,13 @@ sellerRouter.post('/me/orders/:publicId/increase-cash', async (req, res, next) =
       actorMemberId: memberCheck.memberId, actorMemberName: memberCheck.memberName,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
+
+    if (result.appliedImmediately) {
+      // Infantes solos y/o traslado incluido activado: ya se aplicó, sin costo.
+      sendFreeOrderUpdateNotifications(result.orderId, result.transferActivated).catch((e) =>
+        console.error('[email] free order update notification failed for order', result.orderId, e));
+      return res.json({ data: result.data });
+    }
 
     sendCashAddonPendingNotifications(
       result.orderId, result.extraAdults, result.extraChildren, result.extraInfants,

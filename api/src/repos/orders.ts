@@ -492,6 +492,61 @@ export async function applyOrderReduction(input: OrderReductionInput, externalCl
   }
 }
 
+export interface FreeOrderChangeInput {
+  orderId: number;
+  itemId: number;
+  origAdults: number;
+  origChildren: number;
+  origInfants: number;
+  origTransferQty: number;
+  newAdults: number;
+  newChildren: number;
+  newInfants: number;
+  newTransferQty: number;
+  newInfantTransferUsd: number;
+  newTransferHotel: string | null;
+  newTransferRoom: string | null;
+}
+
+/**
+ * Aplica un AUMENTO que no genera ningún cobro -- hoy los únicos casos posibles son
+ * agregar infantes solos (nunca pagan entrada) y/o activar un traslado INCLUIDO (sin
+ * costo) que estaba en 0 (el pasajero lo había rechazado o se había cancelado antes).
+ * No pasa por el circuito de ampliación pendiente de cobro (no hay nada que cobrar):
+ * se aplica directo, igual que una reducción. Si también sube adultos/menores con
+ * costo real, eso NUNCA da $0 y va por el camino normal de ampliación -- por eso acá
+ * no hace falta chequear cupo (el pax que ocupa lugar pagando no cambia en este caso).
+ */
+export async function applyFreeOrderChange(input: FreeOrderChangeInput): Promise<void> {
+  // Mismo chequeo de concurrencia optimista que applyOrderReduction: si la orden ya
+  // no está en el estado que se leyó, otra modificación se adelantó.
+  const { rowCount } = await pool.query(
+    `UPDATE order_items
+        SET adults = $1, children = $2, infants = $3,
+            transfer_qty = $4, infant_transfer_usd = $5,
+            transfer_hotel = COALESCE($6, transfer_hotel),
+            transfer_room = COALESCE($7, transfer_room)
+      WHERE id = $8 AND adults = $9 AND children = $10 AND infants = $11 AND transfer_qty = $12`,
+    [
+      input.newAdults, input.newChildren, input.newInfants,
+      input.newTransferQty, input.newInfantTransferUsd,
+      input.newTransferHotel, input.newTransferRoom,
+      input.itemId, input.origAdults, input.origChildren, input.origInfants, input.origTransferQty,
+    ],
+  );
+  if (!rowCount) throw new ConcurrentModificationError();
+
+  await pool.query(
+    `INSERT INTO payment_events (order_id, event_type, payload)
+     VALUES ($1, 'order_increased_free', $2::jsonb)`,
+    [input.orderId, JSON.stringify({
+      orig_infants: input.origInfants, new_infants: input.newInfants,
+      orig_transfer_qty: input.origTransferQty, new_transfer_qty: input.newTransferQty,
+      transfer_hotel: input.newTransferHotel, transfer_room: input.newTransferRoom,
+    })],
+  );
+}
+
 export interface OrderIncreaseInput {
   orderId: number;
   itemId: number;

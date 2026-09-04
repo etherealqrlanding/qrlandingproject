@@ -1265,6 +1265,60 @@ export async function sendCashAddonPendingNotifications(
   }
 }
 
+// ─── Ampliación sin costo (infantes solos y/o traslado incluido activado) ───
+// Único caso de "ampliación" que no pasa por el circuito de cobro pendiente: sumar
+// infantes (nunca pagan entrada) y/o activar un traslado incluido que estaba en 0 no
+// genera ningún cargo, así que se aplica y se confirma en el momento -- la reserva
+// sigue vigente tal cual estaba, solo se le agregó lo que corresponda.
+export async function sendFreeOrderUpdateNotifications(orderId: number, transferActivated: boolean): Promise<void> {
+  if (!isEnabled() && !config.ADMIN_NOTIFICATION_EMAIL) return;
+
+  const { rows } = await pool.query(`SELECT ${ORDER_EMAIL_SELECT}`, [orderId]);
+  const data = rows[0];
+  if (!data) return;
+
+  const orderData = toOrderData(data);
+  const title = transferActivated ? 'Activamos tu traslado' : 'Actualizamos tu reserva';
+  const intro = transferActivated
+    ? 'activamos el traslado de tu reserva — ya está incluido en el precio, sin costo adicional.'
+    : 'actualizamos tu reserva con los infantes que agregaste — no pagan entrada, así que no genera ningún cargo.';
+
+  // 1) Cliente
+  const customerHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tango QR · Buenos Aires</p>
+  <h1 style="${baseStyles.title}">${title}</h1>
+  ${ticketBadge()}
+  <p>Hola ${escapeHtml(orderData.customer_name)}, ${intro}</p>
+  ${reservationCard(orderData, { showContact: true })}
+  ${voucherButtonBlock(orderData.public_id)}
+  <p>Guardá este email como comprobante actualizado. Cualquier duda, respondé este correo o escribinos por WhatsApp con tu número de referencia.</p>
+  ${supportBlock()}
+  <p style="${baseStyles.footer}">Tango QR · Buenos Aires · ${new Date().getFullYear()}</p>
+</div></body></html>`;
+  await send(data.customer_email, `${title} — ${orderData.option_name}`, customerHtml, 'CLIENTE');
+
+  // 2) Admin
+  if (config.ADMIN_NOTIFICATION_EMAIL) {
+    const adminHtml = `
+<!doctype html>
+<html><body style="${baseStyles.body}"><div style="${baseStyles.container}">
+  <p style="${baseStyles.eyebrow}">Tango QR · Admin</p>
+  <h1 style="${baseStyles.title}">${title} (sin costo)</h1>
+  <div style="${baseStyles.card}">
+    <div style="${baseStyles.row}"><span>Cliente</span><strong>${escapeHtml(orderData.customer_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Servicio</span><strong>${escapeHtml(orderData.option_name)} — ${escapeHtml(orderData.product_name)}</strong></div>
+    <div style="${baseStyles.row}"><span>Composición actual</span><strong>${orderData.adults} ad · ${orderData.children} men${orderData.infants != null && orderData.infants > 0 ? ` · ${orderData.infants} inf` : ''}</strong></div>
+    ${orderData.transfer_hotel ? `<div style="${baseStyles.row}"><span>Hotel</span><strong>${escapeHtml(orderData.transfer_hotel)}</strong></div>` : ''}
+    <div style="${baseStyles.row}"><span>Referencia</span><span style="font-family:monospace;font-size:11px">${orderData.public_id}</span></div>
+  </div>
+  <p style="${baseStyles.footer}">Notificación automática · Tango QR admin</p>
+</div></body></html>`;
+    await send(config.ADMIN_NOTIFICATION_EMAIL, `[${title}] ${orderData.customer_name}`, adminHtml, 'ADMIN');
+  }
+}
+
 // ─── Aumento de reserva (pasajeros agregados) ───────────────
 // La orden ya tiene la composición nueva al enviarse. `charged` = lo cobrado de más.
 export async function sendOrderIncreasedNotifications(

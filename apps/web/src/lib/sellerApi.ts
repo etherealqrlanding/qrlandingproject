@@ -174,6 +174,8 @@ export interface SellerOrder {
   unit_price_child_usd: number | null;
   subtotal_usd: number;
   transfer_qty: number;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
   infants: number;
   infant_transfer_usd: number;
   transfer_mode: 'none' | 'optional' | 'included';
@@ -497,7 +499,9 @@ export const sellerApi = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
   increaseCash: (publicId: string, body: { adults: number; children: number; infants?: number; add_transfer?: boolean; transfer_zone?: 'centro' | 'palermo'; transfer_hotel?: string; transfer_room?: string; notify_customer?: boolean; seller_member_id?: number; seller_member_pin?: string; admin_pin?: string }) =>
-    request<{ ok: true; charge_usd: number; charge_ars: number; new_total_usd: number }>(
+    // Sin addon_public_id/charge_* cuando fue un traslado incluido activado sin
+    // costo (se aplicó directo, no quedó ninguna ampliación pendiente de cobro).
+    request<{ addon_public_id: string; charge_usd: number; charge_ars: number; new_total_usd: number } | { new_total_usd: number }>(
       `/api/seller/me/orders/${encodeURIComponent(publicId)}/increase-cash`,
       { method: 'POST', body: JSON.stringify(body) },
     ),
