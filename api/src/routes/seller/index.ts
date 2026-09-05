@@ -327,8 +327,13 @@ sellerRouter.get('/me/stats', async (req, res, next) => {
 // GET /api/seller/me/orders — ventas atribuidas al vendedor
 sellerRouter.get('/me/orders', async (req, res, next) => {
   try {
-    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-    const rows = await listSellerOrders(req.seller!.sellerId, { status, hideAutoArchived: true });
+    const rawStatus = typeof req.query.status === 'string' ? req.query.status : undefined;
+    // "Cobradas"/"Rendidas" no son valores reales de orders.status (son derivados de
+    // net_settled_at, solo para efectivo) -- traducirlos al filtro dedicado en vez de
+    // mandarlos como si fueran el estado real, que nunca matchea nada.
+    const cashSettlement = rawStatus === 'collected' || rawStatus === 'settled' ? rawStatus : undefined;
+    const status = cashSettlement ? undefined : rawStatus;
+    const rows = await listSellerOrders(req.seller!.sellerId, { status, cashSettlement, hideAutoArchived: true });
     // El vendedor no ve links de Mercado Pago (ni para vender ni para reenviar).
     const sanitized = rows.map(({ mp_init_point: _mp_init_point, ...rest }) => rest);
     res.json({ data: sanitized });

@@ -264,7 +264,15 @@ export interface SellerOrder {
 
 export async function listSellerOrders(
   sellerId: number,
-  opts?: { status?: string; settlement?: 'pending' | 'settled'; hideAutoArchived?: boolean },
+  opts?: {
+    status?: string; settlement?: 'pending' | 'settled'; hideAutoArchived?: boolean;
+    // Filtros rápidos de "Mis Órdenes" ("Cobradas"/"Rendidas") -- a diferencia de
+    // `settlement` (que mezcla cash+MP, pensado para la vista de liquidaciones del
+    // admin), estos dos son puntualmente sobre efectivo, que es lo único que el
+    // portal del vendedor deriva como "Cobrada"/"Rendida" (ver derivedStatus en
+    // SellerOrders.tsx) -- MP ahí siempre es simplemente "Pagada".
+    cashSettlement?: 'collected' | 'settled';
+  },
 ): Promise<SellerOrder[]> {
   const params: unknown[] = [sellerId];
   let statusFilter = '';
@@ -284,14 +292,11 @@ export async function listSellerOrders(
       (o.payment_method = 'cash' AND a.net_settled_at IS NOT NULL)
       OR (o.payment_method != 'cash' AND a.paid_to_seller_at IS NOT NULL)
     )`;
+  } else if (opts?.cashSettlement === 'collected') {
+    settlementFilter = ` AND o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NULL`;
+  } else if (opts?.cashSettlement === 'settled') {
+    settlementFilter = ` AND o.status = 'paid' AND o.payment_method = 'cash' AND a.net_settled_at IS NOT NULL`;
   }
-  // "Mis Órdenes" del portal del vendedor archiva automáticamente las rendidas
-  // (net_settled_at) para no acumular para siempre — quedan solo en el Archivo,
-  // salvo que el vendedor las haya restaurado a propósito. La vista de admin por
-  // vendedor (con filtro de liquidación) no usa este flag: ahí sí debe verse todo.
-  const autoArchivedFilter = opts?.hideAutoArchived
-    ? ` AND (a.net_settled_at IS NULL OR o.restored_at IS NOT NULL)`
-    : '';
   // Canceladas/reintegradas/vencidas/fallidas: se ocultan de "Mis Órdenes" recién
   // después de archive_retention_days (el mismo número configurable que gobierna el
   // archivado general), no al instante. Antes esto era incondicional e ignoraba esa
@@ -305,6 +310,26 @@ export async function listSellerOrders(
       o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
       OR COALESCE(o.cancelled_at, o.refunded_at, o.updated_at) >= NOW() - make_interval(days => $${params.length})
     )`;
+  }
+  // "Mis Órdenes" muestra una orden en efectivo rendida (net_settled_at) con su
+  // estado "Rendida" -- ya NO desaparece al instante, para que el vendedor vea la
+  // confirmación ahí mismo sin tener que ir a buscarla al Archivo. Se oculta recién
+  // después de la misma ventana configurable que rige el resto (archiveStaleOrders
+  // la archiva de verdad -- columna archived_at -- pasado ese plazo), salvo que el
+  // archivado automático esté desactivado (retentionDays null): ahí sí se sigue
+  // ocultando al toque, mismo criterio que el resto de esta función.
+  let autoArchivedFilter = '';
+  if (opts?.hideAutoArchived) {
+    if (retentionDays == null) {
+      autoArchivedFilter = ` AND (a.net_settled_at IS NULL OR o.restored_at IS NOT NULL)`;
+    } else {
+      params.push(retentionDays);
+      autoArchivedFilter = ` AND (
+        a.net_settled_at IS NULL
+        OR o.restored_at IS NOT NULL
+        OR a.net_settled_at >= NOW() - make_interval(days => $${params.length})
+      )`;
+    }
   }
   const { rows } = await pool.query<SellerOrder>(
     `SELECT
