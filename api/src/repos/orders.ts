@@ -925,9 +925,12 @@ export async function listSellerTrashedOrders(sellerId: number): Promise<Archive
 }
 
 // Restaura a "Mis Órdenes" una orden del archivo del vendedor: ya sea archivada
-// explícitamente por el admin (archived_at) o rendida y auto-archivada (net_settled_at).
-// Excluye estados terminales (cancelada/reintegrada/vencida/fallida): esas nunca
-// vuelven a Mis Órdenes porque su resolución no se puede deshacer con un simple restore.
+// (manualmente por el vendedor/admin, o auto-archivada por estado terminal o por
+// rendida) o rendida (net_settled_at) sin archivar todavía. Restaurar solo la trae
+// de vuelta a la vista -- no deshace la cancelación/reintegro/vencimiento en sí,
+// pero el vendedor puede querer volver a tenerla a la vista igual (ej. para
+// consultarla sin entrar al archivo). Mismo criterio que el restore del admin, que
+// tampoco restringe por estado.
 export async function restoreFromSellerArchive(publicId: string, sellerId: number): Promise<number> {
   const result = await pool.query(
     `UPDATE orders o
@@ -939,8 +942,7 @@ export async function restoreFromSellerArchive(publicId: string, sellerId: numbe
       WHERE o.id = a.order_id
         AND o.public_id = $1
         AND a.seller_id = $2
-        AND (o.archived_at IS NOT NULL OR a.net_settled_at IS NOT NULL)
-        AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')`,
+        AND (o.archived_at IS NOT NULL OR a.net_settled_at IS NOT NULL)`,
     [publicId, sellerId],
   );
   return result.rowCount ?? 0;

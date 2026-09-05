@@ -301,13 +301,17 @@ export async function listSellerOrders(
   // después de archive_retention_days (el mismo número configurable que gobierna el
   // archivado general), no al instante. Antes esto era incondicional e ignoraba esa
   // configuración por completo. Si el archivado automático está desactivado (null),
-  // se mantiene el comportamiento previo (ocultar de inmediato).
+  // se mantiene el comportamiento previo (ocultar de inmediato). Si el vendedor
+  // restauró una a propósito (restored_at) se ve igual aunque sea vieja -- si no,
+  // el restore de una orden terminal más vieja que la ventana no serviría de nada
+  // (volvería a ocultarse sola en la próxima carga).
   const retentionDays = await getArchiveRetentionDays();
-  let terminalStatusFilter = ` AND o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')`;
+  let terminalStatusFilter = ` AND (o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed') OR o.restored_at IS NOT NULL)`;
   if (retentionDays != null) {
     params.push(retentionDays);
     terminalStatusFilter = ` AND (
       o.status NOT IN ('cancelled', 'refunded', 'expired', 'failed')
+      OR o.restored_at IS NOT NULL
       OR COALESCE(o.cancelled_at, o.refunded_at, o.updated_at) >= NOW() - make_interval(days => $${params.length})
     )`;
   }

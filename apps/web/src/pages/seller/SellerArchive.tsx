@@ -204,7 +204,7 @@ export default function SellerArchive() {
         <div className={`space-y-3 transition-opacity duration-150 ${loading ? 'opacity-50' : 'opacity-100'}`}>
           {orders.map((o) => {
             const isOpen = expanded === o.public_id;
-            const canRestore = (!!o.archived_at || !!o.net_settled_at) && !['cancelled', 'refunded', 'expired', 'failed'].includes(o.status);
+            const canRestore = !!o.archived_at || !!o.net_settled_at;
             return (
               <div key={o.public_id} className="rounded-xl border border-gold/10 bg-ink-soft/40 overflow-hidden">
                 <div

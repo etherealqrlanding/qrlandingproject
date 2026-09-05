@@ -139,6 +139,22 @@ function OrderExtraDetails({ o, events, twoColumns }: Readonly<{ o: AdminOrderLi
   );
 }
 
+// Solo aplica a efectivo ya cobrado -- antes de eso (pending) todavía no hay nada
+// que rendir. Es lo que el vendedor le tiene que devolver al operador, así que el
+// admin necesita verlo de un vistazo en la tabla, no recién al desplegar la fila.
+function SettlementBadge({ o }: Readonly<{ o: AdminOrderListItem }>) {
+  if (o.payment_method !== 'cash' || o.status !== 'paid') return null;
+  return o.net_settled_at ? (
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/30 text-emerald-400 bg-emerald-950/20 whitespace-nowrap">
+      ✓ Rendido
+    </span>
+  ) : (
+    <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-400 bg-amber-950/20 whitespace-nowrap">
+      Sin rendir
+    </span>
+  );
+}
+
 function StatusBadge({ status }: Readonly<{ status: string }>) {
   const color = {
     paid: 'text-gold border-gold/40 bg-gold/10',
@@ -181,6 +197,7 @@ function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpan
               Efectivo{o.cash_collected_currency ? ` · ${o.cash_collected_currency}` : ''}
             </span>
           )}
+          <SettlementBadge o={o} />
         </div>
         <p className="text-gold font-mono font-medium text-sm whitespace-nowrap shrink-0">{orderTotalDisplay(o)}</p>
       </div>
@@ -550,13 +567,14 @@ export default function OrdersList() {
                     ) : <span className="text-cream/30">—</span>}
                   </td>
                   <td className="py-2 px-2 text-center">
-                    <div className="flex items-center justify-center gap-1 flex-nowrap">
+                    <div className="flex items-center justify-center gap-1 flex-wrap">
                       <StatusBadge status={o.status} />
                       {o.payment_method === 'cash' && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded border border-gold/30 text-gold-soft bg-gold/5 whitespace-nowrap">
                           Ef.{o.cash_collected_currency ? ` ${o.cash_collected_currency}` : ''}
                         </span>
                       )}
+                      <SettlementBadge o={o} />
                       {!o.admin_viewed_at && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-gold text-ink bg-gold font-semibold whitespace-nowrap">🆕 Nueva</span>
                       )}
