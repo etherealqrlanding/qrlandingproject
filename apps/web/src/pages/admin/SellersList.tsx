@@ -33,18 +33,6 @@ function WaButton({ phone, name }: Readonly<{ phone: string; name: string }>) {
   );
 }
 
-function SummaryCard({ label, value, hint, highlight, showHintOnMobile }: Readonly<{
-  label: string; value: string; hint?: string; highlight?: boolean; showHintOnMobile?: boolean;
-}>) {
-  return (
-    <div className={`rounded-lg border p-3 md:p-5 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
-      <p className="text-[10px] uppercase tracking-widest text-gold-soft">{label}</p>
-      <p className={`mt-1 font-display text-2xl md:text-3xl ${highlight ? 'text-gold' : 'text-cream'}`}>{value}</p>
-      {hint && <p className={`mt-0.5 text-xs text-cream/50 ${showHintOnMobile ? '' : 'hidden md:block'}`}>{hint}</p>}
-    </div>
-  );
-}
-
 // ── Mobile card ───────────────────────────────────────────────────────────────
 function SellerCard({
   s, baseCommission, highlighted, cardRef, onNavigate,
@@ -124,7 +112,6 @@ export default function SellersList() {
   const [filter, setFilter] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statsOpen, setStatsOpen] = useState(false);
   const [kindBaseCommissions, setKindBaseCommissions] = useState<Record<string, number> | null>(null);
   const { isHighlighted, highlightedRef, markVisited } = useReturnHighlight(
     LAST_VIEWED_KEY, sellers, (s: AdminSeller) => s.id,
@@ -141,24 +128,6 @@ export default function SellersList() {
   // Configuración → Comisión base por perfil. Solo informativa en este listado: la
   // comisión real de una venta puntual depende también del producto.
   const baseCommissionFor = (kind: string | null) => kindBaseCommissions?.[kind ?? 'sin_especificar'] ?? 10;
-
-  const totals = useMemo(() => {
-    if (!sellers) return null;
-    return sellers.reduce(
-      (acc, s) => {
-        if (!s.is_active && !showInactive) return acc;
-        // Cuentas propias de la agencia no son afiliados: no suman a estos totales,
-        // que representan el programa de vendedores externos.
-        if (s.is_house) return acc;
-        acc.revenue += s.revenue_paid_ars ?? 0;
-        acc.paid += s.commission_paid_ars ?? 0;
-        acc.pending += s.commission_pending_payment_ars ?? 0;
-        acc.netPending += s.net_pending_settlement_ars ?? 0;
-        return acc;
-      },
-      { revenue: 0, paid: 0, pending: 0, netPending: 0 },
-    );
-  }, [sellers, showInactive]);
 
   const filtered = useMemo(() => {
     if (!sellers) return null;
@@ -287,58 +256,6 @@ export default function SellersList() {
         </div>
         <Link to="/admin/sellers/new" className="btn-primary text-sm">+ Nuevo</Link>
       </header>
-
-      {totals && (
-        <>
-          {/* ── Mobile: botón que abre un modal con las estadísticas, para no tener
-              que scrollear pasando 4 cards apiladas antes de ver a los vendedores ── */}
-          <button
-            type="button"
-            onClick={() => setStatsOpen(true)}
-            className="md:hidden w-full flex items-center justify-between gap-3 rounded-lg border border-gold/15 bg-ink-soft/50 px-4 py-3 mb-4 text-left hover:border-gold/30 transition"
-          >
-            <span className="flex items-center gap-2 text-sm text-cream">
-              📊 Estadísticas
-            </span>
-            <span className="text-xs text-gold-soft">Ver →</span>
-          </button>
-
-          <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
-            <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por tarjeta · afiliados externos" />
-            <SummaryCard label="Incentivos" value={`ARS ${totals.paid.toLocaleString()}`} hint="Incentivos de afiliados externos" />
-            <SummaryCard label="A pagar (Tarjeta)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de tarjeta a liquidar a recomendadores" highlight />
-            <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los recomendadores nos deben rendir" />
-          </div>
-        </>
-      )}
-
-      {statsOpen && totals && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8 bg-ink/85 backdrop-blur-sm animate-modal-backdrop"
-          onClick={() => setStatsOpen(false)}
-        >
-          <div
-            className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-6 animate-modal-panel"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setStatsOpen(false)}
-              aria-label="Cerrar"
-              className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
-            >
-              ×
-            </button>
-            <p className="text-xs uppercase tracking-[0.3em] text-gold-soft mb-4">Estadísticas</p>
-            <div className="grid grid-cols-1 gap-3">
-              <SummaryCard label="Revenue generado" value={`ARS ${totals.revenue.toLocaleString()}`} hint="Ventas por tarjeta · afiliados externos" showHintOnMobile />
-              <SummaryCard label="Incentivos" value={`ARS ${totals.paid.toLocaleString()}`} hint="Incentivos de afiliados externos" showHintOnMobile />
-              <SummaryCard label="A pagar (Tarjeta)" value={`ARS ${totals.pending.toLocaleString()}`} hint="Incentivos de tarjeta a liquidar a recomendadores" highlight showHintOnMobile />
-              <SummaryCard label="A cobrar (efectivo)" value={`ARS ${totals.netPending.toLocaleString()}`} hint="Neto que los recomendadores nos deben rendir" showHintOnMobile />
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="flex flex-wrap gap-3 items-center mb-4">
         <input

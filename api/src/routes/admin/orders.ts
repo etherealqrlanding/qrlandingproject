@@ -386,16 +386,23 @@ adminOrdersRouter.get('/', async (req, res, next) => {
          oi.product_name_snapshot AS product_name,
          oi.option_name_snapshot AS option_name,
          to_char(oi.service_date, 'YYYY-MM-DD') AS service_date,
-         oi.adults, oi.children,
+         oi.adults, oi.children, oi.infants,
+         oi.transfer_qty, oi.transfer_hotel, oi.transfer_room,
          a.seller_id, s.code AS seller_code, s.name AS seller_name,
+         a.seller_member_id, m.name AS seller_member_name,
          a.commission_amount_usd::float AS commission_amount_usd,
          a.commission_amount_ars::float AS commission_amount_ars,
          a.net_total_usd_snapshot::float AS net_total_usd,
-         a.paid_to_seller_at, a.net_settled_at
+         a.paid_to_seller_at, a.net_settled_at,
+         COALESCE(o.refunded_amount_ars, 0) > 0 AS was_reduced,
+         EXISTS (
+           SELECT 1 FROM order_addons ad WHERE ad.order_id = o.id AND ad.status = 'paid'
+         ) AS has_paid_addon
          FROM orders o
          LEFT JOIN order_items oi ON oi.order_id = o.id
          LEFT JOIN order_attributions a ON a.order_id = o.id
          LEFT JOIN sellers s ON s.id = a.seller_id
+         LEFT JOIN seller_members m ON m.id = a.seller_member_id
          ${whereSql}
         ORDER BY o.created_at DESC
         LIMIT ${limit}`,
@@ -460,6 +467,26 @@ adminOrdersRouter.get('/archive/download', async (req, res, next) => {
 });
 
 // ─── Detalle de una orden ─────────────────────────────────────────────────────
+
+// GET /api/admin/orders/:publicId/events — histórico de pasos de una orden, liviano
+// (sin el resto del detalle) -- para el desplegable inline del listado, que carga los
+// eventos recién al expandir una fila en vez de traerlos todos de entrada.
+adminOrdersRouter.get('/:publicId/events', async (req, res, next) => {
+  try {
+    const publicId = req.params.publicId;
+    if (!/^[0-9a-f-]{8,40}$/i.test(publicId)) return res.status(400).json({ error: 'Invalid id' });
+    const { rows } = await pool.query(
+      `SELECT pe.id, pe.event_type, pe.payload, pe.created_at
+         FROM payment_events pe
+         JOIN orders o ON o.id = pe.order_id
+        WHERE o.public_id = $1
+        ORDER BY pe.created_at DESC
+        LIMIT 50`,
+      [publicId],
+    );
+    res.json({ data: rows });
+  } catch (err) { next(err); }
+});
 
 adminOrdersRouter.get('/:publicId', async (req, res, next) => {
   try {
@@ -1312,7 +1339,7 @@ adminOrdersRouter.post('/:publicId/transfer-hotel', async (req, res, next) => {
     const parsed = transferHotelSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() });
 
-    const result = await updateTransferHotel({ orderPublicId: publicId, hotel: parsed.data.hotel, room: parsed.data.room });
+    const result = await updateTransferHotel({ orderPublicId: publicId, hotel: parsed.data.hotel, room: parsed.data.room, actor: 'admin' });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
     res.json({ data: { ok: true, transfer_hotel: result.hotel, transfer_room: result.room } });
   } catch (err) { next(err); }

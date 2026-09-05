@@ -1,6 +1,7 @@
 // Cliente para los endpoints /api/admin/*: añade Authorization: Bearer <jwt>
 // usando el access token vigente de Supabase.
 import { supabase } from './supabase';
+import type { OrderEvent } from './orderEvents';
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:4000';
 
@@ -427,9 +428,17 @@ export interface AdminOrderListItem {
   service_date: string | null;
   adults: number | null;
   children: number | null;
+  infants: number | null;
+  transfer_qty: number | null;
+  transfer_hotel: string | null;
+  transfer_room: string | null;
   seller_id: number | null;
   seller_code: string | null;
   seller_name: string | null;
+  seller_member_id: number | null;
+  seller_member_name: string | null;
+  was_reduced: boolean;
+  has_paid_addon: boolean;
   commission_amount_usd: number | null;
   commission_amount_ars: number | null;
   net_total_usd: number | null;
@@ -847,6 +856,7 @@ export const adminApi = {
     get: (publicId: string) => request<AdminOrderListItem & { items: unknown[]; events: unknown[] }>(
       `/api/admin/orders/${encodeURIComponent(publicId)}`,
     ),
+    events: (publicId: string) => request<OrderEvent[]>(`/api/admin/orders/${encodeURIComponent(publicId)}/events`),
     updateStatus: (publicId: string, status: string, note?: string) =>
       request<{ ok: true; status: string }>(`/api/admin/orders/${encodeURIComponent(publicId)}/status`, {
         method: 'PATCH',

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { adminApi, type AdminOrderListItem, type AdminSeller, type AdminSellerMember } from '../../lib/adminApi';
+import type { OrderEvent } from '../../lib/orderEvents';
 import { NEW_ORDER_PAID_EVENT } from '../../components/admin/AdminLayout';
 import AdminBookingModal from '../../components/admin/AdminBookingModal';
 import SellerFilterSelect from '../../components/admin/SellerFilterSelect';
@@ -10,7 +11,6 @@ import Checkbox from '../../components/Checkbox';
 import DetailRow from '../../components/DetailRow';
 import ExpandToggle from '../../components/ExpandToggle';
 import Collapse from '../../components/Collapse';
-import { useCountUp } from '../../hooks/useCountUp';
 
 
 
@@ -78,14 +78,53 @@ function orderTotalDisplay(o: AdminOrderListItem): string {
 // esto es para monitorear sin salir del listado.
 const PAYMENT_LABEL: Record<string, string> = { mercadopago: 'Tarjeta', cash: 'Efectivo', pix: 'PIX' };
 
-function OrderExtraDetails({ o, twoColumns }: Readonly<{ o: AdminOrderListItem; twoColumns?: boolean }>) {
+function paxLabel(adults: number, children: number, infants = 0) {
+  const parts = [`${adults} adulto${adults !== 1 ? 's' : ''}`];
+  if (children > 0) parts.push(`${children} menor${children !== 1 ? 'es' : ''}`);
+  if (infants > 0) parts.push(`${infants} infante${infants !== 1 ? 's' : ''}`);
+  return parts.join(' · ');
+}
+
+// Deriva original/actual/sumados a partir de los eventos de la orden (mismo criterio
+// que usa el portal del vendedor) -- solo cuenta los eventos que representan el
+// cambio YA aplicado (no el de "registrado, pendiente de cobro", que loguea el mismo
+// extra_adults/extra_children y duplicaría el total si se sumaran los dos).
+function paxDetail(o: AdminOrderListItem, events?: OrderEvent[]) {
+  const current = paxLabel(o.adults ?? 0, o.children ?? 0, o.infants ?? 0);
+  if (!events || (!o.was_reduced && !o.has_paid_addon)) return { current, original: null, added: null };
+  const modEvent = [...events].reverse().find(
+    (e) => e.event_type === 'order_modified' && e.payload?.orig_adults != null,
+  );
+  const appliedEvents = events.filter((e) => ['addon_cash_collected', 'addon_paid'].includes(e.event_type));
+  const extraAdults = appliedEvents.reduce((sum, e) => sum + Number(e.payload?.extra_adults ?? 0), 0);
+  const extraChildren = appliedEvents.reduce((sum, e) => sum + Number(e.payload?.extra_children ?? 0), 0);
+  const original = modEvent
+    ? paxLabel(Number(modEvent.payload!.orig_adults), Number(modEvent.payload!.orig_children))
+    : null;
+  const addedParts = [
+    extraAdults > 0 ? `+${extraAdults} ad` : '',
+    extraChildren > 0 ? `+${extraChildren} men` : '',
+  ].filter(Boolean);
+  return { current, original, added: addedParts.length > 0 ? addedParts.join(' · ') : null };
+}
+
+function OrderExtraDetails({ o, events, twoColumns }: Readonly<{ o: AdminOrderListItem; events?: OrderEvent[]; twoColumns?: boolean }>) {
+  const pd = paxDetail(o, events);
   return (
     <div className={twoColumns ? 'grid sm:grid-cols-2 gap-x-8 gap-y-1.5' : 'space-y-1.5'}>
       {o.customer_phone && <DetailRow label="Teléfono">{o.customer_phone}</DetailRow>}
       {o.customer_nationality && <DetailRow label="Nacionalidad">{o.customer_nationality}</DetailRow>}
-      {(o.adults != null) && (
-        <DetailRow label="Pasajeros">{o.adults} ad.{o.children ? ` · ${o.children} men.` : ''}</DetailRow>
+      {(o.adults != null) && <DetailRow label="Pasajeros">{pd.current}</DetailRow>}
+      {pd.original && <DetailRow label="Antes"><span className="text-cream/50">{pd.original}</span></DetailRow>}
+      {pd.added && <DetailRow label="Sumados"><span className="text-gold text-xs">{pd.added}</span></DetailRow>}
+      {(o.transfer_qty ?? 0) > 0 && (
+        <DetailRow label="Traslado">
+          {o.transfer_hotel
+            ? <>{o.transfer_hotel}{o.transfer_room ? ` · Hab. ${o.transfer_room}` : ''}</>
+            : <span className="text-amber-400">Sin hotel indicado</span>}
+        </DetailRow>
       )}
+      {o.seller_member_name && <DetailRow label="Atendido por">{o.seller_member_name}</DetailRow>}
       <DetailRow label="Medio de pago">{PAYMENT_LABEL[o.payment_method] ?? o.payment_method}</DetailRow>
       {o.payment_method !== 'cash' && o.mp_payment_status && (
         <DetailRow label="Estado MP">{o.mp_payment_status}</DetailRow>
@@ -115,24 +154,10 @@ function StatusBadge({ status }: Readonly<{ status: string }>) {
   return <span className={`text-[10px] px-2.5 py-1 rounded-full border whitespace-nowrap ${color}`}>{label}</span>;
 }
 
-function SummaryCard({ label, value, format, sub, highlight, showSubOnMobile }: Readonly<{
-  label: string; value: number; format?: (n: number) => string; sub?: string; highlight?: boolean; showSubOnMobile?: boolean;
-}>) {
-  const animated = useCountUp(value);
-  const display = format ? format(animated) : Math.round(animated).toLocaleString('es-AR');
-  return (
-    <div className={`rounded-lg border p-3 md:p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${highlight ? 'border-gold/40 bg-gold/5' : 'border-gold/10 bg-ink-soft/60'}`}>
-      <p className="text-[10px] uppercase tracking-widest text-gold-soft">{label}</p>
-      <p className={`mt-0.5 font-display text-xl md:text-2xl tabular-nums ${highlight ? 'text-gold' : 'text-cream'}`}>{display}</p>
-      {sub && <p className={`mt-0.5 text-[11px] text-cream/40 ${showSubOnMobile ? '' : 'hidden sm:block'}`}>{sub}</p>}
-    </div>
-  );
-}
-
 // ── Mobile card ───────────────────────────────────────────────────────────────
-function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpand }: Readonly<{
+function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpand, events }: Readonly<{
   o: AdminOrderListItem; selected: boolean; onToggle: () => void; highlighted?: boolean;
-  expanded: boolean; onToggleExpand: () => void;
+  expanded: boolean; onToggleExpand: () => void; events?: OrderEvent[];
 }>) {
   return (
     <div
@@ -202,7 +227,7 @@ function OrderCard({ o, selected, onToggle, highlighted, expanded, onToggleExpan
       {expanded && (
         <Collapse className="border-t border-gold/10 px-4 py-3 bg-ink-soft/20">
           <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
-          <OrderExtraDetails o={o} />
+          <OrderExtraDetails o={o} events={events} />
         </Collapse>
       )}
     </div>
@@ -314,15 +339,28 @@ export default function OrdersList() {
   const [deleting, setDeleting] = useState(false);
 
   // Acordeón: qué orden está desplegada mostrando más detalle inline (solo lectura —
-  // las acciones siguen viviendo en el detalle completo vía "Ver →").
+  // las acciones siguen viviendo en el detalle completo vía "Ver →"). Los eventos
+  // (para "Antes"/"Sumados") se cargan recién al expandir, no de entrada para las
+  // 10 órdenes de la página -- se cachean por orden así no se repide el pedido si
+  // se colapsa y se vuelve a abrir la misma fila.
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [eventsByOrder, setEventsByOrder] = useState<Record<string, OrderEvent[]>>({});
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
 
-  // Mobile: estadísticas y filtros secundarios colapsados en modales, para no
-  // tener que scrollear pasando todo eso antes de ver las órdenes. El filtro por
-  // Estado queda siempre visible en mobile (el más usado); el resto (búsqueda,
-  // vendedor, rango de fechas) vive en el modal "Más filtros".
-  const [statsOpen, setStatsOpen] = useState(false);
+  function toggleExpand(publicId: string) {
+    const next = expandedRow === publicId ? null : publicId;
+    setExpandedRow(next);
+    if (next && !eventsByOrder[next]) {
+      adminApi.orders.events(next)
+        .then((evs) => setEventsByOrder((prev) => ({ ...prev, [next]: evs })))
+        .catch(() => {});
+    }
+  }
+
+  // Mobile: filtros secundarios colapsados en un modal, para no tener que scrollear
+  // pasando todo eso antes de ver las órdenes. El filtro por Estado queda siempre
+  // visible en mobile (el más usado); el resto (búsqueda, vendedor, rango de
+  // fechas) vive en el modal "Más filtros".
   const [filtersOpen, setFiltersOpen] = useState(false);
   const extraFilterCount = [filters.ref, filters.member_id, filters.from, filters.to].filter(Boolean).length;
 
@@ -372,30 +410,6 @@ export default function OrdersList() {
     }, 100);
     return () => clearTimeout(t);
   }, [highlight, orders, page]);
-
-  const summary = useMemo(() => {
-    if (!orders) return null;
-    return orders.reduce((acc, o) => {
-      acc.count++;
-      if (o.status === 'paid') {
-        acc.paidCount++;
-        // Facturación/comisiones: solo MP (siempre en pesos — no hay pago por MP en
-        // otra moneda). En efectivo no trazamos venta ni comisión.
-        if (o.payment_method !== 'cash') {
-          acc.revenue += o.total_ars ?? 0;
-          acc.commission += o.commission_amount_ars ?? 0;
-        } else if (!o.net_settled_at) {
-          // Neto que el vendedor todavía nos tiene que rendir por ventas en efectivo
-          // ya pagadas. Normalizamos todo a ARS (algunos se cobraron en dólares) para
-          // poder sumarlos en un solo total.
-          const netArs = o.net_total_usd != null ? o.net_total_usd * o.exchange_rate_used : o.total_ars;
-          acc.netPending += netArs ?? 0;
-          acc.netPendingCount++;
-        }
-      }
-      return acc;
-    }, { count: 0, paidCount: 0, revenue: 0, commission: 0, netPending: 0, netPendingCount: 0 });
-  }, [orders]);
 
   const totalPages = Math.ceil((orders?.length ?? 0) / PAGE_SIZE);
   const paginated = orders?.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE) ?? [];
@@ -465,7 +479,8 @@ export default function OrdersList() {
               onToggle={() => toggleSelect(o.public_id)}
               highlighted={o.public_id === highlight}
               expanded={expandedRow === o.public_id}
-              onToggleExpand={() => setExpandedRow(expandedRow === o.public_id ? null : o.public_id)}
+              onToggleExpand={() => toggleExpand(o.public_id)}
+              events={eventsByOrder[o.public_id]}
             />
           ))}
         </div>
@@ -560,7 +575,7 @@ export default function OrdersList() {
                       <Link to={`/admin/orders/${o.public_id}`} className="text-gold-soft hover:text-gold text-[11px]">Ver →</Link>
                       <ExpandToggle
                         open={expandedRow === o.public_id}
-                        onClick={() => setExpandedRow(expandedRow === o.public_id ? null : o.public_id)}
+                        onClick={() => toggleExpand(o.public_id)}
                       />
                     </div>
                   </td>
@@ -570,7 +585,7 @@ export default function OrdersList() {
                     <td colSpan={9} className="px-6 py-2.5">
                       <p className="text-[10px] uppercase tracking-wider text-gold-soft mb-2">Detalle</p>
                       <Collapse className="max-w-xl">
-                        <OrderExtraDetails o={o} twoColumns />
+                        <OrderExtraDetails o={o} events={eventsByOrder[o.public_id]} twoColumns />
                       </Collapse>
                     </td>
                   </tr>
@@ -616,94 +631,6 @@ export default function OrdersList() {
 
       {bookingModalOpen && (
         <AdminBookingModal onClose={() => setBookingModalOpen(false)} onCreated={() => reload()} />
-      )}
-
-      {summary && (
-        <>
-          {/* ── Mobile: botón que abre un modal con las estadísticas ── */}
-          <button
-            type="button"
-            onClick={() => setStatsOpen(true)}
-            className="md:hidden w-full flex items-center justify-between gap-3 rounded-lg border border-gold/15 bg-ink-soft/50 px-4 py-3 mb-3 text-left hover:border-gold/30 transition"
-          >
-            <span className="flex items-center gap-2 text-sm text-cream">📊 Estadísticas</span>
-            <span className="text-xs text-gold-soft">Ver →</span>
-          </button>
-
-          <div className="hidden md:grid md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-            <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" />
-            <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, tarjeta o efectivo" />
-            <SummaryCard
-              label="Facturación con Tarjeta"
-              value={summary.revenue}
-              format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-              sub="cobrado con tarjeta (no incluye efectivo)"
-            />
-            <SummaryCard
-              label="Incentivos"
-              value={summary.commission}
-              format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-              sub="a liquidar, solo ventas por tarjeta"
-              highlight
-            />
-            <SummaryCard
-              label="Neto por cobrar"
-              value={summary.netPending}
-              format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-              sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los recomendadores`}
-              highlight
-            />
-          </div>
-        </>
-      )}
-
-      {statsOpen && summary && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8 bg-ink/85 backdrop-blur-sm animate-modal-backdrop"
-          onClick={() => setStatsOpen(false)}
-        >
-          <div
-            className="relative w-full max-w-md rounded-2xl bg-ink-soft border border-gold/20 p-6 animate-modal-panel"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setStatsOpen(false)}
-              aria-label="Cerrar"
-              className="absolute right-4 top-4 h-9 w-9 rounded-full bg-ink/60 text-cream hover:bg-ink transition"
-            >
-              ×
-            </button>
-            <p className="text-xs uppercase tracking-[0.3em] text-gold-soft mb-4">Estadísticas</p>
-            <div className="grid grid-cols-1 gap-3">
-              <SummaryCard label="Total" value={summary.count} sub="órdenes en este listado" showSubOnMobile />
-              <SummaryCard label="Pagadas" value={summary.paidCount} sub="confirmadas, tarjeta o efectivo" showSubOnMobile />
-              <SummaryCard
-                label="Facturación con Tarjeta"
-                value={summary.revenue}
-                format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-                sub="cobrado con tarjeta (no incluye efectivo)"
-                showSubOnMobile
-              />
-              <SummaryCard
-                label="Incentivos"
-                value={summary.commission}
-                format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-                sub="a liquidar, solo ventas por tarjeta"
-                highlight
-                showSubOnMobile
-              />
-              <SummaryCard
-                label="Neto por cobrar"
-                value={summary.netPending}
-                format={(n) => `ARS ${Math.round(n).toLocaleString('es-AR')}`}
-                sub={`${summary.netPendingCount} venta${summary.netPendingCount !== 1 ? 's' : ''} en efectivo sin rendir, de todos los recomendadores`}
-                highlight
-                showSubOnMobile
-              />
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── Mobile: Estado siempre visible (el filtro más usado) + botón "Más filtros" ── */}

@@ -1065,6 +1065,8 @@ sellerRouter.post('/me/orders/:publicId/transfer-hotel', async (req, res, next) 
     const result = await updateTransferHotel({
       orderPublicId: publicId, hotel: parsed.data.hotel, room: parsed.data.room,
       restrictSellerId: req.seller!.sellerId,
+      actor: memberCheck.byAdmin ? 'admin' : 'seller',
+      actorMemberId: memberCheck.memberId, actorMemberName: memberCheck.memberName,
     });
     if (!result.ok) return res.status(result.httpStatus).json({ error: result.error });
     res.json({ data: { ok: true, transfer_hotel: result.hotel, transfer_room: result.room } });

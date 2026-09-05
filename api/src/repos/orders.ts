@@ -561,12 +561,18 @@ export async function updateTransferHotel(params: {
   hotel: string;
   room?: string | null;
   restrictSellerId?: number;
+  // Quién hizo el cambio -- se guarda en el evento para que quede trazado en el
+  // histórico de la orden (ej. "Hotel de traslado modificado (admin)").
+  actor?: 'admin' | 'seller';
+  actorMemberId?: number | null;
+  actorMemberName?: string | null;
 }): Promise<UpdateTransferHotelResult> {
   const { rows } = await pool.query<{
     order_id: number; status: string; item_id: number; transfer_qty: number; seller_id: number | null;
+    transfer_hotel: string | null; transfer_room: string | null;
   }>(
     `SELECT o.id AS order_id, o.status::text AS status, oi.id AS item_id, oi.transfer_qty,
-            a.seller_id
+            oi.transfer_hotel, oi.transfer_room, a.seller_id
        FROM orders o
        JOIN order_items oi ON oi.order_id = o.id
        LEFT JOIN order_attributions a ON a.order_id = o.id
@@ -591,7 +597,12 @@ export async function updateTransferHotel(params: {
   const room = params.room?.trim() || null;
 
   await pool.query(`UPDATE order_items SET transfer_hotel = $1, transfer_room = $2 WHERE id = $3`, [hotel, room, row.item_id]);
-  await logPaymentEvent(row.order_id, 'transfer_hotel_updated', null, { hotel, room });
+  await logPaymentEvent(row.order_id, 'transfer_hotel_updated', null, {
+    orig_hotel: row.transfer_hotel, orig_room: row.transfer_room,
+    hotel, room,
+    ...(params.actor ? { actor: params.actor } : {}),
+    ...(params.actorMemberId != null ? { seller_member_id: params.actorMemberId, seller_member_name: params.actorMemberName } : {}),
+  });
 
   return { ok: true, orderId: row.order_id, hotel, room };
 }

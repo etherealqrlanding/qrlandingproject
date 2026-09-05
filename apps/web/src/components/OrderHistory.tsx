@@ -160,9 +160,21 @@ function detailAttributionSetByMember(payload: Record<string, unknown>): string 
   return name ? `Autoasignada por ${name}` : null;
 }
 
+function detailTransferHotelUpdated(payload: Record<string, unknown>): string | null {
+  const origHotel = strVal(payload.orig_hotel);
+  const newHotel = strVal(payload.hotel) ?? '?';
+  const origRoom = strVal(payload.orig_room);
+  const newRoom = strVal(payload.room);
+  const from = origHotel ? `${origHotel}${origRoom ? ` (Hab. ${origRoom})` : ''}` : 'sin hotel';
+  const to = `${newHotel}${newRoom ? ` (Hab. ${newRoom})` : ''}`;
+  const actor = actorSuffix(payload);
+  return `${from} → ${to}${actor}`;
+}
+
 function eventDetail(type: string, payload: Record<string, unknown> | null | undefined): string | null {
   if (!payload) return null;
   if (type === 'order_rescheduled') return detailRescheduled(payload);
+  if (type === 'transfer_hotel_updated') return detailTransferHotelUpdated(payload);
   if (type === 'order_modified') return detailModified(payload);
   if (type === 'order_cancelled') return detailCancelled(payload);
   if (type === 'refund_processed') return detailRefund(payload, false);

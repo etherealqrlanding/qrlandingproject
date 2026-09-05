@@ -18,6 +18,7 @@ const LABELS: Record<string, { label: string; tone: EventTone }> = {
   cash_collected_by_seller: { label: 'Cobro en efectivo confirmado', tone: 'good' },
   cash_collected_by_admin: { label: 'Cobro en efectivo confirmado (admin)', tone: 'good' },
   order_rescheduled: { label: 'Fecha reprogramada', tone: 'warn' },
+  transfer_hotel_updated: { label: 'Hotel de traslado modificado', tone: 'neutral' },
   order_modified: { label: 'Reserva modificada', tone: 'neutral' },
   order_increased_cash: { label: 'Ampliación cobrada (efectivo)', tone: 'good' },
   addon_paid: { label: 'Ampliación pagada (Tarjeta)', tone: 'good' },
