@@ -150,7 +150,12 @@ function effectiveNetArs(o: SellerOrder): number {
 }
 
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  // service_date llega como fecha pura "YYYY-MM-DD" (sin hora) -- parsearla tal cual
+  // la toma como medianoche UTC, y en Argentina (UTC-3) eso cae en el día ANTERIOR
+  // (ej. "2026-09-12" se mostraba como 11/09). Si no trae hora, se la agregamos para
+  // que se interprete en horario local, no UTC.
+  const withTime = iso.includes('T') ? iso : `${iso}T00:00:00`;
+  return new Date(withTime).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function fmtDateTime(iso: string) {
@@ -172,8 +177,13 @@ function paxDetail(o: SellerOrder, events?: OrderEvent[]) {
   const modEvent = [...events].reverse().find(
     (e) => e.event_type === 'order_modified' && e.payload?.orig_adults != null,
   );
-  const extraAdults = events.reduce((sum, e) => sum + Number(e.payload?.extra_adults ?? 0), 0);
-  const extraChildren = events.reduce((sum, e) => sum + Number(e.payload?.extra_children ?? 0), 0);
+  // Solo se cuentan los eventos que representan el cambio YA aplicado a la orden --
+  // 'addon_cash_created'/pending llevan el mismo extra_adults/extra_children que su
+  // 'addon_cash_collected' correspondiente (o el pago MP su 'addon_paid'), así que
+  // sumar todos los eventos duplicaba cada ampliación en efectivo (registrada + cobrada).
+  const appliedEvents = events.filter((e) => ['addon_cash_collected', 'addon_paid'].includes(e.event_type));
+  const extraAdults = appliedEvents.reduce((sum, e) => sum + Number(e.payload?.extra_adults ?? 0), 0);
+  const extraChildren = appliedEvents.reduce((sum, e) => sum + Number(e.payload?.extra_children ?? 0), 0);
   const original = modEvent
     ? paxLabel(Number(modEvent.payload!.orig_adults), Number(modEvent.payload!.orig_children))
     : null;
