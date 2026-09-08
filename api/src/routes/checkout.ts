@@ -126,9 +126,10 @@ async function prepareCheckoutHold(
     net_price_adult_usd: string | null; net_price_child_usd: string | null;
     transfer_mode: 'none' | 'optional' | 'included';
     transfer_price_usd: string; transfer_price_usd_palermo: string | null; net_transfer_price_usd: string | null;
+    net_transfer_price_usd_palermo: string | null;
     net_price_currency: string;
     net_price_adult_ars: string | null; net_price_child_ars: string | null;
-    net_transfer_price_ars: string | null;
+    net_transfer_price_ars: string | null; net_transfer_price_ars_palermo: string | null;
     available_days: number[];
     default_capacity_per_day: number;
     product_name: string; product_slug: string;
@@ -143,10 +144,12 @@ async function prepareCheckoutHold(
             o.transfer_price_usd::text       AS transfer_price_usd,
             o.transfer_price_usd_palermo::text AS transfer_price_usd_palermo,
             o.net_transfer_price_usd::text   AS net_transfer_price_usd,
+            o.net_transfer_price_usd_palermo::text AS net_transfer_price_usd_palermo,
             o.net_price_currency,
             o.net_price_adult_ars::text      AS net_price_adult_ars,
             o.net_price_child_ars::text      AS net_price_child_ars,
             o.net_transfer_price_ars::text   AS net_transfer_price_ars,
+            o.net_transfer_price_ars_palermo::text AS net_transfer_price_ars_palermo,
             o.available_days, o.default_capacity_per_day, o.is_active,
             p.name AS product_name, p.slug AS product_slug, p.is_active AS product_active
        FROM product_options o
@@ -234,7 +237,9 @@ async function prepareCheckoutHold(
   if (netCurrency === 'USD') {
     const netAdult = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
     const netChild = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
-    const netTransfer = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+    const netTransferBase = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+    const netTransferPalermo = option.net_transfer_price_usd_palermo != null ? Number.parseFloat(option.net_transfer_price_usd_palermo) : null;
+    const netTransfer = input.transfer_zone === 'palermo' && netTransferPalermo != null ? netTransferPalermo : netTransferBase;
     if (netAdult != null) {
       netTotalUsd = Math.round((
         input.adults * netAdult + input.children * (netChild ?? netAdult)
@@ -245,7 +250,9 @@ async function prepareCheckoutHold(
   } else {
     const netAdultArs = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
     const netChildArs = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
-    const netTransferArs = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+    const netTransferArsBase = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+    const netTransferArsPalermo = option.net_transfer_price_ars_palermo != null ? Number.parseFloat(option.net_transfer_price_ars_palermo) : null;
+    const netTransferArs = input.transfer_zone === 'palermo' && netTransferArsPalermo != null ? netTransferArsPalermo : netTransferArsBase;
     if (netAdultArs != null && rate > 0) {
       const netTotalArs = Math.round((
         input.adults * netAdultArs + input.children * (netChildArs ?? netAdultArs)
@@ -613,9 +620,10 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
       net_price_adult_usd: string | null; net_price_child_usd: string | null;
       transfer_mode: 'none' | 'optional' | 'included';
       transfer_price_usd: string; transfer_price_usd_palermo: string | null; net_transfer_price_usd: string | null;
+      net_transfer_price_usd_palermo: string | null;
       net_price_currency: string;
       net_price_adult_ars: string | null; net_price_child_ars: string | null;
-      net_transfer_price_ars: string | null;
+      net_transfer_price_ars: string | null; net_transfer_price_ars_palermo: string | null;
       available_days: number[];
       default_capacity_per_day: number;
       product_name: string; product_slug: string;
@@ -630,10 +638,12 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
               o.transfer_price_usd::text     AS transfer_price_usd,
               o.transfer_price_usd_palermo::text AS transfer_price_usd_palermo,
               o.net_transfer_price_usd::text AS net_transfer_price_usd,
+              o.net_transfer_price_usd_palermo::text AS net_transfer_price_usd_palermo,
               o.net_price_currency,
               o.net_price_adult_ars::text    AS net_price_adult_ars,
               o.net_price_child_ars::text    AS net_price_child_ars,
               o.net_transfer_price_ars::text AS net_transfer_price_ars,
+              o.net_transfer_price_ars_palermo::text AS net_transfer_price_ars_palermo,
               o.available_days, o.default_capacity_per_day, o.is_active,
               p.name AS product_name, p.slug AS product_slug,
               p.is_active AS product_active
@@ -715,7 +725,9 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
     if (netCurrencyCash === 'USD') {
       const netAdultCash = option.net_price_adult_usd != null ? Number.parseFloat(option.net_price_adult_usd) : null;
       const netChildCash = option.net_price_child_usd != null ? Number.parseFloat(option.net_price_child_usd) : null;
-      const netTransferCash = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+      const netTransferCashBase = option.net_transfer_price_usd != null ? Number.parseFloat(option.net_transfer_price_usd) : null;
+      const netTransferCashPalermo = option.net_transfer_price_usd_palermo != null ? Number.parseFloat(option.net_transfer_price_usd_palermo) : null;
+      const netTransferCash = input.transfer_zone === 'palermo' && netTransferCashPalermo != null ? netTransferCashPalermo : netTransferCashBase;
       if (netAdultCash != null) {
         netTotalUsdCash = Math.round((
           input.adults * netAdultCash
@@ -727,7 +739,9 @@ checkoutRouter.post('/cash', checkoutLimiter, async (req, res, next) => {
     } else {
       const netAdultArsCash = option.net_price_adult_ars != null ? Number.parseFloat(option.net_price_adult_ars) : null;
       const netChildArsCash = option.net_price_child_ars != null ? Number.parseFloat(option.net_price_child_ars) : null;
-      const netTransferArsCash = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+      const netTransferArsCashBase = option.net_transfer_price_ars != null ? Number.parseFloat(option.net_transfer_price_ars) : null;
+      const netTransferArsCashPalermo = option.net_transfer_price_ars_palermo != null ? Number.parseFloat(option.net_transfer_price_ars_palermo) : null;
+      const netTransferArsCash = input.transfer_zone === 'palermo' && netTransferArsCashPalermo != null ? netTransferArsCashPalermo : netTransferArsCashBase;
       if (netAdultArsCash != null && rate > 0) {
         const netTotalArs = Math.round((
           input.adults * netAdultArsCash

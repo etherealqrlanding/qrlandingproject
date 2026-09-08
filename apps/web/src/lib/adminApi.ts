@@ -231,10 +231,14 @@ export interface AdminOption {
   // products.optionKindAdjustments).
   commission_adjustment_percent: number;
   net_transfer_price_usd: number | string | null;
+  // Neto de traslado para hoteles en Palermo -- mismo criterio que
+  // transfer_price_usd_palermo. NULL = siempre se usa net_transfer_price_usd.
+  net_transfer_price_usd_palermo: number | string | null;
   net_price_currency: 'USD' | 'ARS' | null;
   net_price_adult_ars: number | string | null;
   net_price_child_ars: number | string | null;
   net_transfer_price_ars: number | string | null;
+  net_transfer_price_ars_palermo: number | string | null;
   available_days: number[];
   default_capacity_per_day: number;
   low_availability_threshold: number;

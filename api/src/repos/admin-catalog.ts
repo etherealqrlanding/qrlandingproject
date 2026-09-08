@@ -117,11 +117,13 @@ export async function adminGetProduct(id: number) {
     net_price_adult_usd: num(o.net_price_adult_usd),
     net_price_child_usd: num(o.net_price_child_usd),
     net_transfer_price_usd: num(o.net_transfer_price_usd),
+    net_transfer_price_usd_palermo: num(o.net_transfer_price_usd_palermo),
     transfer_price_usd: num(o.transfer_price_usd),
     transfer_price_usd_palermo: num(o.transfer_price_usd_palermo),
     net_price_adult_ars: num(o.net_price_adult_ars),
     net_price_child_ars: num(o.net_price_child_ars),
     net_transfer_price_ars: num(o.net_transfer_price_ars),
+    net_transfer_price_ars_palermo: num(o.net_transfer_price_ars_palermo),
     commission_adjustment_percent: num(o.commission_adjustment_percent),
   }));
   return { ...prod[0], starting_price_usd: num(prod[0].starting_price_usd), options, images: imgsRes.rows, menus };
@@ -234,10 +236,14 @@ export interface AdminOptionInput {
   // del vendedor salvo que exista un override puntual (ver option_kind_commission_adjustments).
   commission_adjustment_percent?: number;
   net_transfer_price_usd?: number | null;
+  // Neto de traslado para hoteles en Palermo -- opcional, igual criterio que
+  // transfer_price_usd_palermo. NULL/ausente = siempre se usa net_transfer_price_usd.
+  net_transfer_price_usd_palermo?: number | null;
   net_price_currency?: 'USD' | 'ARS' | null;
   net_price_adult_ars?: number | null;
   net_price_child_ars?: number | null;
   net_transfer_price_ars?: number | null;
+  net_transfer_price_ars_palermo?: number | null;
   available_days?: number[];
   default_capacity_per_day?: number;
   display_order?: number;
@@ -260,35 +266,42 @@ async function recomputeStartingPrice(productId: number): Promise<void> {
 }
 
 export async function adminCreateOption(productId: number, input: AdminOptionInput): Promise<number> {
+  // Placeholders generados a partir de la cantidad real de valores -- a mano se
+  // habían desalineado más de una vez (columna nueva sumada sin correr $n+1 en el resto).
+  const columns = [
+    'product_id', 'code', 'name_es', 'name_en', 'description_es', 'description_en',
+    'includes_es', 'includes_en', 'price_adult_usd', 'price_child_usd',
+    'net_price_adult_usd', 'net_price_child_usd',
+    'has_dinner', 'show_only_time_enabled', 'transfer_mode', 'transfer_price_usd', 'transfer_price_usd_palermo',
+    'net_transfer_price_usd', 'net_transfer_price_usd_palermo',
+    'net_price_currency', 'net_price_adult_ars', 'net_price_child_ars', 'net_transfer_price_ars', 'net_transfer_price_ars_palermo',
+    'available_days',
+    'default_capacity_per_day', 'display_order', 'is_active',
+    'commission_adjustment_percent',
+  ];
+  const values = [
+    productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
+    input.description_es ?? null, input.description_en ?? null,
+    sanitizeIncludes(input.includes_es) ?? [], sanitizeIncludes(input.includes_en) ?? [],
+    input.price_adult_usd, input.price_child_usd ?? null,
+    input.net_price_adult_usd ?? null, input.net_price_child_usd ?? null,
+    input.has_dinner ?? false, input.show_only_time_enabled ?? false, input.transfer_mode ?? 'none',
+    input.transfer_price_usd ?? 0, input.transfer_price_usd_palermo ?? null,
+    input.net_transfer_price_usd ?? null, input.net_transfer_price_usd_palermo ?? null,
+    input.net_price_currency ?? 'USD',
+    input.net_price_adult_ars ?? null, input.net_price_child_ars ?? null, input.net_transfer_price_ars ?? null,
+    input.net_transfer_price_ars_palermo ?? null,
+    input.available_days ?? [1, 2, 3, 4, 5, 6, 7],
+    input.default_capacity_per_day ?? 80,
+    input.display_order ?? 0, input.is_active ?? true,
+    input.commission_adjustment_percent ?? 0,
+  ];
+  const placeholders = values.map((_, i) => `$${i + 1}`).join(',');
   const { rows } = await pool.query<{ id: number }>(
-    `INSERT INTO product_options (
-       product_id, code, name_es, name_en, description_es, description_en,
-       includes_es, includes_en, price_adult_usd, price_child_usd,
-       net_price_adult_usd, net_price_child_usd,
-       has_dinner, show_only_time_enabled, transfer_mode, transfer_price_usd, transfer_price_usd_palermo,
-       net_transfer_price_usd,
-       net_price_currency, net_price_adult_ars, net_price_child_ars, net_transfer_price_ars,
-       available_days,
-       default_capacity_per_day, display_order, is_active,
-       commission_adjustment_percent
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+    `INSERT INTO product_options (${columns.join(', ')})
+     VALUES (${placeholders})
      RETURNING id`,
-    [
-      productId, input.code, input.name_es, input.name_en?.trim() || input.name_es,
-      input.description_es ?? null, input.description_en ?? null,
-      sanitizeIncludes(input.includes_es) ?? [], sanitizeIncludes(input.includes_en) ?? [],
-      input.price_adult_usd, input.price_child_usd ?? null,
-      input.net_price_adult_usd ?? null, input.net_price_child_usd ?? null,
-      input.has_dinner ?? false, input.show_only_time_enabled ?? false, input.transfer_mode ?? 'none',
-      input.transfer_price_usd ?? 0, input.transfer_price_usd_palermo ?? null,
-      input.net_transfer_price_usd ?? null,
-      input.net_price_currency ?? 'USD',
-      input.net_price_adult_ars ?? null, input.net_price_child_ars ?? null, input.net_transfer_price_ars ?? null,
-      input.available_days ?? [1,2,3,4,5,6,7],
-      input.default_capacity_per_day ?? 80,
-      input.display_order ?? 0, input.is_active ?? true,
-      input.commission_adjustment_percent ?? 0,
-    ],
+    values,
   );
   await recomputeStartingPrice(productId);
   return rows[0].id;

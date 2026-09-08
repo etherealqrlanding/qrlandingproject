@@ -27,7 +27,9 @@ const blankOption: Partial<AdminOption> = {
   price_adult_usd: 0, price_child_usd: null,
   net_price_currency: 'USD',
   net_price_adult_usd: null, net_price_child_usd: null, net_transfer_price_usd: null,
+  net_transfer_price_usd_palermo: null,
   net_price_adult_ars: null, net_price_child_ars: null, net_transfer_price_ars: null,
+  net_transfer_price_ars_palermo: null,
   has_dinner: false, show_only_time_enabled: false, transfer_mode: 'none', transfer_price_usd: 0,
   transfer_price_usd_palermo: null,
   available_days: [1, 2, 3, 4, 5, 6, 7],
@@ -71,9 +73,11 @@ export default function OptionsEditor({ product, onChange }: Props) {
         net_price_adult_usd: parseNetField(changes.net_price_adult_usd),
         net_price_child_usd: parseNetField(changes.net_price_child_usd),
         net_transfer_price_usd: parseNetField(changes.net_transfer_price_usd),
+        net_transfer_price_usd_palermo: parseNetField(changes.net_transfer_price_usd_palermo),
         net_price_adult_ars: parseNetField(changes.net_price_adult_ars),
         net_price_child_ars: parseNetField(changes.net_price_child_ars),
         net_transfer_price_ars: parseNetField(changes.net_transfer_price_ars),
+        net_transfer_price_ars_palermo: parseNetField(changes.net_transfer_price_ars_palermo),
         default_capacity_per_day: changes.default_capacity_per_day != null ? Number(changes.default_capacity_per_day) : undefined,
         low_availability_threshold: changes.low_availability_threshold != null ? Number(changes.low_availability_threshold) : undefined,
         display_order: changes.display_order != null ? Number(changes.display_order) : undefined,
@@ -98,9 +102,11 @@ export default function OptionsEditor({ product, onChange }: Props) {
         net_price_adult_usd: parseNetField(draftNew.net_price_adult_usd),
         net_price_child_usd: parseNetField(draftNew.net_price_child_usd),
         net_transfer_price_usd: parseNetField(draftNew.net_transfer_price_usd),
+        net_transfer_price_usd_palermo: parseNetField(draftNew.net_transfer_price_usd_palermo),
         net_price_adult_ars: parseNetField(draftNew.net_price_adult_ars),
         net_price_child_ars: parseNetField(draftNew.net_price_child_ars),
         net_transfer_price_ars: parseNetField(draftNew.net_transfer_price_ars),
+        net_transfer_price_ars_palermo: parseNetField(draftNew.net_transfer_price_ars_palermo),
       };
       await adminApi.products.options.create(product.id, payload);
       setDraftNew(blankOption);
@@ -407,6 +413,15 @@ function OptionFormFields({ option, onChange, product }: {
                 placeholder="Ej: 15"
               />
             </Field>
+            <Field label="Neto traslado Palermo (USD/pax)" hint='Vacío = igual al neto de traslado general'>
+              <input
+                type="number" min={0} step={0.01}
+                value={option.net_transfer_price_usd_palermo ?? ''}
+                onChange={(e) => update('net_transfer_price_usd_palermo', e.target.value ? Number(e.target.value) : null)}
+                className="input no-spinner"
+                placeholder="Igual"
+              />
+            </Field>
           </div>
         ) : (
           <div className="grid sm:grid-cols-3 gap-4">
@@ -435,6 +450,15 @@ function OptionFormFields({ option, onChange, product }: {
                 onChange={(e) => update('net_transfer_price_ars', e.target.value ? Number(e.target.value) : null)}
                 className="input"
                 placeholder="Ej: 8000"
+              />
+            </Field>
+            <Field label="Neto traslado Palermo (ARS/pax)" hint='Vacío = igual al neto de traslado general'>
+              <input
+                type="number" min={0} step={1}
+                value={option.net_transfer_price_ars_palermo ?? ''}
+                onChange={(e) => update('net_transfer_price_ars_palermo', e.target.value ? Number(e.target.value) : null)}
+                className="input"
+                placeholder="Igual"
               />
             </Field>
           </div>

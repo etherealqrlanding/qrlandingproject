@@ -189,7 +189,9 @@ const optionSchema = z.object({
   // tener márgenes distintos.
   commission_adjustment_percent: z.number().min(-100).max(100).optional(),
   net_transfer_price_usd: z.number().nonnegative().optional().nullable(),
+  net_transfer_price_usd_palermo: z.number().nonnegative().optional().nullable(),
   net_transfer_price_ars: z.number().nonnegative().optional().nullable(),
+  net_transfer_price_ars_palermo: z.number().nonnegative().optional().nullable(),
   available_days: z.array(z.number().int().min(1).max(7)).max(7).optional(),
   default_capacity_per_day: z.number().int().nonnegative().optional(),
   low_availability_threshold: z.number().int().nonnegative().optional(),
