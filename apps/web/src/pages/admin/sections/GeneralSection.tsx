@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { adminApi, AdminApiError, type AdminCategory, type AdminProductDetail } from '../../../lib/adminApi';
 import Checkbox from '../../../components/Checkbox';
+import FormErrorBanner from '../../../components/admin/FormErrorBanner';
+import LimitedTextarea from '../../../components/admin/LimitedTextarea';
+import { describeApiError, LIMITS, validateMaxLength } from '../../../lib/formErrors';
 
 interface Props {
   product: AdminProductDetail | null;
@@ -40,7 +43,7 @@ const DAYS = [
 export default function GeneralSection({ product, categories, isNew, onCreated, onUpdated, onDelete, onHardDelete }: Props) {
   const [form, setForm] = useState(() => product ? { ...empty, ...product } : { ...empty });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[] | null>(null);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -66,7 +69,12 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    const problems = [
+      ...validateMaxLength('Descripción corta', form.short_description_es, LIMITS.shortDescription),
+      ...validateMaxLength('Descripción larga', form.long_description_es, LIMITS.longDescription),
+    ];
+    if (problems.length > 0) { setErrors(problems); return; }
+    setErrors(null);
     setSaving(true);
     try {
       // starting_price_usd es read-only (lo calcula el server desde los tiers):
@@ -85,8 +93,7 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
         setDirty(false);
       }
     } catch (err) {
-      const e2 = err as AdminApiError;
-      setError(e2.message + (e2.details ? `\n${JSON.stringify(e2.details, null, 2)}` : ''));
+      setErrors(describeApiError(err as AdminApiError));
     } finally {
       setSaving(false);
     }
@@ -94,11 +101,7 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-3xl">
-      {error && (
-        <pre className="rounded-md border border-bordeaux-light/40 bg-bordeaux-deep/20 p-3 text-xs text-cream/90 whitespace-pre-wrap">
-          {error}
-        </pre>
-      )}
+      <FormErrorBanner messages={errors} onDismiss={() => setErrors(null)} />
 
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Nombre" required>
@@ -165,20 +168,18 @@ export default function GeneralSection({ product, categories, isNew, onCreated, 
       </Field>
 
       <Field label="Descripción corta (ES)" hint="Aparece en las cards del listado — el sitio traduce automáticamente al resto de los idiomas">
-        <textarea
-          rows={3} maxLength={500}
+        <LimitedTextarea
+          rows={3} max={LIMITS.shortDescription}
           value={form.short_description_es ?? ''}
-          onChange={(e) => update('short_description_es', e.target.value)}
-          className="input"
+          onChange={(v) => update('short_description_es', v)}
         />
       </Field>
 
       <Field label="Descripción larga (ES)" hint="En la página de detalle">
-        <textarea
-          rows={6} maxLength={4000}
+        <LimitedTextarea
+          rows={6} max={LIMITS.longDescription}
           value={form.long_description_es ?? ''}
-          onChange={(e) => update('long_description_es', e.target.value)}
-          className="input"
+          onChange={(v) => update('long_description_es', v)}
         />
       </Field>
 

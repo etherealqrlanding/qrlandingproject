@@ -3,6 +3,8 @@ import { adminApi, AdminApiError, type AdminMenu, type AdminMenuInput, type Admi
 import Checkbox from '../../../components/Checkbox';
 import RichTextEditor from '../../../components/admin/RichTextEditor';
 import Collapse from '../../../components/Collapse';
+import FormErrorBanner from '../../../components/admin/FormErrorBanner';
+import { describeApiError, LIMITS, validateMenuDraft } from '../../../lib/formErrors';
 
 interface Props {
   product: AdminProductDetail;
@@ -72,13 +74,17 @@ function MenuScopeForm({ initial, onSave, onDelete, deleteLabel }: {
   const [isVisible, setIsVisible] = useState(initial?.is_visible ?? true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [errors, setErrors] = useState<string[] | null>(null);
 
   const handleSave = async () => {
+    const problems = validateMenuDraft({ title, content_html: contentHtml });
+    if (problems.length > 0) { setErrors(problems); return; }
+    setErrors(null);
     setSaving(true);
     try {
       await onSave({ title: title.trim() || null, content_html: contentHtml, is_visible: isVisible });
     } catch (err) {
-      alert((err as AdminApiError).message);
+      setErrors(describeApiError(err as AdminApiError));
     } finally {
       setSaving(false);
     }
@@ -87,11 +93,12 @@ function MenuScopeForm({ initial, onSave, onDelete, deleteLabel }: {
   const handleDelete = async () => {
     if (!onDelete) return;
     if (!confirm('¿Eliminar este menú?')) return;
+    setErrors(null);
     setDeleting(true);
     try {
       await onDelete();
     } catch (err) {
-      alert((err as AdminApiError).message);
+      setErrors(describeApiError(err as AdminApiError));
     } finally {
       setDeleting(false);
     }
@@ -99,6 +106,7 @@ function MenuScopeForm({ initial, onSave, onDelete, deleteLabel }: {
 
   return (
     <div className="space-y-4">
+      <FormErrorBanner messages={errors} onDismiss={() => setErrors(null)} />
       <label className="block">
         <span className="block text-sm text-cream/80 mb-1.5">Título (opcional)</span>
         <input
@@ -113,6 +121,7 @@ function MenuScopeForm({ initial, onSave, onDelete, deleteLabel }: {
         <RichTextEditor
           value={contentHtml}
           onChange={setContentHtml}
+          maxLength={LIMITS.menuHtml}
           placeholder="Pegá o escribí el menú acá. Seleccioná texto para ponerlo en negrita, subrayarlo o armar una lista."
         />
       </label>

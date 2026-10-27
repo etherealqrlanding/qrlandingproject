@@ -4,6 +4,9 @@ import AvailabilityEditor from './AvailabilityEditor';
 import Checkbox from '../../../components/Checkbox';
 import IncludesEditor from '../../../components/admin/IncludesEditor';
 import Collapse from '../../../components/Collapse';
+import FormErrorBanner from '../../../components/admin/FormErrorBanner';
+import LimitedTextarea from '../../../components/admin/LimitedTextarea';
+import { describeApiError, LIMITS, validateOptionDraft } from '../../../lib/formErrors';
 
 interface Props {
   product: AdminProductDetail;
@@ -42,6 +45,13 @@ export default function OptionsEditor({ product, onChange }: Props) {
   const [draftNew, setDraftNew] = useState<Partial<AdminOption>>(blankOption);
   const [availabilityFor, setAvailabilityFor] = useState<AdminOption | null>(null);
   const [toggling, setToggling] = useState<Set<number>>(new Set());
+  // Errores del último intento de guardado: 'new' = formulario de tier nuevo,
+  // un id = ese tier, 'list' = acciones de la lista (mostrar/ocultar, eliminar).
+  const [formErrors, setFormErrors] = useState<{ key: number | 'new' | 'list'; messages: string[] } | null>(null);
+  const showErrors = (key: number | 'new' | 'list', err: unknown) =>
+    setFormErrors({ key, messages: describeApiError(err as AdminApiError) });
+  const errorsFor = (key: number | 'new' | 'list') => (formErrors?.key === key ? formErrors.messages : null);
+  const clearErrors = () => setFormErrors(null);
 
   const refresh = async () => {
     const updated = await adminApi.products.get(product.id);
@@ -50,18 +60,22 @@ export default function OptionsEditor({ product, onChange }: Props) {
 
   const handleToggleOption = async (opt: AdminOption) => {
     if (toggling.has(opt.id)) return;
+    clearErrors();
     setToggling((prev) => new Set(prev).add(opt.id));
     try {
       await adminApi.products.options.update(opt.id, { is_active: !opt.is_active });
       await refresh();
     } catch (err) {
-      alert((err as AdminApiError).message);
+      showErrors('list', err);
     } finally {
       setToggling((prev) => { const next = new Set(prev); next.delete(opt.id); return next; });
     }
   };
 
   const handleSaveExisting = async (opt: AdminOption, changes: Partial<AdminOption>) => {
+    const problems = validateOptionDraft(changes);
+    if (problems.length > 0) { setFormErrors({ key: opt.id, messages: problems }); return; }
+    clearErrors();
     try {
       const parseNetField = (v: unknown) => (v != null && v !== '') ? Number(v) : null;
       const payload: Partial<AdminOption> = {
@@ -86,11 +100,14 @@ export default function OptionsEditor({ product, onChange }: Props) {
       await refresh();
       setExpandedId(null);
     } catch (err) {
-      alert((err as AdminApiError).message);
+      showErrors(opt.id, err);
     }
   };
 
   const handleCreate = async () => {
+    const problems = validateOptionDraft(draftNew);
+    if (problems.length > 0) { setFormErrors({ key: 'new', messages: problems }); return; }
+    clearErrors();
     try {
       const parseNetField = (v: unknown) => (v != null && v !== '') ? Number(v) : null;
       const payload = {
@@ -113,17 +130,18 @@ export default function OptionsEditor({ product, onChange }: Props) {
       setExpandedId(null);
       await refresh();
     } catch (err) {
-      alert((err as AdminApiError).message);
+      showErrors('new', err);
     }
   };
 
   const handleDelete = async (opt: AdminOption) => {
     if (!confirm(`¿Eliminar el tier "${opt.name_es}"?`)) return;
+    clearErrors();
     try {
       await adminApi.products.options.delete(opt.id);
       await refresh();
     } catch (err) {
-      alert((err as AdminApiError).message);
+      showErrors('list', err);
     }
   };
 
@@ -143,9 +161,12 @@ export default function OptionsEditor({ product, onChange }: Props) {
         </button>
       </div>
 
+      <FormErrorBanner messages={errorsFor('list')} onDismiss={clearErrors} />
+
       {expandedId === 'new' && (
         <Collapse className="rounded-lg border border-gold/30 bg-gold/5 p-5">
           <h3 className="font-display text-lg text-cream mb-4">Nuevo tier</h3>
+          <div className="mb-4"><FormErrorBanner messages={errorsFor('new')} onDismiss={clearErrors} /></div>
           <OptionFormFields option={draftNew} onChange={setDraftNew} product={product} />
           <div className="mt-5 flex justify-end gap-2">
             <button type="button" onClick={() => setExpandedId(null)} className="btn-ghost text-sm">Cancelar</button>
@@ -166,6 +187,8 @@ export default function OptionsEditor({ product, onChange }: Props) {
           onManageAvailability={() => setAvailabilityFor(opt)}
           onToggleVisibility={() => handleToggleOption(opt)}
           isToggling={toggling.has(opt.id)}
+          errors={errorsFor(opt.id)}
+          onDismissErrors={clearErrors}
         />
       ))}
 
@@ -179,7 +202,7 @@ export default function OptionsEditor({ product, onChange }: Props) {
   );
 }
 
-function OptionRow({ option, product, expanded, onToggle, onSave, onDelete, onManageAvailability, onToggleVisibility, isToggling }: {
+function OptionRow({ option, product, expanded, onToggle, onSave, onDelete, onManageAvailability, onToggleVisibility, isToggling, errors, onDismissErrors }: {
   option: AdminOption;
   product: AdminProductDetail;
   expanded: boolean;
@@ -189,6 +212,8 @@ function OptionRow({ option, product, expanded, onToggle, onSave, onDelete, onMa
   onManageAvailability: () => void;
   onToggleVisibility: () => void;
   isToggling: boolean;
+  errors: string[] | null;
+  onDismissErrors: () => void;
 }) {
   const [draft, setDraft] = useState<Partial<AdminOption>>(option);
 
@@ -255,6 +280,7 @@ function OptionRow({ option, product, expanded, onToggle, onSave, onDelete, onMa
 
       {expanded && (
         <Collapse className="p-5 border-t border-gold/10">
+          <div className="mb-4"><FormErrorBanner messages={errors} onDismiss={onDismissErrors} /></div>
           <OptionFormFields option={draft} onChange={setDraft} product={product} />
           <div className="mt-5 flex items-center justify-between">
             <div className="flex gap-2">
@@ -312,10 +338,9 @@ function OptionFormFields({ option, onChange, product }: {
       </div>
 
       <Field label="Descripción" hint="Texto corto que resume este tier en el selector de checkout">
-        <textarea
-          rows={2} maxLength={500}
-          value={option.description_es ?? ''} onChange={(e) => update('description_es', e.target.value)}
-          className="input"
+        <LimitedTextarea
+          rows={2} max={LIMITS.optionDescription}
+          value={option.description_es ?? ''} onChange={(v) => update('description_es', v)}
         />
       </Field>
 
